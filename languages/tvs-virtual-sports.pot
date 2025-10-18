@@ -1,0 +1,2 @@
+# POT file for tvs-virtual-sports
+# TODO: Extract strings and generate a proper .pot using xgettext or WP i18n tools

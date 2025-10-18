@@ -1,0 +1,1 @@
+Includes folder: contains plugin classes. TODO: add more documentation for each class.

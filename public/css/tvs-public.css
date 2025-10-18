@@ -1,0 +1,6 @@
+/* Public styles for TVS Virtual Sports */
+#tvs-app-root {
+    min-height: 200px;
+    border: 1px solid #ddd;
+    padding: 1rem;
+}
