@@ -1,37 +1,122 @@
-# Operating System files
+# macOS
 .DS_Store
-Thumbs.db
+.AppleDouble
+.LSOverride
 
-# IDE/Editor folders
-.idea/
+# Windows
+Thumbs.db
+desktop.ini
+ehthumbs.db
+Thumbs.db:encryptable
+
+# Linux
+*~
+
+# Editor/IDE
 .vscode/
+.idea/
 *.sublime-project
 *.sublime-workspace
+*.code-workspace
 
-# Node modules and build assets
+# Node
 node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log
+.next/
+out/
 
-# Composer dependencies
-vendor/
-composer.lock
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pytest_cache/
+.pytest_cache/
+venv/
+env/
+ENV/
+env.bak/
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+build/
+.eggs/
+.python-version
+.Python
 
-# WordPress specific
-*.log
-wp-config.php
-wp-content/advanced-cache.php
-wp-content/backup-db/
-wp-content/backups/
-wp-content/blogs.dir/
-wp-content/cache/
-wp-content/upgrade/
-wp-content/uploads/
-wp-content/mu-plugins/
-wp-content/wp-cache-config.php
+# Go / binaries
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
 
-# Unit tests / coverage reports
+# Java
+*.class
+*.jar
+*.war
+*.ear
+target/
+*.iml
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+crash.log
+override.tf
+override.tf.json
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+
+# Ansible
+*.retry
+vault-password
+
+# Docker
+docker-compose.override.yml
+docker-compose.*.yml
+docker-compose.local.yml
+docker-compose.*.env
+docker-compose.*.local.yml
+
+# Kubernetes / kubeconfig
+*.kubeconfig
+.kube/
+
+# CI / build artifacts
 coverage/
-phpunit.xml
-.phpunit.result.cache
+coverage.*
+reports/
+dist/
+build/
+out/
+
+# Secrets / keys / certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.pfx
+id_rsa
+id_rsa.pub
+*.asc
+secrets.yml
+.env
+.env.*
+
+# Logs
+*.log
+
+# Misc
+*.swp
+*~.nib
+*.lock
