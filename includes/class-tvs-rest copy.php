@@ -14,50 +14,18 @@ class TVS_REST {
     public function register_routes() {
         $ns = 'tvs/v1';
 
-        // /tvs/v1/routes (LIST)
         register_rest_route( $ns, '/routes', array(
-            'methods'             => 'GET',
-            'callback'            => array( $this, 'get_routes' ),
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_routes' ),
             'permission_callback' => '__return_true',
-            'args' => array(
-                'per_page' => array(
-                    'description' => 'Items per page',
-                    'type'        => 'integer',
-                    'default'     => 20,
-                    'minimum'     => 1,
-                    'maximum'     => 50,
-                ),
-                'page' => array(
-                    'description' => 'Page number',
-                    'type'        => 'integer',
-                    'default'     => 1,
-                    'minimum'     => 1,
-                ),
-                'search' => array(
-                    'description' => 'Search term',
-                    'type'        => 'string',
-                    'default'     => '',
-                ),
-                'region' => array(
-                    'description' => 'Region slug',
-                    'type'        => 'string',
-                    'default'     => '',
-                ),
-            ),
         ) );
 
-        // /tvs/v1/routes/{id} (GET ONE)
         register_rest_route( $ns, '/routes/(?P<id>\d+)', array(
-            'methods'             => 'GET',
-            'callback'            => array( $this, 'get_route' ),
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_route' ),
             'permission_callback' => '__return_true',
             'args' => array(
-                'id' => array(
-                    'description' => 'Route ID',
-                    'type'        => 'integer',
-                    'required'    => true,
-                    'minimum'     => 1,
-                ),
+                'id' => array( 'validate_callback' => 'is_numeric' ),
             ),
         ) );
 
@@ -88,7 +56,7 @@ class TVS_REST {
         ) );
     }
 
- /*    public function get_routes( $request ) {
+    public function get_routes( $request ) {
         $args = array(
             'post_type' => 'tvs_route',
             'posts_per_page' => 20,
@@ -102,48 +70,7 @@ class TVS_REST {
         }
         wp_reset_postdata();
         return rest_ensure_response( $out );
-    } */
-
-        public function get_routes( $request ) {
-    $per_page = max( 1, min( 50, (int) $request->get_param( 'per_page' ) ?: 20 ) );
-    $paged    = max( 1, (int) $request->get_param( 'page' ) ?: 1 );
-    $search   = (string) $request->get_param( 'search' );
-    $region   = (string) $request->get_param( 'region' );
-
-    $tax_query = array();
-    if ( $region ) {
-        $tax_query[] = array(
-            'taxonomy' => 'tvs_region',
-            'field'    => 'slug',
-            'terms'    => $region,
-        );
     }
-
-    $args = array(
-        'post_type'      => 'tvs_route',
-        'posts_per_page' => $per_page,
-        'paged'          => $paged,
-        's'              => $search,
-        'tax_query'      => $tax_query ?: null,
-        'no_found_rows'  => false,
-    );
-
-    $q   = new WP_Query( $args );
-    $out = array();
-    while ( $q->have_posts() ) {
-        $q->the_post();
-        $out[] = $this->prepare_route_response( get_the_ID() );
-    }
-    wp_reset_postdata();
-
-    return rest_ensure_response( array(
-        'items'      => $out,
-        'total'      => (int) $q->found_posts,
-        'totalPages' => (int) $q->max_num_pages,
-        'page'       => $paged,
-        'perPage'    => $per_page,
-    ) );
-}
 
     public function get_route( $request ) {
         $id = (int) $request['id'];
@@ -153,7 +80,7 @@ class TVS_REST {
         return rest_ensure_response( $this->prepare_route_response( $id ) );
     }
 
- /*    protected function prepare_route_response( $post_id ) {
+    protected function prepare_route_response( $post_id ) {
         $post = get_post( $post_id );
         $meta = array();
         foreach ( tvs_route_meta_keys() as $k ) {
@@ -167,59 +94,6 @@ class TVS_REST {
             'meta' => $meta,
             'regions' => $regions,
         );
-    } */
-   protected function prepare_route_response( $post_id ) {
-    $post = get_post( $post_id );
-    if ( ! $post ) {
-        return new WP_Error( 'not_found', 'Route not found', array( 'status' => 404 ) );
-    }
-
-    // Meta keys – bruk helper hvis den finnes, ellers safe fallback
-    if ( function_exists( 'tvs_route_meta_keys' ) ) {
-        $keys = (array) tvs_route_meta_keys();
-    } else {
-        $keys = array( 'distance_m', 'elevation_m', 'gpx_url', 'video_url', 'duration_s' );
-    }
-
-    $meta = array();
-    foreach ( $keys as $k ) {
-        $meta[ $k ] = get_post_meta( $post_id, $k, true );
-    }
-
-    $regions  = wp_get_post_terms( $post_id, 'tvs_region', array( 'fields' => 'names' ) );
-    $types    = wp_get_post_terms( $post_id, 'tvs_activity_type', array( 'fields' => 'names' ) );
-    $thumb_id = get_post_thumbnail_id( $post_id );
-    $image    = $thumb_id ? wp_get_attachment_image_url( $thumb_id, 'large' ) : null;
-
-    return array(
-        'id'        => (int) $post_id,
-        'title'     => get_the_title( $post_id ),
-        'content'   => apply_filters( 'the_content', $post->post_content ),
-        'excerpt'   => get_the_excerpt( $post_id ),
-        'link'      => get_permalink( $post_id ),
-        'image'     => $image,
-        'meta'      => $meta,
-        'regions'   => is_wp_error( $regions ) ? array() : (array) $regions,
-        'types'     => is_wp_error( $types ) ? array() : (array) $types,
-        'modified'  => get_post_modified_time( 'c', true, $post ),
-        'date'      => get_post_time( 'c', true,   $post ),
-        // hint for klienter
-        'schema'    => array(
-            'distance_m' => 'number',
-            'elevation_m'=> 'number',
-            'duration_s' => 'number',
-            'gpx_url'    => 'url',
-            'video_url'  => 'url',
-        ),
-    );
-}
-
-
-    public function get_route_payload( int $id ) {
-        if ( get_post_type( $id ) !== 'tvs_route' ) {
-            return new WP_Error( 'not_found', 'Route not found', array( 'status' => 404 ) );
-        }
-        return $this->prepare_route_response( $id );
     }
 
     public function create_activity( $request ) {

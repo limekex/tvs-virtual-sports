@@ -1,6 +1,324 @@
-/* Public styles for TVS Virtual Sports */
-#tvs-app-root {
-    min-height: 200px;
-    border: 1px solid #ddd;
-    padding: 1rem;
+.tvs-dev {
+	position: fixed;
+	z-index: 99999;
+	left: 16px; top: 16px;
+	width: 320px;
+	background: #0b1220;
+	color: #e6edf3;
+	border: 1px solid #253049;
+	border-radius: 10px;
+	box-shadow: 0 8px 20px rgba(0,0,0,.35);
+	font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", Arial;
+	user-select: none;
 }
+.tvs-dev.is-min .tvs-dev__body { display: none; }
+.tvs-dev__header {
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 10px; cursor: move;
+	background: linear-gradient(180deg, #0f1a33, #0b1220);
+	border-bottom: 1px solid #253049;
+}
+.tvs-dev__spacer { flex: 1; }
+.tvs-dev__pill {
+	background: #1f6feb; color: #fff; border-radius: 999px;
+	font-size: 11px; padding: 2px 8px;
+}
+.tvs-dev__btn {
+	background: #141b2d; color: #d0d6e1; border: 1px solid #2a3550;
+	border-radius: 6px; padding: 4px 8px; cursor: pointer;
+}
+.tvs-dev__btn:hover { background: #1b2440; }
+.tvs-dev__btn--ghost { background: transparent; }
+.tvs-dev__body { padding: 10px; }
+.tvs-dev__row {
+	display: grid; grid-template-columns: 80px 1fr; gap: 8px;
+	align-items: baseline; padding: 4px 0;
+}
+.tvs-dev__row span { color: #9fb0c8; }
+.tvs-dev__row code {
+	background: #0f1627; border: 1px solid #233152; color: #dfe7f3;
+	padding: 3px 6px; border-radius: 6px; overflow-wrap: anywhere;
+}
+.tvs-dev__err { color: #ffb4b4; }
+.tvs-dev__actions { display: flex; gap: 8px; margin-top: 8px; }
+.tvs-dev {
+	position: fixed;
+	z-index: 99999;
+	left: 16px; top: 16px;
+	width: 320px;
+	background: #0b1220;
+	color: #e6edf3;
+	border: 1px solid #253049;
+	border-radius: 10px;
+	box-shadow: 0 8px 20px rgba(0,0,0,.35);
+	font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Noto Sans", Arial;
+	user-select: none;
+}
+.tvs-dev.is-min .tvs-dev__body { display: none; }
+.tvs-dev__header {
+	display: flex; align-items: center; gap: 8px;
+	padding: 8px 10px; cursor: move;
+	background: linear-gradient(180deg, #0f1a33, #0b1220);
+	border-bottom: 1px solid #253049;
+}
+.tvs-dev__spacer { flex: 1; }
+.tvs-dev__pill {
+	background: #1f6feb; color: #fff; border-radius: 999px;
+	font-size: 11px; padding: 2px 8px;
+}
+.tvs-dev__btn {
+	background: #141b2d; color: #d0d6e1; border: 1px solid #2a3550;
+	border-radius: 6px; padding: 4px 8px; cursor: pointer;
+}
+.tvs-dev__btn:hover { background: #1b2440; }
+.tvs-dev__btn--ghost { background: transparent; }
+.tvs-dev__body { padding: 10px; }
+.tvs-dev__row {
+	display: grid; grid-template-columns: 80px 1fr; gap: 8px;
+	align-items: baseline; padding: 4px 0;
+}
+.tvs-dev__row span { color: #9fb0c8; }
+.tvs-dev__row code {
+	background: #0f1627; border: 1px solid #233152; color: #dfe7f3;
+	padding: 3px 6px; border-radius: 6px; overflow-wrap: anywhere;
+}
+.tvs-dev__err { color: #ffb4b4; }
+.tvs-dev__actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* ========== TVS Virtual Sports App ========== */
+
+.tvs-app {
+  box-sizing: border-box;
+  max-width: 800px;
+  margin: 3rem auto;
+  padding: 2rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+  color: #111;
+  line-height: 1.6;
+}
+
+.tvs-app h2 {
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.tvs-app .tvs-video {
+  position: relative;
+  padding-bottom: 56.25%; /* 16:9 */
+  height: 0;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+}
+
+.tvs-app .tvs-video iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.tvs-app .tvs-meta {
+  background: #f7f7f7;
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.85rem;
+  color: #333;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+
+.tvs-app .tvs-meta pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tvs-app button {
+  display: inline-block;
+  background: #111;
+  color: #fff;
+  font-size: 1rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.tvs-app button:hover {
+  background: #333;
+}
+
+.tvs-app button:active {
+  background: #000;
+}
+
+/* ========== Error & Overlay States ========== */
+
+.tvs-route.tvs-error {
+  background: #fee;
+  border: 1px solid #f88;
+  color: #a00;
+  padding: 1rem;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.tvs-dev-overlay {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-family: monospace;
+  z-index: 99999;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.4);
+}
+
+.tvs-dev-overlay strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #8cf;
+}
+
+/* ===== TVS Loading (runner + skeleton) ===== */
+.tvs-loading {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px dashed #ddd;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.tvs-loading .tvs-runner {
+  width: 64px;
+  height: 64px;
+}
+
+/* Shimmer skeleton blocks */
+.tvs-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eee 25%, #f6f6f6 37%, #eee 63%);
+  background-size: 400% 100%;
+  animation: tvs-shimmer 1.25s linear infinite;
+}
+.tvs-skel.line { height: 12px; width: 220px; margin-bottom: 10px; }
+.tvs-skel.line.sm { width: 140px; }
+.tvs-skel.block { height: 12px; width: 100px; display:inline-block; margin-right:10px; }
+
+@keyframes tvs-shimmer {
+  0% { background-position: 0% 0; }
+  100% { background-position: 400% 0; }
+}
+
+/* SVG runner animations */
+.tvs-runner .arm, .tvs-runner .leg {
+  transform-box: fill-box;
+  transform-origin: top left; /* overridden on elements */
+  animation: tvs-run 0.6s ease-in-out infinite alternate;
+}
+.tvs-runner .arm.back,
+.tvs-runner .leg.back {
+  animation-delay: 0.3s; /* motfase */
+  opacity: .9;
+}
+
+@keyframes tvs-run {
+  from { transform: rotate(-25deg); }
+  to   { transform: rotate(25deg); }
+}
+
+/* optional: liten “track” under løperen */
+.tvs-runner .track {
+  stroke-dasharray: 2 4;
+  animation: tvs-track 0.8s linear infinite;
+}
+@keyframes tvs-track {
+  to { stroke-dashoffset: -12; }
+}
+
+
+
+/* ===== TVS Button Spinner ===== */
+.tvs-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.tvs-btn[disabled] {
+  opacity: .7;
+  cursor: not-allowed;
+}
+
+.tvs-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #fff;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: tvs-spin .7s linear infinite;
+}
+
+@keyframes tvs-spin {
+  to { transform: rotate(360deg); }
+}
+
+
+/* ---- Dev overlay ---- */
+.tvs-dev {
+  position: fixed;
+  z-index: 99999;
+  max-width: 360px;
+  background: rgba(0,0,0,.85);
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.35);
+  font: 12px/1.4 -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+  user-select: none;
+}
+.tvs-dev.is-min .tvs-dev__body { display: none; }
+.tvs-dev__header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; cursor: move; border-bottom: 1px solid rgba(255,255,255,.1);
+}
+.tvs-dev__spacer { flex: 1; }
+.tvs-dev__pill {
+  display:inline-block; background: #0ea5e9; color:#00131a;
+  padding: 2px 6px; border-radius: 999px; font-weight: 700;
+}
+.tvs-dev__btn {
+  background: transparent; color: #cbd5e1; border: 1px solid #334155;
+  padding: 2px 6px; border-radius: 6px; cursor: pointer;
+}
+.tvs-dev__btn:hover { color:#fff; border-color:#475569; }
+.tvs-dev__btn--ghost { border-color: transparent; }
+.tvs-dev__body { padding: 10px; }
+.tvs-dev__row { display:flex; gap:10px; align-items:flex-start; margin: 6px 0; }
+.tvs-dev__row > span { width: 60px; color:#9ca3af; }
+.tvs-dev__row > code {
+  flex:1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: rgba(255,255,255,.06); padding: 2px 4px; border-radius: 6px;
+  color:#e5e7eb;
+}
+.tvs-dev__err { color: #fecaca; background: rgba(220,38,38,.15) !important; }
