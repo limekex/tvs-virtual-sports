@@ -14,7 +14,11 @@ On activation the plugin seeds the `tvs_activity_type` taxonomy with `run`, `rid
 ## Setup (Strava)
 1. Create a Strava app at https://www.strava.com/settings/api
 2. Set the Authorization Callback Domain to your site and the Redirect URI to: `https://your-site.example/wp-json/tvs/v1/strava/callback`
-3. Add `STRAVA_CLIENT_ID` and `STRAVA_CLIENT_SECRET` to your environment or set them in wp-config.php as constants (see TODOs).
+3. In WordPress admin, navigate to TVS → Strava
+4. Enter your Strava API Client ID and Client Secret
+5. Save the settings
+
+Note: The Strava API credentials are stored securely in WordPress options and are only accessible to administrators with the `manage_options` capability.
 
 ## Shortcodes
 - `[tvs_route id="123"]` — renders the React mount point and injects route JSON.

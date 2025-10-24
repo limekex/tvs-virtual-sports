@@ -15,6 +15,9 @@ Thumbs.db:encryptable
 # Editor/IDE
 .vscode/
 .idea/
+.vendor/
+vendor/
+tests/
 *.sublime-project
 *.sublime-workspace
 *.code-workspace

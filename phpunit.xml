@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.3/phpunit.xsd"
+         bootstrap="tests/phpunit/bootstrap.php"
+         backupGlobals="false"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true">
+    <coverage>
+        <include>
+            <directory suffix=".php">./includes</directory>
+        </include>
+    </coverage>
+    <testsuites>
+        <testsuite name="TVS Virtual Sports Test Suite">
+            <directory prefix="test-" suffix=".php">./tests/phpunit</directory>
+        </testsuite>
+    </testsuites>
+    <php>
+        <env name="WP_TESTS_DIR" value="/tmp/wordpress-tests-lib"/>
+        <env name="WP_CORE_DIR" value="/var/www/html"/>
+    </php>
+</phpunit>
