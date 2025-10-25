@@ -9,6 +9,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TVS_Frontend {
     public function __construct() {
         add_shortcode( 'tvs_route', array( $this, 'shortcode_route' ) );
+        add_shortcode( 'tvs_strava_status', array( $this, 'shortcode_strava_status' ) );
     }
 
     /* public function shortcode_route( $atts ) {
@@ -87,5 +88,42 @@ $out .= sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
 
 return $out;
 }
+
+    /**
+     * Shortcode to display Strava connection status
+     * Usage: [tvs_strava_status]
+     */
+    public function shortcode_strava_status( $atts ) {
+        if ( ! is_user_logged_in() ) {
+            return '<p>' . esc_html__( 'Du må være innlogget for å se Strava-status.', 'tvs-virtual-sports' ) . '</p>';
+        }
+        
+        $status = tvs_get_strava_status();
+        
+        if ( ! $status['connected'] ) {
+            return '<div class="tvs-strava-status">
+                <p><strong>Strava:</strong> Ikke tilkoblet</p>
+                <p><a href="/connect-strava/" class="button">Koble til Strava</a></p>
+            </div>';
+        }
+        
+        $athlete_name = $status['athlete_name'] ? esc_html( $status['athlete_name'] ) : 'Ukjent';
+        $athlete_id = $status['athlete_id'] ? esc_html( $status['athlete_id'] ) : 'N/A';
+        $scope = $status['scope'] ? esc_html( $status['scope'] ) : 'N/A';
+        
+        $expires_at = '';
+        if ( $status['expires_at'] ) {
+            $expires_at = date( 'Y-m-d H:i:s', $status['expires_at'] );
+        }
+        
+        return '<div class="tvs-strava-status" style="border:1px solid #ddd;padding:1em;margin:1em 0;">
+            <h3>Strava-tilkobling</h3>
+            <p><strong>Status:</strong> Tilkoblet ✓</p>
+            <p><strong>Atlet:</strong> ' . $athlete_name . ' (ID: ' . $athlete_id . ')</p>
+            <p><strong>Scope:</strong> ' . $scope . '</p>
+            ' . ( $expires_at ? '<p><strong>Utløper:</strong> ' . esc_html( $expires_at ) . '</p>' : '' ) . '
+            <p><em>Tokens er lagret i user_meta[\'tvs_strava\']</em></p>
+        </div>';
+    }
 
 }

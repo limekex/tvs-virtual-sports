@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Secure storage of Strava credentials in WordPress options
 - Helper methods in TVS_Strava class for accessing API credentials
 
+- Strava OAuth connection flow:
+	- Landing page `/strava/connected` for OAuth callback
+	- JS handler for code POST and redirect
+	- REST endpoint `tvs/v1/strava/connect` for exchanging code and storing tokens in user_meta
+	- Tokens stored as `user_meta['tvs_strava']`
+	- PHPUnit tests for endpoint (auth, missing code, invalid code)
+
 ### Changed
 - Updated Strava configuration to use WordPress admin interface instead of constants
 

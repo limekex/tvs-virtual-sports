@@ -13,8 +13,16 @@ class TVS_Strava {
     protected $api_base = 'https://www.strava.com/api/v3';
 
     public function __construct() {
-        $this->client_id = defined( 'STRAVA_CLIENT_ID' ) ? STRAVA_CLIENT_ID : getenv( 'STRAVA_CLIENT_ID' );
-        $this->client_secret = defined( 'STRAVA_CLIENT_SECRET' ) ? STRAVA_CLIENT_SECRET : getenv( 'STRAVA_CLIENT_SECRET' );
+        // Priority: 1) WP options (from admin settings), 2) constants, 3) env vars
+        $this->client_id = get_option( 'tvs_strava_client_id' );
+        if ( empty( $this->client_id ) ) {
+            $this->client_id = defined( 'STRAVA_CLIENT_ID' ) ? STRAVA_CLIENT_ID : getenv( 'STRAVA_CLIENT_ID' );
+        }
+        
+        $this->client_secret = get_option( 'tvs_strava_client_secret' );
+        if ( empty( $this->client_secret ) ) {
+            $this->client_secret = defined( 'STRAVA_CLIENT_SECRET' ) ? STRAVA_CLIENT_SECRET : getenv( 'STRAVA_CLIENT_SECRET' );
+        }
     }
 
     /**

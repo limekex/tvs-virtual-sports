@@ -294,11 +294,19 @@ class TVS_REST {
             return $res;
         }
 
-        // Store tokens in user meta
-        if ( isset( $res['access_token'] ) ) {
-            update_user_meta( $user_id, 'tvs_strava_token', $res );
+        // Store tokens in user meta as tvs_strava (per issue #3)
+        if ( isset( $res['access_token'] ) && isset( $res['refresh_token'] ) ) {
+            $tokens = array(
+                'access'     => $res['access_token'],
+                'refresh'    => $res['refresh_token'],
+                'expires_at' => isset($res['expires_at']) ? $res['expires_at'] : null,
+                'scope'      => isset($res['scope']) ? $res['scope'] : null,
+                'athlete'    => isset($res['athlete']) ? $res['athlete'] : null,
+            );
+            update_user_meta( $user_id, 'tvs_strava', $tokens );
+            return rest_ensure_response( $tokens );
         }
-        return rest_ensure_response( $res );
+        return new WP_Error( 'invalid_response', 'Missing tokens from Strava', array( 'status' => 500 ) );
     }
 
     public function activities_upload_strava( $request ) {

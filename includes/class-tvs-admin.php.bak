@@ -282,6 +282,7 @@ class TVS_Admin {
 		</p>
 		<?php
 	}
+}
 	/**
 	 * Show Strava connection status on user profile pages
 	 *

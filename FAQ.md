@@ -6,6 +6,13 @@ The Strava API credentials can be configured in WordPress admin under the "TVS" 
 ## Who can access the Strava settings?
 Only administrators with the `manage_options` capability can access and modify the Strava API settings.
 
+
+## How does the Strava connection flow work?
+After logging in and authorizing via Strava, you are redirected to `/strava/connected?code=...`.
+On this page, a script automatically POSTs the code to the REST endpoint `/wp-json/tvs/v1/strava/connect`.
+If successful, your Strava tokens are securely stored in your WordPress user meta (`tvs_strava`).
+You are then redirected to your profile page. If there is an error, you will see a retry option.
+
 ## How are the Strava credentials stored?
 The Strava API credentials are stored securely in WordPress options using WordPress's built-in options API. They are stored as `tvs_strava_client_id` and `tvs_strava_client_secret`.
 

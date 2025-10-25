@@ -33,3 +33,33 @@ function tvs_sanitize_route_meta( $data ) {
     }
     return $out;
 }
+
+/**
+ * Check if current user is connected to Strava
+ * 
+ * @param int $user_id Optional user ID (defaults to current user)
+ * @return bool True if connected, false otherwise
+ */
+function tvs_is_strava_connected( $user_id = null ) {
+    return TVS_User_Profile::is_strava_connected( $user_id );
+}
+
+/**
+ * Get Strava connection status for a user
+ * 
+ * @param int $user_id Optional user ID (defaults to current user)
+ * @return array Status with keys: connected, athlete_name, athlete_id, expires_at, scope
+ */
+function tvs_get_strava_status( $user_id = null ) {
+    return TVS_User_Profile::get_strava_status( $user_id );
+}
+
+/**
+ * Get Strava athlete data for a user
+ * 
+ * @param int $user_id Optional user ID (defaults to current user)
+ * @return array|null Athlete data or null
+ */
+function tvs_get_strava_athlete( $user_id = null ) {
+    return TVS_User_Profile::get_strava_athlete( $user_id );
+}
