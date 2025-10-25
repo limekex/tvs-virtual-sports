@@ -120,7 +120,7 @@ class TVS_Admin {
 		// Register settings section.
 		add_settings_section(
 			'tvs_strava_settings_section',
-			__( 'Strava API Settings', 'tvs-virtual-sports' ),
+			__( 'Strava Settings', 'tvs-virtual-sports' ),
 			array( $this, 'render_section_info' ),
 			'tvs-strava-settings'
 		);
@@ -134,7 +134,9 @@ class TVS_Admin {
                 'sanitize_callback' => array($this, 'sanitize_client_id'),
                 'default'           => '',
             )
-        );		// Register Client Secret field.
+        );
+
+		// Register Client Secret field.
         register_setting(
             'tvs_strava_settings',
             'tvs_strava_client_secret',
@@ -143,7 +145,43 @@ class TVS_Admin {
                 'sanitize_callback' => array($this, 'sanitize_client_secret'),
                 'default'           => '',
             )
-        );		// Add settings fields.
+        );
+
+		// Register default upload templates and privacy
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_title_template',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => 'TVS: {route_title}',
+			)
+		);
+
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_desc_template',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_textarea_field',
+				'default'           => 'Uploaded from TVS Virtual Sports (Activity ID: {activity_id}).',
+			)
+		);
+
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_private',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => function( $v ) { 
+					// Checkbox sends '1' when checked, nothing when unchecked
+					return ! empty( $v );
+				},
+				'default'           => true,
+			)
+		);
+
+		// Add settings fields.
 		add_settings_field(
 			'tvs_strava_client_id',
 			__( 'Client ID', 'tvs-virtual-sports' ),
@@ -156,6 +194,30 @@ class TVS_Admin {
 			'tvs_strava_client_secret',
 			__( 'Client Secret', 'tvs-virtual-sports' ),
 			array( $this, 'render_client_secret_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		add_settings_field(
+			'tvs_strava_title_template',
+			__( 'Default Title Template', 'tvs-virtual-sports' ),
+			array( $this, 'render_title_template_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		add_settings_field(
+			'tvs_strava_desc_template',
+			__( 'Default Description Template', 'tvs-virtual-sports' ),
+			array( $this, 'render_desc_template_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		add_settings_field(
+			'tvs_strava_private',
+			__( 'Publish as Private', 'tvs-virtual-sports' ),
+			array( $this, 'render_private_field' ),
 			'tvs-strava-settings',
 			'tvs_strava_settings_section'
 		);
@@ -279,6 +341,50 @@ class TVS_Admin {
 				'tvs-virtual-sports'
 			);
 			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Render title template field
+	 */
+	public function render_title_template_field() {
+		$value = get_option( 'tvs_strava_title_template', 'TVS: {route_title}' );
+		?>
+		<input type="text" id="tvs_strava_title_template" name="tvs_strava_title_template" value="<?php echo esc_attr( $value ); ?>" class="regular-text" />
+		<p class="description">
+			<?php esc_html_e( 'Placeholders: {route_title}, {route_url}, {activity_id}, {distance_km}, {duration_hms}, {date_local}, {type}', 'tvs-virtual-sports' ); ?>
+			<br><code>{distance_km}</code>: Distanse i kilometer, automatisk med "km" postfix (f.eks. "5 km")
+			<br><code>{duration_hms}</code>: Tid brukt, automatisk formatert: "mm:ss" hvis under 1 time, "h mm:ss" hvis over 1 time
+		</p>
+		<?php
+	}
+
+	/**
+	 * Render description template field
+	 */
+	public function render_desc_template_field() {
+		$value = get_option( 'tvs_strava_desc_template', 'Uploaded from TVS Virtual Sports (Activity ID: {activity_id}).' );
+		?>
+		<textarea id="tvs_strava_desc_template" name="tvs_strava_desc_template" rows="4" class="large-text"><?php echo esc_textarea( $value ); ?></textarea>
+		<p class="description">
+			<?php esc_html_e( 'Placeholders: {route_title}, {route_url}, {activity_id}, {distance_km}, {duration_hms}, {date_local}, {type}', 'tvs-virtual-sports' ); ?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Render private toggle field
+	 */
+	public function render_private_field() {
+		$value = (bool) get_option( 'tvs_strava_private', true );
+		?>
+		<label>
+			<input type="checkbox" id="tvs_strava_private" name="tvs_strava_private" value="1" <?php checked( $value, true ); ?> />
+			<?php esc_html_e( 'Hide uploaded activities from public feed (activity will still be visible to anyone with the link).', 'tvs-virtual-sports' ); ?>
+		</label>
+		<p class="description">
+			<?php esc_html_e( 'Note: Strava does not allow setting activities as "Only You" via API. To make an activity fully private, you must change it manually on Strava after upload.', 'tvs-virtual-sports' ); ?>
 		</p>
 		<?php
 	}

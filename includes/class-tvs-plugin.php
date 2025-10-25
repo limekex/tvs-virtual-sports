@@ -69,6 +69,15 @@ class TVS_Plugin {
 
         // Register app script that depends on React
         wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
+        
+        // Localize script with settings and nonce
+        wp_localize_script( 'tvs-app', 'TVS_SETTINGS', array(
+            'env'      => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
+            'restRoot' => get_rest_url(),
+            'nonce'    => wp_create_nonce( 'wp_rest' ),
+            'version'  => TVS_PLUGIN_VERSION,
+            'user'     => is_user_logged_in() ? wp_get_current_user()->user_login : null,
+        ) );
     }
 
     /**

@@ -75,16 +75,14 @@ if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
 }
 wp_enqueue_script( 'tvs-app' );
 
-// 1) Prøv vanlig WP-måte
-$json   = wp_json_encode( $payload );
+// 1) Legg data på en trygg måte før app-skriptet
+$json = wp_json_encode( $payload );
+// Beskytt mot </script> sekvens i innhold
+$json = str_replace( '</script>', '<\/script>', $json );
 wp_add_inline_script( 'tvs-app', "window.tvs_route_payload = {$json};", 'before' );
 
-// 2) I tillegg: skriv payload direkte i markup (sikrer at den finnes tidlig)
-$inline_tag = '<script>window.tvs_route_payload = ' . $json . ';</script>';
-
-// Mountpunkt + inline payload (payload før root er fint)
-$out  = $inline_tag;
-$out .= sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
+// 2) Kun mountpunkt i markup (unngå ekstra inline <script> i innholdet)
+$out = sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
 
 return $out;
 }

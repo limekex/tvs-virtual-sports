@@ -257,11 +257,14 @@
     const [data, setData] = useState(initialData || null);
     const [error, setError] = useState(null);
     const [isPosting, setIsPosting] = useState(false);
+    const [activities, setActivities] = useState([]);
+    const [loadingActivities, setLoadingActivities] = useState(false);
+    const [uploadingId, setUploadingId] = useState(null);
     const [lastStatus, setLastStatus] = useState(initialData ? "inline" : "loading");
     const [lastError, setLastError] = useState(null);
 
+    // Load route data
     useEffect(() => {
-      // For å tvinge frem loader: hvis initialData finnes men du vil SE loader, bruk ?tvsforcefetch=1
       const forceFetch =
         new URLSearchParams(location.search).get("tvsforcefetch") === "1";
 
@@ -293,18 +296,51 @@
           setLastError(e?.message || String(e));
           setLastStatus("error");
         }
-      })(); // FIX: fjernet ekstra krøllparentes som brøt syntaks
+      })();
     }, [routeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (error) return h("div", { className: "tvs-route tvs-error" }, String(error));
-    if (!data) return React.createElement(Loading, null);
+    // Load user's activities
+    useEffect(() => {
+      loadActivities();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const title = data.title || "Route";
-    const meta = data.meta || {};
-    const vimeo = meta.vimeo_id ? String(meta.vimeo_id) : "";
+    async function loadActivities() {
+      try {
+        setLoadingActivities(true);
+        const r = await fetch("/wp-json/tvs/v1/activities/me", {
+          credentials: "same-origin",
+          headers: {
+            "X-WP-Nonce": window.TVS_SETTINGS?.nonce || ""
+          }
+        });
+        if (!r.ok) {
+          throw new Error("Failed to load activities");
+        }
+        const json = await r.json();
+        log("Activities loaded:", json);
+        // Handle both array format and {activities: []} format
+        const activitiesData = Array.isArray(json) ? json : (json.activities || []);
+        setActivities(activitiesData);
+      } catch (e) {
+        err("Load activities FAIL:", e);
+        // Set empty array on error
+        setActivities([]);
+      } finally {
+        setLoadingActivities(false);
+      }
+    }
 
     async function createActivity() {
       try {
+        // Check if user is logged in
+        if (!window.TVS_SETTINGS?.user) {
+          alert("You must be logged in to create an activity");
+          return;
+        }
+        
+        // Debug: Log settings
+        log("TVS_SETTINGS:", window.TVS_SETTINGS);
+        
         setIsPosting(true);
         setLastStatus("posting");
         const payload = {
@@ -313,33 +349,118 @@
           duration_s: Number(meta.duration_s || 0),
           distance_m: Number(meta.distance_m || 0),
         };
-        log("POST activity", payload, "(tvsslow:", slowParam, "ms)");
-        if (slowParam) await delay(slowParam); // simuler treghet
+        
+        const nonce = window.TVS_SETTINGS?.nonce || "";
+        log("POST activity", payload, "nonce:", nonce);
+        log("Headers being sent:", {
+          "Content-Type": "application/json",
+          "X-WP-Nonce": nonce
+        });
+        
+        if (slowParam) await delay(slowParam);
 
         const r = await fetch("/wp-json/tvs/v1/activities", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "X-WP-Nonce": nonce
+          },
           credentials: "same-origin",
           body: JSON.stringify(payload),
         });
+        
+        log("Response status:", r.status);
+        log("Response headers:", Array.from(r.headers.entries()));
+        
+        if (!r.ok) {
+          const res = await r.json();
+          log("Response status:", r.status, "Response:", res);
+          throw new Error(res.message || `HTTP ${r.status}: ${res.code || 'Unknown error'}`);
+        }
+        
         const res = await r.json();
         log("Activity OK:", res);
-        alert("Activity created: " + (res.id || JSON.stringify(res)));
+        alert("✓ Activity created! ID: " + res.id);
         setLastStatus("ok");
+        // Reload activities list
+        await loadActivities();
       } catch (e) {
         err("Activity FAIL:", e);
-        alert("Failed to create activity");
+        alert("Failed to create activity: " + (e?.message || String(e)));
         setLastError(e?.message || String(e));
         setLastStatus("error");
-      } finally { // FIX: fjernet ekstra krøllparentes før finally
+      } finally {
         setIsPosting(false);
       }
     }
+
+    async function uploadToStrava(activityId) {
+      try {
+        setUploadingId(activityId);
+        setLastStatus("uploading");
+        log("Uploading activity", activityId, "to Strava");
+        
+        const r = await fetch(`/wp-json/tvs/v1/activities/${activityId}/strava`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-WP-Nonce": window.TVS_SETTINGS?.nonce || ""
+          },
+          credentials: "same-origin",
+        });
+        
+        const res = await r.json();
+        
+        if (!r.ok) {
+          throw new Error(res.message || "Upload failed");
+        }
+        
+        log("Strava upload OK:", res);
+        alert("✓ Uploaded to Strava!\n" + (res.strava_url || "Activity ID: " + res.strava_id));
+        setLastStatus("ok");
+        
+        // Reload activities to show updated sync status
+        await loadActivities();
+      } catch (e) {
+        err("Strava upload FAIL:", e);
+        alert("Failed to upload to Strava: " + (e?.message || String(e)));
+        setLastError(e?.message || String(e));
+        setLastStatus("error");
+      } finally {
+        setUploadingId(null);
+      }
+    }
+
+    if (error) return h("div", { className: "tvs-route tvs-error" }, String(error));
+    if (!data) return React.createElement(Loading, null);
+
+    const title = data.title || "Route";
+    const meta = data.meta || {};
+    const vimeo = meta.vimeo_id ? String(meta.vimeo_id) : "";
+    const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
     return h(
       "div",
       { className: "tvs-app" },
       h("h2", null, title),
+      
+      // Login warning if not authenticated
+      !isLoggedIn
+        ? h(
+            "div",
+            {
+              style: {
+                backgroundColor: "#fef3c7",
+                border: "1px solid #f59e0b",
+                padding: "1rem",
+                marginBottom: "1rem",
+                borderRadius: "4px",
+              },
+            },
+            h("strong", null, "⚠️ You must be logged in"),
+            h("p", { style: { margin: "0.5rem 0 0 0" } }, "Please log in to create activities and upload to Strava.")
+          )
+        : null,
       vimeo
         ? h(
             "div",
@@ -357,13 +478,119 @@
       h("div", { className: "tvs-meta" }, h("pre", null, JSON.stringify(meta, null, 2))),
       h(
         "button",
-        { className: "tvs-btn", onClick: createActivity, disabled: isPosting },
+        { 
+          className: "tvs-btn", 
+          onClick: createActivity, 
+          disabled: isPosting || !isLoggedIn 
+        },
         isPosting
           ? h("span", { className: "tvs-spinner", "aria-hidden": "true" })
           : null,
-        isPosting ? " Starting..." : "Start activity"
+        isPosting ? " Creating..." : "Start New Activity"
       ),
+      
+      // Activities List
+      h(
+        "div",
+        { className: "tvs-activities", style: { marginTop: "2rem" } },
+        h("h3", null, "My Activities"),
+        loadingActivities
+          ? h("p", null, "Loading activities...")
+          : activities.length === 0
+          ? h("p", null, "No activities yet. Start one above!")
+          : h(
+              "div",
+              { className: "tvs-activities-list" },
+              activities.map((activity) =>
+                h(ActivityCard, {
+                  key: activity.id,
+                  activity,
+                  uploadToStrava,
+                  uploading: uploadingId === activity.id,
+                  React,
+                })
+              )
+            )
+      ),
+      
       DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError }) : null
+    );
+  }
+
+  // Activity Card Component
+  function ActivityCard({ activity, uploadToStrava, uploading, React }) {
+    const { createElement: h } = React;
+    const meta = activity.meta || {};
+    const activityId = activity.id;
+    
+    const syncedStrava = meta._tvs_synced_strava?.[0] || meta.synced_strava?.[0];
+    const stravaRemoteId = meta._tvs_strava_remote_id?.[0] || meta.strava_activity_id?.[0];
+    const isSynced = syncedStrava === "1" || syncedStrava === 1;
+    
+    const distance = meta._tvs_distance_m?.[0] || meta.distance_m?.[0] || 0;
+    const duration = meta._tvs_duration_s?.[0] || meta.duration_s?.[0] || 0;
+    const routeId = meta._tvs_route_id?.[0] || meta.route_id?.[0];
+    
+    return h(
+      "div",
+      {
+        className: "tvs-activity-card",
+        style: {
+          border: "1px solid #ddd",
+          padding: "1rem",
+          marginBottom: "1rem",
+          borderRadius: "4px",
+          backgroundColor: isSynced ? "#f0f9ff" : "#fff"
+        },
+      },
+      h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+        h("div", null,
+          h("strong", null, "Activity #" + activityId),
+          routeId ? h("span", { style: { marginLeft: "0.5rem", color: "#666" } }, " (Route: " + routeId + ")") : null,
+          h("div", { style: { marginTop: "0.5rem", fontSize: "0.9rem", color: "#666" } },
+            distance > 0 ? h("span", null, "Distance: " + (distance / 1000).toFixed(2) + " km ") : null,
+            duration > 0 ? h("span", null, "Duration: " + Math.floor(duration / 60) + " min") : null
+          )
+        ),
+        h("div", null,
+          isSynced
+            ? h(
+                "div",
+                { style: { textAlign: "right" } },
+                h("span", { style: { color: "#10b981", fontWeight: "bold" } }, "✓ Synced to Strava"),
+                stravaRemoteId
+                  ? h(
+                      "a",
+                      {
+                        href: "https://www.strava.com/activities/" + stravaRemoteId,
+                        target: "_blank",
+                        rel: "noopener noreferrer",
+                        style: { display: "block", marginTop: "0.25rem", fontSize: "0.85rem" }
+                      },
+                      "View on Strava →"
+                    )
+                  : null
+              )
+            : h(
+                "button",
+                {
+                  className: "tvs-btn tvs-btn-strava",
+                  onClick: () => uploadToStrava(activityId),
+                  disabled: uploading,
+                  style: {
+                    backgroundColor: "#fc4c02",
+                    color: "white",
+                    border: "none",
+                    padding: "0.5rem 1rem",
+                    borderRadius: "4px",
+                    cursor: uploading ? "wait" : "pointer",
+                    opacity: uploading ? 0.6 : 1
+                  }
+                },
+                uploading ? "Uploading..." : "Upload to Strava"
+              )
+        )
+      )
     );
   }
 

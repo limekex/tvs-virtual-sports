@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
 }
 
-define( 'TVS_PLUGIN_VERSION', '0.1.0' );
+define( 'TVS_PLUGIN_VERSION', '0.1.3' );
 define( 'TVS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TVS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
