@@ -72,6 +72,14 @@ class TVS_REST {
             'methods' => 'GET',
             'callback' => array( $this, 'get_activities_me' ),
             'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'scope' => array(
+                    'description' => 'me (default) or all (dev/admin only) to list activities',
+                    'type'        => 'string',
+                    'default'     => 'me',
+                    'enum'        => array( 'me', 'all' ),
+                ),
+            ),
         ) );
 
         register_rest_route( $ns, '/strava/connect', array(
@@ -300,6 +308,8 @@ class TVS_REST {
 
     public function get_activities_me( $request ) {
         $user_id = get_current_user_id();
+        $scope   = $request->get_param( 'scope' );
+        $scope   = $scope ? strtolower( $scope ) : 'me';
         
         // WORKAROUND: For cross-domain issues where cookies don't work but nonce is valid
         if ( ! $user_id ) {
@@ -324,14 +334,29 @@ class TVS_REST {
         }
         
     error_log( 'TVS: get_activities_me called for user_id: ' . $user_id );
-        
-        $args = array(
-            'post_type'      => 'tvs_activity',
-            'author'         => $user_id,
-            'posts_per_page' => 50,
-            // Include all statuses for the current user's activities to avoid empty results
-            'post_status'    => 'any',
-        );
+
+        $dev_mode = defined( 'WP_DEBUG' ) && WP_DEBUG;
+        $nonce_present = (bool) ( $request->get_header( 'X-TVS-Nonce' ) ?: $request->get_header( 'X-WP-Nonce' ) );
+        $allow_all = ( user_can( $user_id, 'manage_options' ) || ( $dev_mode && $nonce_present ) );
+
+        // Default to author's activities; allow scope=all only for admin/dev
+        if ( $scope === 'all' && $allow_all ) {
+            $args = array(
+                'post_type'      => 'tvs_activity',
+                'posts_per_page' => 50,
+                'post_status'    => 'any',
+                'orderby'        => 'date',
+                'order'          => 'DESC',
+            );
+            error_log( 'TVS: activities_me scope=all enabled (allow_all=' . ( $allow_all ? 'yes' : 'no' ) . ')' );
+        } else {
+            $args = array(
+                'post_type'      => 'tvs_activity',
+                'author'         => $user_id,
+                'posts_per_page' => 50,
+                'post_status'    => 'any',
+            );
+        }
     $q = new WP_Query( $args );
     error_log( 'TVS: activities_me query args: ' . wp_json_encode( $args ) );
         
