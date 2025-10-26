@@ -325,9 +325,11 @@ class TVS_REST {
         error_log( 'TVS: get_activities_me called for user_id: ' . $user_id );
         
         $args = array(
-            'post_type' => 'tvs_activity',
-            'author' => $user_id,
+            'post_type'      => 'tvs_activity',
+            'author'         => $user_id,
             'posts_per_page' => 50,
+            // Include all statuses for the current user's activities to avoid empty results
+            'post_status'    => 'any',
         );
         $q = new WP_Query( $args );
         
