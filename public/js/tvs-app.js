@@ -64,6 +64,37 @@
     }
   }
 
+  // ---------- formatTime helper ----------
+  function formatTime(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return mins + ":" + (secs < 10 ? "0" : "") + secs;
+  }
+
+  // ---------- ProgressBar component ----------
+  function ProgressBar({ React, currentTime, duration }) {
+    const h = React.createElement;
+    const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+    
+    return h(
+      "div",
+      { className: "tvs-progress" },
+      h(
+        "div",
+        { className: "tvs-progress__bar" },
+        h("div", {
+          className: "tvs-progress__fill",
+          style: { width: Math.min(progress, 100) + "%" }
+        })
+      ),
+      h(
+        "div",
+        { className: "tvs-progress__time" },
+        formatTime(currentTime) + " / " + formatTime(duration)
+      )
+    );
+  }
+
   // ---------- Loading (spinner/skeleton) ----------
   function Loading() {
     const h = React.createElement;
@@ -128,7 +159,7 @@
     return fps;
   }
 
-  function DevOverlay({ React, routeId, lastStatus, lastError }) {
+  function DevOverlay({ React, routeId, lastStatus, lastError, currentTime, duration }) {
     const { useEffect, useRef, useState, createElement: h } = React;
     const fps = useFPS(React);
     const boxRef = useRef(null);
@@ -168,6 +199,8 @@
       };
     }, [pos]);
 
+    const progress = duration > 0 ? ((currentTime / duration) * 100).toFixed(1) : "0.0";
+
     const data = {
       env: window.TVS_SETTINGS?.env,
       version: window.TVS_SETTINGS?.version,
@@ -176,6 +209,9 @@
       routeId,
       lastStatus: lastStatus || "idle",
       lastError: lastError ? String(lastError) : null,
+      currentTime: currentTime ? currentTime.toFixed(1) : "0.0",
+      duration: duration || 0,
+      progress: progress + "%",
       fps,
     };
 
@@ -221,6 +257,9 @@
         row("REST", data.restRoot ?? "n/a"),
         row("Status", data.lastStatus),
         data.lastError ? row("Error", data.lastError, true) : null,
+        row("Duration", data.duration + "s"),
+        row("Current", data.currentTime + "s"),
+        row("Progress", data.progress),
         row("FPS", String(data.fps)),
         h(
           "div",
@@ -253,7 +292,7 @@
 
   // ---------- App ----------
   function App({ initialData, routeId }) {
-    const { useEffect, useState, createElement: h } = React;
+    const { useEffect, useState, useRef, createElement: h } = React;
     const [data, setData] = useState(initialData || null);
     const [error, setError] = useState(null);
     const [isPosting, setIsPosting] = useState(false);
@@ -262,6 +301,8 @@
     const [uploadingId, setUploadingId] = useState(null);
     const [lastStatus, setLastStatus] = useState(initialData ? "inline" : "loading");
     const [lastError, setLastError] = useState(null);
+    const [currentTime, setCurrentTime] = useState(0);
+    const videoRef = useRef(null);
 
     // Load route data
     useEffect(() => {
@@ -329,6 +370,25 @@
         setLoadingActivities(false);
       }
     }
+
+    // Bind to video/iframe timeupdate event
+    useEffect(() => {
+      if (!data) return;
+      
+      const video = videoRef.current;
+      if (!video) return;
+
+      function handleTimeUpdate() {
+        if (video.currentTime !== undefined) {
+          setCurrentTime(video.currentTime);
+        }
+      }
+
+      video.addEventListener("timeupdate", handleTimeUpdate);
+      return () => {
+        video.removeEventListener("timeupdate", handleTimeUpdate);
+      };
+    }, [data]);
 
     async function createActivity() {
       try {
@@ -437,6 +497,7 @@
     const title = data.title || "Route";
     const meta = data.meta || {};
     const vimeo = meta.vimeo_id ? String(meta.vimeo_id) : "";
+    const duration = Number(meta.duration_s || 0);
     const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
     return h(
@@ -466,6 +527,7 @@
             "div",
             { className: "tvs-video" },
             h("iframe", {
+              ref: videoRef,
               width: 560,
               height: 315,
               src: "https://player.vimeo.com/video/" + encodeURIComponent(vimeo),
@@ -476,6 +538,7 @@
           )
         : null,
       h("div", { className: "tvs-meta" }, h("pre", null, JSON.stringify(meta, null, 2))),
+      h(ProgressBar, { React, currentTime, duration }),
       h(
         "button",
         { 
@@ -513,7 +576,7 @@
             )
       ),
       
-      DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError }) : null
+      DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
     );
   }
 
