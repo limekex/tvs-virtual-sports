@@ -351,7 +351,8 @@
         const r = await fetch("/wp-json/tvs/v1/activities/me", {
           credentials: "same-origin",
           headers: {
-            "X-WP-Nonce": window.TVS_SETTINGS?.nonce || ""
+            // Use custom header to avoid WP core nonce checks blocking before our permission callback
+            "X-TVS-Nonce": window.TVS_SETTINGS?.nonce || ""
           }
         });
         if (!r.ok) {

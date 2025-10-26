@@ -303,7 +303,11 @@ class TVS_REST {
         
         // WORKAROUND: For cross-domain issues where cookies don't work but nonce is valid
         if ( ! $user_id ) {
-            $nonce = $request->get_header( 'X-WP-Nonce' );
+            // Accept both our custom header and WP's header name
+            $nonce = $request->get_header( 'X-TVS-Nonce' );
+            if ( ! $nonce ) {
+                $nonce = $request->get_header( 'X-WP-Nonce' );
+            }
             if ( $nonce && wp_verify_nonce( $nonce, 'wp_rest' ) ) {
                 // Get first admin user as fallback
                 $admins = get_users( array( 'role' => 'administrator', 'number' => 1 ) );
@@ -350,7 +354,11 @@ class TVS_REST {
         
         // WORKAROUND: cross-domain nonce fallback
         if ( ! $user_id ) {
-            $nonce = $request->get_header( 'X-WP-Nonce' );
+            // Accept both our custom header and WP's header name
+            $nonce = $request->get_header( 'X-TVS-Nonce' );
+            if ( ! $nonce ) {
+                $nonce = $request->get_header( 'X-WP-Nonce' );
+            }
             if ( $nonce && strlen( $nonce ) > 5 ) {
                 $admins = get_users( array( 'role' => 'administrator', 'number' => 1 ) );
                 if ( ! empty( $admins ) ) {
@@ -558,8 +566,12 @@ class TVS_REST {
         // For cross-domain requests where cookies don't work, check for nonce
         // Even if wp_verify_nonce() fails (because there's no user session),
         // the presence of a nonce proves the user had access to a logged-in page
-        $nonce = $request->get_header( 'X-WP-Nonce' );
-        
+        // Accept both our custom header and WP's header name
+        $nonce = $request->get_header( 'X-TVS-Nonce' );
+        if ( ! $nonce ) {
+            $nonce = $request->get_header( 'X-WP-Nonce' );
+        }
+
         error_log( 'TVS: permissions_for_activities - nonce: ' . ($nonce ? 'present' : 'missing') );
         error_log( 'TVS: permissions_for_activities - is_user_logged_in: ' . (is_user_logged_in() ? 'yes' : 'no') );
         
