@@ -40,9 +40,50 @@ Available template placeholders:
 - `{route_url}` - Link to the route page
 
 ## Shortcodes
-- `[tvs_route id="123"]` — renders the React mount point and injects route JSON.
+ `[tvs_my_activities]` — displays a compact list of the user's 5 most recent activities with Strava sync status
 
+## Gutenberg Blocks
+**TVS My Activities** — Standalone block for displaying recent activities. Shows the same content as the `[tvs_my_activities]` shortcode but can be inserted via the block editor.
 ## REST API (namespace `tvs/v1`)
+## Features
+
+### Progress Tracking
+- **Visual Progress Bar**: Real-time indicator showing playback progress
+	- Displays current time and total duration (e.g., "2:45 / 15:00")
+	- Smooth updates during video playback
+	- Gradient-styled progress fill
+	- Works with slow-motion testing (`?tvsslow=1500`)
+	- Progress percentage visible in DevOverlay when debug mode active
+
+### Activity Session Management
+- **Start**: Begin a new activity session and start video playback
+- **Pause**: Pause video and session without saving
+- **Resume**: Continue from where paused, preserving session start time
+- **Finish & Save**: Save activity with cumulative duration
+- Session timer accurately tracks total activity time across pause/resume cycles
+
+### My Activities Display
+- Compact activity cards showing 5 most recent activities
+- Activity names formatted as "Route name (date)"
+- Distance and duration statistics
+- Strava sync status with visual indicators:
+	- Green checkmark (✓) for synced activities
+	- Orange "S" button for upload/view on Strava
+- Click-to-upload with elegant popover confirmation
+- Auto-refresh when activities are saved or synced
+- Available as both Gutenberg block and shortcode
+
+### Flash Notifications
+- Elegant slide-in notifications replacing alert() dialogs
+- Auto-fade after 3 seconds
+- Green for success, red for errors
+- Used for activity save and Strava upload confirmations
+
+### Debug Mode
+- Activate with URL parameter `?tvsdebug=1`
+- Or press backtick (`) key to enable
+- Shows developer overlay with route data, timing, and API status
+- Debug logging only visible when active
 - GET /wp-json/tvs/v1/routes
 - GET /wp-json/tvs/v1/routes/{id}
 - POST /wp-json/tvs/v1/activities
