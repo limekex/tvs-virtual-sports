@@ -24,20 +24,10 @@
     console.error("[TVS]", ...args);
   }
 
-  const slowParam = Number(new URLSearchParams(location.search).get("tvsslow") || 0);
-  function delay(ms) {
-    return new Promise((res) => setTimeout(res, ms));
-  }
-
-  // ---------- React wiring (WP-safe) ----------
+  // ---------- React mount helper ----------
   const wpEl = (window.wp && window.wp.element) || {};
   const React = window.React || wpEl;
   const ReactDOM = window.ReactDOM || null;
-
-  if (!React || !React.createElement) {
-    err("React/ wp.element mangler. Kunne ikke mount'e appen.");
-    return;
-  }
 
   // createRoot-kompat: bruk det som finnes
   const hasCreateRoot =
@@ -62,6 +52,11 @@
     } catch (e) {
       err("Mount feilet:", e);
     }
+  }
+
+  const slowParam = Number(new URLSearchParams(location.search).get("tvsslow") || 0);
+  function delay(ms) {
+    return new Promise((res) => setTimeout(res, ms));
   }
 
   // ---------- formatTime helper ----------
@@ -296,6 +291,8 @@
     const [data, setData] = useState(initialData || null);
     const [error, setError] = useState(null);
     const [isPosting, setIsPosting] = useState(false);
+    const [isSessionActive, setIsSessionActive] = useState(false);
+    const [sessionStartAt, setSessionStartAt] = useState(null);
     const [activities, setActivities] = useState([]);
     const [loadingActivities, setLoadingActivities] = useState(false);
     const [uploadingId, setUploadingId] = useState(null);
@@ -303,6 +300,12 @@
     const [lastError, setLastError] = useState(null);
     const [currentTime, setCurrentTime] = useState(0);
     const videoRef = useRef(null);
+    const playerRef = useRef(null);
+    
+    // Flash message helper
+    function showFlash(message, type = 'success') {
+      window.tvsFlash(message, type);
+    }
 
     // Load route data
     useEffect(() => {
@@ -336,6 +339,7 @@
           setError("Kunne ikke hente rutedata.");
           setLastError(e?.message || String(e));
           setLastStatus("error");
+             window.player = player; // Expose for debugging
         }
       })();
     }, [routeId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -348,7 +352,11 @@
     async function loadActivities() {
       try {
         setLoadingActivities(true);
-        const r = await fetch("/wp-json/tvs/v1/activities/me", {
+        // In debug mode (or with ?tvsall=1), include scope=all to help diagnose author filtering in dev
+        const scopeQ = (DEBUG || param("tvsall") === "1") ? "?scope=all" : "";
+        const url = "/wp-json/tvs/v1/activities/me" + scopeQ;
+        log("Fetching activities:", url);
+        const r = await fetch(url, {
           credentials: "same-origin",
           headers: {
             // Use custom header to avoid WP core nonce checks blocking before our permission callback
@@ -363,6 +371,7 @@
         // Handle both array format and {activities: []} format
         const activitiesData = Array.isArray(json) ? json : (json.activities || []);
         setActivities(activitiesData);
+           window.player = null;
       } catch (e) {
         err("Load activities FAIL:", e);
         // Set empty array on error
@@ -372,82 +381,275 @@
       }
     }
 
-    // Bind to video/iframe timeupdate event
+    // Bind to Vimeo player timeupdate via API (iframe doesn't emit timeupdate itself)
     useEffect(() => {
       if (!data) return;
-      
-      const video = videoRef.current;
-      if (!video) return;
 
-      function handleTimeUpdate() {
-        if (video.currentTime !== undefined) {
-          setCurrentTime(video.currentTime);
-        }
+      const iframe = videoRef.current;
+      if (!iframe) return;
+
+      let player = null;
+      let unsubscribed = false;
+
+      function loadVimeoAPI() {
+        return new Promise((resolve, reject) => {
+          if (window.Vimeo && window.Vimeo.Player) return resolve();
+          const existing = document.querySelector('script[src="https://player.vimeo.com/api/player.js"]');
+          if (existing) {
+            existing.addEventListener('load', () => resolve());
+            existing.addEventListener('error', () => reject(new Error('Vimeo API failed to load')));
+            return;
+          }
+          const s = document.createElement('script');
+          s.src = 'https://player.vimeo.com/api/player.js';
+          s.async = true;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('Vimeo API failed to load'));
+          document.head.appendChild(s);
+        });
       }
 
-      video.addEventListener("timeupdate", handleTimeUpdate);
+      (async () => {
+        try {
+          if (DEBUG) console.info('[TVS] Loading Vimeo API...');
+          await loadVimeoAPI();
+          if (DEBUG) console.info('[TVS] Vimeo API loaded, window.Vimeo:', !!window.Vimeo, 'window.Vimeo.Player:', !!window.Vimeo?.Player);
+          if (unsubscribed) return;
+          
+          if (DEBUG) console.info('[TVS] Creating Vimeo Player with iframe:', iframe);
+          player = new window.Vimeo.Player(iframe);
+          playerRef.current = player;
+          window.player = player; // Expose for debugging
+          if (DEBUG) console.info('[TVS] Vimeo player created and assigned to window.player:', !!window.player);
+          if (DEBUG) console.info('[TVS] Player methods:', player ? Object.keys(player).filter(k => typeof player[k] === 'function').slice(0, 10) : 'none');
+
+          // Prime duration from API if route meta is missing
+          player.getDuration().then((d) => {
+            if (DEBUG) console.info('[TVS] Got duration from Vimeo API:', d);
+            if (!Number(data?.meta?.duration_s) && typeof d === 'number' && d > 0) {
+              // We don't store duration in state; the UI uses meta. Just ensure time text makes sense.
+              // Optionally, we could set a ref for display only, but keeping minimal for now.
+            }
+          }).catch((e) => { if (DEBUG) console.warn('[TVS] getDuration failed:', e); });
+
+          // Wait for player ready
+          player.ready().then(() => {
+            if (DEBUG) console.info('[TVS] Vimeo player ready event fired');
+          }).catch((e) => {
+            console.error('[TVS] Vimeo player ready error:', e);
+          });
+
+          player.on('timeupdate', (ev) => {
+            if (typeof ev?.seconds === 'number') {
+              setCurrentTime(ev.seconds);
+              if (DEBUG && Math.floor(ev.seconds) % 5 === 0) {
+                log('Vimeo timeupdate', ev.seconds);
+              }
+            }
+          });
+        } catch (e) {
+          console.error('[TVS] Vimeo API init failed:', e);
+          err('Vimeo API init failed', e);
+        }
+      })();
+
       return () => {
-        video.removeEventListener("timeupdate", handleTimeUpdate);
+        unsubscribed = true;
+        try {
+          if (player && player.off) player.off('timeupdate');
+          if (player && player.destroy) player.destroy();
+        } catch (e) {}
+        playerRef.current = null;
       };
     }, [data]);
 
-    async function createActivity() {
+    function estimateDistance(durationS) {
+      const meta = data?.meta || {};
+      const routeDur = Number(meta.duration_s || 0);
+      const routeDist = Number(meta.distance_m || 0);
+      if (routeDur > 0 && routeDist > 0 && durationS >= 0) {
+        const ratio = Math.min(1, durationS / routeDur);
+        return Math.round(routeDist * ratio);
+      }
+      return 0;
+    }
+
+    async function startActivitySession() {
+  if (DEBUG) console.info('[TVS] Start Activity clicked');
       try {
-        // Check if user is logged in
         if (!window.TVS_SETTINGS?.user) {
-          alert("You must be logged in to create an activity");
+          showFlash("You must be logged in to start an activity", 'error');
           return;
         }
-        
-        // Debug: Log settings
-        log("TVS_SETTINGS:", window.TVS_SETTINGS);
-        
+        const player = playerRef.current;
+        if (!player) {
+          showFlash("Video player is not ready yet. Please wait a moment.", 'error');
+          return;
+        }
         setIsPosting(true);
-        setLastStatus("posting");
-        const payload = {
-          route_id: data.id,
-          started_at: new Date().toISOString(),
-          duration_s: Number(meta.duration_s || 0),
-          distance_m: Number(meta.distance_m || 0),
-        };
+        setLastStatus("starting");
         
-        const nonce = window.TVS_SETTINGS?.nonce || "";
-        log("POST activity", payload, "nonce:", nonce);
-        log("Headers being sent:", {
-          "Content-Type": "application/json",
-          "X-WP-Nonce": nonce
+        // Ensure player is ready with timeout
+  if (DEBUG) console.info('[TVS] Waiting for player.ready()...');
+        try {
+          await Promise.race([
+            player.ready && typeof player.ready === 'function' ? player.ready() : Promise.resolve(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('player.ready timeout')), 3000))
+          ]);
+          if (DEBUG) console.info('[TVS] Player ready');
+        } catch (e) {
+          if (DEBUG) console.warn('[TVS] player.ready issue:', e?.message || e);
+        }
+        
+        // Reset to start and play (non-blocking)
+        if (DEBUG) console.info('[TVS] Setting time to 0 and starting play...');
+        if (DEBUG) console.info('[TVS] Player object:', player);
+        if (DEBUG) console.info('[TVS] Player has setCurrentTime?', typeof player.setCurrentTime);
+        if (DEBUG) console.info('[TVS] Player has play?', typeof player.play);
+        // Don't await setCurrentTime - it can hang. Just call it and move on.
+        if (DEBUG) console.info('[TVS] Calling setCurrentTime(0) without await...');
+        player.setCurrentTime(0).catch((ex) => {
+          if (DEBUG) console.warn('[TVS] setCurrentTime failed (non-blocking):', ex);
+        });
+        // Call play() immediately without waiting for setCurrentTime
+        if (DEBUG) console.info('[TVS] About to call player.play()...');
+        try {
+          const playPromise = player.play();
+          if (DEBUG) console.info('[TVS] player.play() returned:', playPromise);
+          playPromise.then(() => {
+            if (DEBUG) console.info('[TVS] ✓ Play started successfully');
+          }).catch((e) => {
+            console.error('[TVS] ✗ play() promise rejected:', e);
+            if (DEBUG) {
+              console.error('[TVS] Error name:', e?.name, 'Message:', e?.message);
+              console.error('[TVS] Full error object:', e);
+            }
+            // Common issues: NotAllowedError (autoplay policy), NotSupportedError (codec)
+            showFlash('Failed to start video: ' + (e?.name || 'Unknown') + ' - ' + (e?.message || String(e)) + '. Try clicking play manually or check browser console.', 'error');
+          });
+        } catch (syncError) {
+          console.error('[TVS] play() threw synchronously:', syncError);
+        }
+        
+        setSessionStartAt(new Date());
+        setIsSessionActive(true);
+        setLastStatus("running");
+      } catch (e) {
+        console.error('[TVS] Start session failed:', e);
+        showFlash("Failed to start: " + (e?.message || String(e)), 'error');
+        setLastStatus("error");
+      } finally {
+        setIsPosting(false);
+      }
+    }
+
+    async function resumeActivitySession() {
+  if (DEBUG) console.info('[TVS] Resume Activity clicked');
+      try {
+        const player = playerRef.current;
+        if (!player) {
+          showFlash('Video player is not ready yet.', 'error');
+          return;
+        }
+        setIsPosting(true);
+        setLastStatus('starting');
+        
+  if (DEBUG) console.info('[TVS] Waiting for player.ready()...');
+        try {
+          await Promise.race([
+            player.ready && typeof player.ready === 'function' ? player.ready() : Promise.resolve(),
+            new Promise((_, rej) => setTimeout(() => rej(new Error('player.ready timeout')), 3000))
+          ]);
+          if (DEBUG) console.info('[TVS] Player ready');
+  } catch (e) { if (DEBUG) console.warn('[TVS] player.ready issue:', e?.message || e); }
+        
+        // Do not reset time or sessionStartAt, just resume play
+  if (DEBUG) console.info('[TVS] Resuming play from current position...');
+        player.play().then(() => {
+          if (DEBUG) console.info('[TVS] Play resumed successfully');
+        }).catch((e) => {
+          console.error('[TVS] play() failed:', e);
+          showFlash('Failed to resume video: ' + (e?.message || String(e)), 'error');
         });
         
+        // Keep the same session - do NOT reset sessionStartAt
+        setIsSessionActive(true);
+        setLastStatus('running');
+      } catch (e) {
+        console.error('[TVS] Resume session failed:', e);
+        setLastStatus('error');
+      } finally {
+        setIsPosting(false);
+      }
+    }
+
+    async function pauseActivitySession() {
+      try {
+        const player = playerRef.current;
+        if (!player) return;
+  if (DEBUG) console.info('[TVS] Pausing activity (not saving yet)...');
+        await player.pause();
+        setIsSessionActive(false);
+        setLastStatus("paused");
+  if (DEBUG) console.info('[TVS] Activity paused');
+      } catch (e) {
+        console.error('[TVS] Pause failed:', e);
+        showFlash("Failed to pause: " + (e?.message || String(e)), 'error');
+        setLastStatus("error");
+      }
+    }
+
+    async function finishAndSaveActivity() {
+      try {
+        const player = playerRef.current;
+        if (!player) return;
+        setIsPosting(true);
+        setLastStatus("saving");
+        
+  if (DEBUG) console.info('[TVS] Finishing and saving activity...');
+        await player.pause();
+        
+        const seconds = await player.getCurrentTime();
+        const durationS = Math.max(0, Math.floor(seconds || 0));
+        const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1000).toISOString();
+        const distanceM = estimateDistance(durationS);
+
+        const payload = {
+          route_id: data.id,
+          route_name: data.title || "Unknown Route",
+          activity_date: new Date().toISOString(),
+          started_at: startISO,
+          duration_s: durationS,
+          distance_m: distanceM,
+        };
+        const nonce = window.TVS_SETTINGS?.nonce || "";
+  if (DEBUG) console.info('[TVS] Saving activity:', payload);
+
         if (slowParam) await delay(slowParam);
 
         const r = await fetch("/wp-json/tvs/v1/activities", {
           method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "X-WP-Nonce": nonce
-          },
+          headers: { "Content-Type": "application/json", "X-WP-Nonce": nonce },
           credentials: "same-origin",
           body: JSON.stringify(payload),
         });
-        
-        log("Response status:", r.status);
-        log("Response headers:", Array.from(r.headers.entries()));
-        
         if (!r.ok) {
           const res = await r.json();
-          log("Response status:", r.status, "Response:", res);
-          throw new Error(res.message || `HTTP ${r.status}: ${res.code || 'Unknown error'}`);
+          throw new Error(res.message || `HTTP ${r.status}`);
         }
-        
         const res = await r.json();
-        log("Activity OK:", res);
-        alert("✓ Activity created! ID: " + res.id);
+  if (DEBUG) console.info('[TVS] Activity saved:', res);
+        showFlash("Activity saved!");
         setLastStatus("ok");
-        // Reload activities list
+        setIsSessionActive(false);
+        setSessionStartAt(null);
         await loadActivities();
+        
+        // Trigger global event so all MyActivities instances reload
+        window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
       } catch (e) {
-        err("Activity FAIL:", e);
-        alert("Failed to create activity: " + (e?.message || String(e)));
+        console.error('[TVS] Save activity failed:', e);
+        showFlash("Failed to save activity: " + (e?.message || String(e)), 'error');
         setLastError(e?.message || String(e));
         setLastStatus("error");
       } finally {
@@ -477,14 +679,17 @@
         }
         
         log("Strava upload OK:", res);
-        alert("✓ Uploaded to Strava!\n" + (res.strava_url || "Activity ID: " + res.strava_id));
+        showFlash("Uploaded to Strava!");
         setLastStatus("ok");
         
         // Reload activities to show updated sync status
         await loadActivities();
+        
+        // Trigger global event so all MyActivities instances reload
+        window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
       } catch (e) {
         err("Strava upload FAIL:", e);
-        alert("Failed to upload to Strava: " + (e?.message || String(e)));
+        showFlash("Failed to upload to Strava: " + (e?.message || String(e)), 'error');
         setLastError(e?.message || String(e));
         setLastStatus("error");
       } finally {
@@ -495,7 +700,7 @@
     if (error) return h("div", { className: "tvs-route tvs-error" }, String(error));
     if (!data) return React.createElement(Loading, null);
 
-    const title = data.title || "Route";
+  const title = data.title || "Route";
     const meta = data.meta || {};
     const vimeo = meta.vimeo_id ? String(meta.vimeo_id) : "";
     const duration = Number(meta.duration_s || 0);
@@ -505,24 +710,7 @@
       "div",
       { className: "tvs-app" },
       h("h2", null, title),
-      
-      // Login warning if not authenticated
-      !isLoggedIn
-        ? h(
-            "div",
-            {
-              style: {
-                backgroundColor: "#fef3c7",
-                border: "1px solid #f59e0b",
-                padding: "1rem",
-                marginBottom: "1rem",
-                borderRadius: "4px",
-              },
-            },
-            h("strong", null, "⚠️ You must be logged in"),
-            h("p", { style: { margin: "0.5rem 0 0 0" } }, "Please log in to create activities and upload to Strava.")
-          )
-        : null,
+      // Note: login warning is rendered below as a replacement for controls when not logged in
       vimeo
         ? h(
             "div",
@@ -531,58 +719,201 @@
               ref: videoRef,
               width: 560,
               height: 315,
-              src: "https://player.vimeo.com/video/" + encodeURIComponent(vimeo),
+              src:
+                "https://player.vimeo.com/video/" +
+                encodeURIComponent(vimeo) +
+                "?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0",
               frameBorder: 0,
-              allow: "autoplay; fullscreen",
+              allow: "autoplay; fullscreen; picture-in-picture",
               allowFullScreen: true,
             })
           )
         : null,
-      h("div", { className: "tvs-meta" }, h("pre", null, JSON.stringify(meta, null, 2))),
+      (new URLSearchParams(location.search).get("tvsdebug") === "1" || window.TVS_DEBUG === true || localStorage.getItem("tvsDev") === "1")
+        ? h("div", { className: "tvs-meta" }, h("pre", null, JSON.stringify(meta, null, 2)))
+        : null,
       h(ProgressBar, { React, currentTime, duration }),
       h(
-        "button",
-        { 
-          className: "tvs-btn", 
-          onClick: createActivity, 
-          disabled: isPosting || !isLoggedIn 
-        },
-        isPosting
-          ? h("span", { className: "tvs-spinner", "aria-hidden": "true" })
-          : null,
-        isPosting ? " Creating..." : "Start New Activity"
+        "div",
+        { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+        !isLoggedIn
+          ? (
+              // Render login warning below the video instead of controls
+              h(
+                "div",
+                {
+                  style: {
+                    backgroundColor: "#fef3c7",
+                    border: "1px solid #f59e0b",
+                    padding: "1rem",
+                    margin: "0.5rem 0 0 0",
+                    borderRadius: "4px",
+                    width: '100%'
+                  },
+                },
+                h("strong", null, "⚠️ You must be logged in"),
+                h(
+                  "p",
+                  { style: { margin: "0.5rem 0 0 0" } },
+                  "Please ",
+                  h("a", { href: "/login", style: { color: '#1f2937', textDecoration: 'underline' } }, "log in"),
+                  " to create activities and upload to Strava. Don't have an account? ",
+                  h("a", { href: "/register", style: { color: '#1f2937', textDecoration: 'underline' } }, "Register here"),
+                  "."
+                )
+              )
+            )
+          : !isSessionActive
+          ? (
+              (currentTime > 0 && sessionStartAt && (duration === 0 || currentTime < duration - 0.5))
+                ? [
+                    h(
+                      "button",
+                      {
+                        key: 'resume',
+                        className: "tvs-btn",
+                        onClick: resumeActivitySession,
+                        disabled: isPosting,
+                      },
+                      isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+                      isPosting ? " Starting..." : "Resume Activity"
+                    ),
+                    h(
+                      "button",
+                      {
+                        key: 'finish',
+                        className: "tvs-btn",
+                        onClick: finishAndSaveActivity,
+                        disabled: isPosting,
+                        style: { backgroundColor: '#10b981' }
+                      },
+                      isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+                      isPosting ? " Saving..." : "Finish & Save"
+                    ),
+                    h(
+                      "button",
+                      {
+                        key: 'restart',
+                        className: "tvs-btn",
+                        onClick: startActivitySession,
+                        disabled: isPosting,
+                        style: { backgroundColor: '#334155' }
+                      },
+                      "Restart from 0:00"
+                    )
+                  ]
+                : h(
+                    "button",
+                    {
+                      className: "tvs-btn",
+                      onClick: startActivitySession,
+                      disabled: isPosting,
+                    },
+                    isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+                    isPosting ? " Starting..." : "Start Activity"
+                  )
+            )
+          : [
+              h(
+                "button",
+                {
+                  key: 'pause',
+                  className: "tvs-btn",
+                  onClick: pauseActivitySession,
+                  disabled: isPosting,
+                  style: { backgroundColor: "#f59e0b" },
+                },
+                "Pause"
+              ),
+              h(
+                "button",
+                {
+                  key: 'finish',
+                  className: "tvs-btn",
+                  onClick: finishAndSaveActivity,
+                  disabled: isPosting,
+                  style: { backgroundColor: "#10b981" },
+                },
+                isPosting
+                  ? h("span", { className: "tvs-spinner", "aria-hidden": "true" })
+                  : null,
+                isPosting ? " Saving..." : "Finish & Save"
+              )
+            ]
       ),
-      
-      // Activities List
+      DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
+    );
+  }
+
+  // MyActivities Component (shared between main app and standalone block)
+  function MyActivities({ React, activities, loadingActivities, uploadToStrava, uploadingId }) {
+    const { useState, createElement: h } = React;
+    const [min, setMin] = useState(false);
+    
+    // Show only the 5 most recent activities
+    const recentActivities = activities.slice(0, 5);
+    
+    return h(
+      "div",
+      {
+        className: "tvs-activities-block",
+        style: { marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: "8px", background: "#fff", padding: "1rem" }
+      },
       h(
         "div",
-        { className: "tvs-activities", style: { marginTop: "2rem" } },
-        h("h3", null, "My Activities"),
-        loadingActivities
-          ? h("p", null, "Loading activities...")
-          : activities.length === 0
-          ? h("p", null, "No activities yet. Start one above!")
-          : h(
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" } },
+        h("h3", { style: { margin: 0, fontSize: "1.25rem" } }, "Recent Activities"),
+        h(
+          "button",
+          {
+            onClick: () => setMin(!min),
+            style: { fontSize: "1.2em", background: "none", border: "none", cursor: "pointer", color: "#666" },
+            "aria-label": min ? "Expand" : "Minimize"
+          },
+          min ? "▸" : "▾"
+        )
+      ),
+      min
+        ? null
+        : loadingActivities
+        ? h("p", { style: { color: "#666" } }, "Loading activities...")
+  : recentActivities.length === 0
+  ? h("p", { style: { color: "#666" } }, "Start a new activity when you're ready")
+        : h(
+            "div",
+            null,
+            h(
               "div",
-              { className: "tvs-activities-list" },
-              activities.map((activity) =>
+              { className: "tvs-activities-list", style: { marginBottom: "1rem" } },
+              recentActivities.map((activity) =>
                 h(ActivityCard, {
                   key: activity.id,
                   activity,
                   uploadToStrava,
                   uploading: uploadingId === activity.id,
                   React,
+                  compact: true
                 })
               )
+            ),
+            h(
+              "div",
+              { style: { textAlign: "center", paddingTop: "0.5rem", borderTop: "1px solid #e5e7eb" } },
+              h(
+                "a",
+                {
+                  href: "/my-activities",
+                  style: { color: "#2563eb", textDecoration: "none", fontSize: "0.9rem" }
+                },
+                "Go to my activities →"
+              )
             )
-      ),
-      
-      DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
+          )
     );
   }
 
   // Activity Card Component
-  function ActivityCard({ activity, uploadToStrava, uploading, React }) {
+  function ActivityCard({ activity, uploadToStrava, uploading, React, compact, dummy }) {
     const { createElement: h } = React;
     const meta = activity.meta || {};
     const activityId = activity.id;
@@ -594,7 +925,235 @@
     const distance = meta._tvs_distance_m?.[0] || meta.distance_m?.[0] || 0;
     const duration = meta._tvs_duration_s?.[0] || meta.duration_s?.[0] || 0;
     const routeId = meta._tvs_route_id?.[0] || meta.route_id?.[0];
+    const routeName = meta._tvs_route_name?.[0] || meta.route_name?.[0] || "Unknown Route";
+    const activityDate = meta._tvs_activity_date?.[0] || meta.activity_date?.[0] || activity.date || "";
     
+    // Format date nicely
+    let formattedDate = "";
+    if (activityDate) {
+      try {
+        const date = new Date(activityDate);
+        formattedDate = date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+      } catch (e) {
+        formattedDate = activityDate;
+      }
+    }
+    
+    const activityTitle = formattedDate ? `${routeName} (${formattedDate})` : routeName;
+    
+    if (compact) {
+      // Compact mode for "Recent Activities" block
+      const { useState } = React;
+      const [showPopover, setShowPopover] = useState(false);
+      
+      // Dummy/preview style
+      if (dummy) {
+        return h(
+          "div",
+          {
+            className: "tvs-activity-card-compact",
+            style: {
+              padding: "0.75rem",
+              marginBottom: "0.5rem",
+              borderRadius: "4px",
+              background: "linear-gradient(90deg, #f3f4f6 60%, #e5e7eb 100%)",
+              fontSize: "0.9rem",
+              position: "relative",
+              opacity: 0.6,
+              filter: "grayscale(0.7)",
+              pointerEvents: "none"
+            },
+          },
+          h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" } },
+            h("div", { style: { flex: 1, minWidth: 0 } },
+              h("div", { style: { fontWeight: "500", marginBottom: "0.25rem" } }, activityTitle),
+              h("div", { style: { fontSize: "0.85rem", color: "#888" } },
+                distance > 0 ? (distance / 1000).toFixed(2) + " km" : "",
+                distance > 0 && duration > 0 ? " · " : "",
+                duration > 0 ? Math.floor(duration / 60) + " min" : ""
+              )
+            ),
+            h("div", { style: { display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 } },
+              h("span", { style: { color: "#bbb", fontSize: "1.5rem", lineHeight: 1, display: "flex", alignItems: "center" }, title: "Preview" }, "✓"),
+              h("div", { style: { width: "32px", height: "32px", borderRadius: "4px", backgroundColor: "#e5e7eb", color: "#ccc", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" } }, "S")
+            )
+          )
+        );
+      }
+      
+      return h(
+        "div",
+        {
+          className: "tvs-activity-card-compact",
+          style: {
+            padding: "0.75rem",
+            marginBottom: "0.5rem",
+            borderRadius: "4px",
+            backgroundColor: "#f9fafb",
+            fontSize: "0.9rem",
+            position: "relative"
+          },
+        },
+        h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" } },
+          h("div", { style: { flex: 1, minWidth: 0 } },
+            h("div", { style: { fontWeight: "500", marginBottom: "0.25rem" } }, activityTitle),
+            h("div", { style: { fontSize: "0.85rem", color: "#666" } },
+              distance > 0 ? (distance / 1000).toFixed(2) + " km" : "",
+              distance > 0 && duration > 0 ? " · " : "",
+              duration > 0 ? Math.floor(duration / 60) + " min" : ""
+            )
+          ),
+          // Strava action icons
+          h("div", { style: { display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 } },
+            // Synced checkmark
+            isSynced
+              ? h("span", { 
+                  style: { 
+                    color: "#10b981", 
+                    fontSize: "1.5rem",
+                    lineHeight: 1,
+                    display: "flex",
+                    alignItems: "center"
+                  },
+                  title: "Synced to Strava"
+                }, "✓")
+              : null,
+            // Strava button/link
+            h("div", { style: { position: "relative" } },
+              isSynced
+                ? h(
+                    "a",
+                    {
+                      href: stravaRemoteId ? "https://www.strava.com/activities/" + stravaRemoteId : "#",
+                      target: "_blank",
+                      rel: "noopener noreferrer",
+                      title: "View on Strava",
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "4px",
+                        backgroundColor: "#fc4c02",
+                        color: "white",
+                        textDecoration: "none",
+                        fontSize: "0.9rem",
+                        fontWeight: "bold"
+                      }
+                    },
+                    "S"
+                  )
+                : h(
+                    "button",
+                    {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        setShowPopover(!showPopover);
+                      },
+                      disabled: uploading,
+                      title: "Upload to Strava",
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: "32px",
+                        height: "32px",
+                      borderRadius: "4px",
+                      backgroundColor: uploading ? "#ccc" : "#fc4c02",
+                      color: "white",
+                      border: "none",
+                      cursor: uploading ? "wait" : "pointer",
+                      fontSize: "0.9rem",
+                      fontWeight: "bold"
+                    }
+                  },
+                  uploading ? "..." : "S"
+                ),
+            // Popover for upload confirmation
+            showPopover && !isSynced && !uploading
+              ? h(
+                  "div",
+                  {
+                    style: {
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 0.5rem)",
+                      backgroundColor: "white",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      padding: "0.75rem",
+                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)",
+                      zIndex: 1000,
+                      minWidth: "200px",
+                      whiteSpace: "nowrap"
+                    }
+                  },
+                  h("div", { style: { fontSize: "0.9rem", marginBottom: "0.5rem", color: "#374151" } }, "Upload to Strava?"),
+                  h("div", { style: { display: "flex", gap: "0.5rem" } },
+                    h(
+                      "button",
+                      {
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          setShowPopover(false);
+                          uploadToStrava(activityId);
+                        },
+                        style: {
+                          flex: 1,
+                          padding: "0.5rem 0.75rem",
+                          backgroundColor: "#fc4c02",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.85rem",
+                          fontWeight: "500"
+                        }
+                      },
+                      "Upload"
+                    ),
+                    h(
+                      "button",
+                      {
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          setShowPopover(false);
+                        },
+                        style: {
+                          flex: 1,
+                          padding: "0.5rem 0.75rem",
+                          backgroundColor: "#f3f4f6",
+                          color: "#374151",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.85rem"
+                        }
+                      },
+                      "Cancel"
+                    )
+                  )
+                )
+              : null
+            )
+          )
+        ),
+        // Click outside to close popover
+        showPopover
+          ? h("div", {
+              style: {
+                position: "fixed",
+                inset: 0,
+                zIndex: 999
+              },
+              onClick: () => setShowPopover(false)
+            })
+          : null
+      );
+    }
+    
+    // Full mode for main activities page
     return h(
       "div",
       {
@@ -609,8 +1168,7 @@
       },
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
         h("div", null,
-          h("strong", null, "Activity #" + activityId),
-          routeId ? h("span", { style: { marginLeft: "0.5rem", color: "#666" } }, " (Route: " + routeId + ")") : null,
+          h("strong", null, activityTitle),
           h("div", { style: { marginTop: "0.5rem", fontSize: "0.9rem", color: "#666" } },
             distance > 0 ? h("span", null, "Distance: " + (distance / 1000).toFixed(2) + " km ") : null,
             duration > 0 ? h("span", null, "Duration: " + Math.floor(duration / 60) + " min") : null
@@ -661,22 +1219,159 @@
   // ---------- boot ----------
   function boot() {
     const mount = document.getElementById("tvs-app-root");
-    if (!mount) {
-      log("Ingen #tvs-app-root. Hopper over.");
-      return;
+    if (mount) {
+      const inline = window.tvs_route_payload || null;
+      const routeId = mount.getAttribute("data-route-id") || (inline && inline.id);
+      log("Boot → routeId:", routeId, "inline payload:", !!inline);
+      mountReact(App, { initialData: inline, routeId }, mount);
     }
 
-    const inline = window.tvs_route_payload || null;
-    const routeId = mount.getAttribute("data-route-id") || (inline && inline.id);
+    // Mount "My Activities" blocks if they exist
+    if (window.tvsMyActivitiesMount && Array.isArray(window.tvsMyActivitiesMount)) {
+      window.tvsMyActivitiesMount.forEach((mountId) => {
+        const blockMount = document.getElementById(mountId);
+        if (blockMount) {
+          log("Mounting MyActivities block on:", mountId);
+          mountReact(MyActivitiesStandalone, {}, blockMount);
+        }
+      });
+    }
+  }
 
-    log("Boot → routeId:", routeId, "inline payload:", !!inline);
+  // Standalone "My Activities" component for Gutenberg block
+  function MyActivitiesStandalone() {
+    const { useState, useEffect, createElement: h } = React;
+    const [activities, setActivities] = useState([]);
+    const [loadingActivities, setLoadingActivities] = useState(false);
+    const [uploadingId, setUploadingId] = useState(null);
+    const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
-    mountReact(App, { initialData: inline, routeId }, mount);
+    useEffect(() => {
+      if (!isLoggedIn) return;
+      loadActivities();
+      
+      // Listen for activity updates from main app
+      const handleActivityUpdate = () => {
+        if (DEBUG) console.info('[TVS] MyActivitiesStandalone: Received activity update event, reloading...');
+        loadActivities();
+      };
+      
+      window.addEventListener('tvs:activity-updated', handleActivityUpdate);
+      
+      // Cleanup listener on unmount
+      return () => {
+        window.removeEventListener('tvs:activity-updated', handleActivityUpdate);
+      };
+  }, []);
+
+    async function loadActivities() {
+      try {
+        setLoadingActivities(true);
+        const url = "/wp-json/tvs/v1/activities/me";
+        const r = await fetch(url, {
+          credentials: "same-origin",
+          headers: {
+            "X-TVS-Nonce": window.TVS_SETTINGS?.nonce || ""
+          }
+        });
+        if (!r.ok) {
+          throw new Error("Failed to load activities");
+        }
+        const json = await r.json();
+        const activitiesData = Array.isArray(json) ? json : (json.activities || []);
+        setActivities(activitiesData);
+      } catch (e) {
+        err("Load activities FAIL:", e);
+        setActivities([]);
+      } finally {
+        setLoadingActivities(false);
+      }
+    }
+
+    async function uploadToStrava(activityId) {
+      try {
+        setUploadingId(activityId);
+        const r = await fetch(`/wp-json/tvs/v1/activities/${activityId}/strava`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-WP-Nonce": window.TVS_SETTINGS?.nonce || ""
+          },
+          credentials: "same-origin",
+        });
+        const res = await r.json();
+        if (!r.ok) {
+          throw new Error(res.message || "Upload failed");
+        }
+        window.tvsFlash("Uploaded to Strava!");
+        await loadActivities();
+        
+        // Trigger global event for other MyActivities instances
+        window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
+      } catch (e) {
+        err("Strava upload FAIL:", e);
+        window.tvsFlash("Failed to upload to Strava: " + (e?.message || String(e)), 'error');
+      } finally {
+        setUploadingId(null);
+      }
+    }
+
+    if (!isLoggedIn) {
+      // Dummy activities for preview
+      const dummyActivities = Array.from({ length: 3 }).map((_, i) => ({
+        id: 'dummy-' + i,
+        meta: {
+          _tvs_route_name: ["Sample Route " + (i + 1)],
+          _tvs_activity_date: [new Date(Date.now() - i * 86400000).toISOString()],
+          _tvs_distance_m: [Math.round(5000 + Math.random() * 5000)],
+          _tvs_duration_s: [Math.round(1200 + Math.random() * 1800)],
+        }
+      }));
+      return h(
+        "div",
+        { className: "tvs-activities-block", style: { marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: "8px", background: "#fff", padding: "1rem" } },
+  h("h3", { style: { marginTop: 0 } }, "My Activities"),
+        h(
+          "div",
+          { className: "tvs-activities-list", style: { marginBottom: "1rem" } },
+          dummyActivities.map((activity) =>
+            h(ActivityCard, {
+              key: activity.id,
+              activity,
+              React,
+              compact: true,
+              dummy: true
+            })
+          )
+        ),
+        h(
+          "div",
+          { style: { textAlign: "center", color: "#888", fontSize: "0.95rem", marginBottom: "0.5rem" } },
+          "Sign in to see your recent activities."
+        ),
+        h(
+          "div",
+          { style: { textAlign: "center" } },
+          h(
+            "a",
+            { href: "/login", style: { color: '#1f2937', textDecoration: 'underline', marginRight: 12 } },
+            "Log in"
+          ),
+          h(
+            "a",
+            { href: "/register", style: { color: '#1f2937', textDecoration: 'underline' } },
+            "Register"
+          )
+        )
+      );
+    }
+
+    return h(MyActivities, { React, activities, loadingActivities, uploadToStrava, uploadingId });
   }
 
   // toggle overlay via ` (backtick)
   if (DEBUG) {
-    log("Debug mode aktivert.");
+    log("Debug mode enabled.");
   } else {
     document.addEventListener("keydown", function (ev) {
       if (ev.key === "`") {

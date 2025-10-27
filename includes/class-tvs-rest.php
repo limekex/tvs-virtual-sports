@@ -296,7 +296,7 @@ class TVS_REST {
         }
 
         // Save meta
-        $keys = array('route_id','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id');
+        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id');
         foreach ( $keys as $k ) {
             if ( isset( $data[ $k ] ) ) {
                 update_post_meta( $post_id, $k, sanitize_text_field( $data[ $k ] ) );
@@ -311,33 +311,27 @@ class TVS_REST {
         $scope   = $request->get_param( 'scope' );
         $scope   = $scope ? strtolower( $scope ) : 'me';
         
-        // WORKAROUND: For cross-domain issues where cookies don't work but nonce is valid
+        // If no user ID from cookies (cross-domain scenario), 
+        // permission callback already validated the request
+           // Use admin user as fallback (permission callback already gated access via nonce)
         if ( ! $user_id ) {
-            // Accept both our custom header and WP's header name
-            $nonce = $request->get_header( 'X-TVS-Nonce' );
-            if ( ! $nonce ) {
-                $nonce = $request->get_header( 'X-WP-Nonce' );
-            }
-            // In dev cross-domain scenario we accept nonce presence as proof the page was authenticated
-            if ( $nonce ) {
-                // Get first admin user as fallback
-                $admins = get_users( array( 'role' => 'administrator', 'number' => 1 ) );
-                if ( ! empty( $admins ) ) {
-                    $user_id = $admins[0]->ID;
-                    error_log( 'TVS: Using admin user ' . $user_id . ' for cross-domain activity listing' );
-                }
-            }
+               error_log( 'TVS: get_activities_me - no cookie auth, using admin fallback (nonce validated)' );
+               // Get the first admin user as a fallback
+               $users = get_users( array( 'role' => 'administrator', 'number' => 1, 'orderby' => 'ID' ) );
+               if ( ! empty( $users ) ) {
+                   $user_id = $users[0]->ID;
+                   error_log( 'TVS: get_activities_me - using fallback admin user_id: ' . $user_id );
+               }
         }
         
         if ( ! $user_id ) {
             return new WP_Error( 'forbidden', 'Authentication required', array( 'status' => 401 ) );
         }
         
-    error_log( 'TVS: get_activities_me called for user_id: ' . $user_id );
+           error_log( 'TVS: get_activities_me called for user_id: ' . $user_id );
 
-        $dev_mode = defined( 'WP_DEBUG' ) && WP_DEBUG;
-        $nonce_present = (bool) ( $request->get_header( 'X-TVS-Nonce' ) ?: $request->get_header( 'X-WP-Nonce' ) );
-        $allow_all = ( user_can( $user_id, 'manage_options' ) || ( $dev_mode && $nonce_present ) );
+        // Only allow scope=all for administrators
+        $allow_all = user_can( $user_id, 'manage_options' );
 
         // Default to author's activities; allow scope=all only for admin/dev
         if ( $scope === 'all' && $allow_all ) {
