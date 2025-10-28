@@ -31,6 +31,12 @@ class TVS_Plugin {
         // Setup components
         add_action( 'init', array( $this, 'register_components' ), 5 );
 
+        // Register Gutenberg blocks
+        add_action( 'init', array( $this, 'register_blocks' ) );
+
+        // Register shortcodes
+        add_action( 'init', array( $this, 'register_shortcodes' ) );
+
         // Enqueue admin assets
         add_action( 'admin_enqueue_scripts', array( $this, 'admin_assets' ) );
 
@@ -53,6 +59,48 @@ class TVS_Plugin {
         // Initialize admin
         $admin = new TVS_Admin();
         $admin->init();
+    }
+
+    public function register_blocks() {
+        // Register "My Activities" block using PHP (simpler, no build step needed)
+        if ( function_exists( 'register_block_type' ) ) {
+            register_block_type( 'tvs-virtual-sports/my-activities', array(
+                'title'           => __( 'TVS My Activities', 'tvs-virtual-sports' ),
+                'description'     => __( 'Display user activities list', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'list-view',
+                'keywords'        => array( 'tvs', 'activities', 'virtual sports' ),
+                'render_callback' => array( $this, 'render_my_activities_block' ),
+                'attributes'      => array(),
+            ) );
+        }
+    }
+
+    public function render_my_activities_block( $attributes ) {
+        // Enqueue the React app if not already loaded
+        wp_enqueue_script( 'tvs-app' );
+        wp_enqueue_style( 'tvs-public' );
+
+        // Create a unique mount point for this block instance
+        $mount_id = 'tvs-my-activities-' . uniqid();
+        
+        ob_start();
+        ?>
+        <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
+        <script>
+        (function() {
+            if (typeof window.tvsMyActivitiesMount === 'undefined') {
+                window.tvsMyActivitiesMount = [];
+            }
+            window.tvsMyActivitiesMount.push('<?php echo esc_js( $mount_id ); ?>');
+        })();
+        </script>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function register_shortcodes() {
+        add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
 
     public function admin_assets() {

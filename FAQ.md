@@ -87,3 +87,42 @@ This is expected behavior due to Strava API limitations. The "Hide from public f
 
 ## What happens if I revoke access to the app on Strava?
 When you visit `/connect-strava/`, the system will validate your stored token against Strava's API. If you have revoked access on Strava, you'll see a warning message and will need to reconnect by clicking "Connect with Strava" again. This ensures that the connection status is always accurate.
+
+## How do I pause and resume an activity session?
+You can now pause an activity without saving it. Use the following buttons:
+- **Start**: Begins a new activity session and starts video playback
+- **Pause**: Pauses the video and session timing (does not save)
+- **Resume**: Continues from where you paused, preserving the original session start time
+- **Finish & Save**: Saves the activity with total cumulative duration
+
+The session timer accurately tracks your total activity time across pause/resume cycles.
+
+## Why won't my video start playing when I click Start?
+If the video loads but doesn't play when you click Start, this was a known issue that has been fixed in version 0.1.23. The problem was caused by `await setCurrentTime(0)` blocking the play operation. Ensure you're running the latest version of the plugin.
+
+## How do I display my recent activities on a page?
+There are two ways to display your activities:
+
+1. **Gutenberg Block**: In the block editor, add the "TVS My Activities" block
+2. **Shortcode**: Add `[tvs_my_activities]` to any page or post
+
+Both methods show your 5 most recent activities with:
+- Activity name in format "Route name (date)"
+- Distance and duration stats
+- Strava sync status (green checkmark ✓ for synced)
+- Upload to Strava button for non-synced activities
+
+## Do my activity lists update automatically?
+Yes! When you save a new activity or upload to Strava, all "My Activities" blocks/shortcodes on the page automatically refresh to show the updated data. No page reload required.
+
+## What does the green checkmark (✓) mean on activity cards?
+The green checkmark indicates that the activity has been successfully synced to Strava. You'll see both the checkmark and an orange "S" button (which links to the activity on Strava).
+
+## How do I upload an activity to Strava from the activity list?
+Click the orange "S" button on any non-synced activity. A popup will appear asking you to confirm. Click "Upload" to sync the activity to Strava. You'll see an elegant notification when the upload is complete, and the checkmark will appear automatically.
+
+## Can I see all my activities or just recent ones?
+The "My Activities" block shows only your 5 most recent activities for a clean, compact display. Click the "Go to my activities →" link at the bottom to see your full activity history.
+
+## How are activity names formatted?
+Activities are now named in the format "Route name (date)", for example: "Eik Forest Trail (Oct 27, 2025)". This makes it much easier to identify activities at a glance compared to the old "Activity #123" format.

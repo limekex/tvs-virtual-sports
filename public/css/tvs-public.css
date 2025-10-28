@@ -198,6 +198,27 @@
   color: #8cf;
 }
 
+/* ===== Progress Bar ===== */
+.tvs-progress { margin: 12px 0 16px; }
+.tvs-progress__bar {
+  width: 100%;
+  height: 8px;
+  background: #e5e7eb; /* gray-200 */
+  border-radius: 999px;
+  overflow: hidden;
+}
+.tvs-progress__fill {
+  width: 0%;
+  height: 100%;
+  background: #16a34a; /* green-600 */
+  transition: width .2s ease;
+}
+.tvs-progress__time {
+  margin-top: 6px;
+  font-size: .9rem;
+  color: #4b5563; /* gray-600 */
+}
+
 /* ===== TVS Loading (runner + skeleton) ===== */
 .tvs-loading {
   display: flex;
@@ -322,3 +343,23 @@
   color:#e5e7eb;
 }
 .tvs-dev__err { color: #fecaca; background: rgba(220,38,38,.15) !important; }
+
+/* ===== Flash Message Animation ===== */
+@keyframes tvs-fade-in-out {
+  0% { 
+    opacity: 0;
+    transform: translateY(-1rem);
+  }
+  10% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  90% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-0.5rem);
+  }
+}
