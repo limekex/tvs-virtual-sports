@@ -1,0 +1,13 @@
+{
+  "name": "tvs-virtual-sports",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Build tooling for TVS Virtual Sports plugin",
+  "scripts": {
+    "build": "esbuild src/index.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-app.js",
+    "dev": "esbuild src/index.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-app.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "0.17.19"
+  }
+}
