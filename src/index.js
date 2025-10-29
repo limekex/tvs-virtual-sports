@@ -1,12 +1,14 @@
 /* TVS Virtual Sports – React mount with debug + dev overlay (bundled entry) */
+import { DEBUG, log, err } from './utils/debug.js';
+import { delay, withTimeout } from './utils/async.js';
+import { mountReact, React } from './utils/reactMount.js';
+import ProgressBar from './components/ProgressBar.js';
+import Loading from './components/Loading.js';
+
 (function () {
   // ---------- helpers ----------
   const qs = (sel, ctx) => (ctx || document).querySelector(sel);
   const param = (k) => new URLSearchParams(location.search).get(k);
-  const DEBUG =
-    new URLSearchParams(location.search).get("tvsdebug") === "1" ||
-    window.TVS_DEBUG === true ||
-    localStorage.getItem("tvsDev") === "1";
 
   if (!DEBUG) {
     document.addEventListener("keydown", (ev) => {
@@ -17,65 +19,7 @@
     });
   }
 
-    function log(...args) {
-    if (DEBUG) console.debug("[TVS]", ...args);
-  }
-  function err(...args) {
-    console.error("[TVS]", ...args);
-  }
-
-  // ---------- React mount helper ----------
-  // Always pair React with its matching renderer to avoid mismatches
-  const hasWindowReact = !!(window.React && window.ReactDOM);
-  const hasWpElement = !!(window.wp && window.wp.element);
-  const wpEl = hasWpElement ? window.wp.element : {};
-  const React = hasWindowReact ? window.React : (wpEl || {});
-  const ReactDOM = hasWindowReact ? window.ReactDOM : (wpEl || null);
-
-  // Track mounted roots to safely unmount/re-mount without DOM desyncs
-  const tvsRoots = new WeakMap();
-
-  // createRoot compatibility: use what's available from the chosen renderer
-  const hasCreateRoot =
-    (ReactDOM && typeof ReactDOM.createRoot === "function") ||
-    (wpEl && typeof wpEl.createRoot === "function");
-
-  function mountReact(Component, props, node) {
-    try {
-      // If we already mounted a root here, unmount it first to prevent React from
-      // attempting to reconcile against DOM mutated elsewhere (e.g., WordPress, third-party)
-      const existingRoot = tvsRoots.get(node);
-      if (existingRoot && typeof existingRoot.unmount === 'function') {
-        existingRoot.unmount();
-        tvsRoots.delete(node);
-      } else if (ReactDOM && typeof ReactDOM.unmountComponentAtNode === 'function') {
-        // Legacy unmount fallback
-        ReactDOM.unmountComponentAtNode(node);
-      }
-
-      if (hasCreateRoot) {
-        const createRoot = (ReactDOM && ReactDOM.createRoot) || (wpEl && wpEl.createRoot);
-        const root = createRoot(node);
-        tvsRoots.set(node, root);
-        root.render(React.createElement(Component, props));
-        return;
-      }
-      // fallback legacy render
-      const legacyRender = (ReactDOM && ReactDOM.render) || (wpEl && wpEl.render);
-      if (legacyRender) {
-        legacyRender(React.createElement(Component, props), node);
-        return;
-      }
-      err("Ingen render-funksjon tilgjengelig.");
-    } catch (e) {
-      err("Mount feilet:", e);
-    }
-  }
-
-  const slowParam = Number(new URLSearchParams(location.search).get("tvsslow") || 0);
-  function delay(ms) {
-    return new Promise((res) => setTimeout(res, ms));
-  }
+    const slowParam = Number(new URLSearchParams(location.search).get("tvsslow") || 0);
 
   async function withTimeout(promise, ms, label = 'operation') {
     let timer;
@@ -98,69 +42,7 @@
     return mins + ":" + (secs < 10 ? "0" : "") + secs;
   }
 
-  // ---------- ProgressBar component ----------
-  function ProgressBar({ React, currentTime, duration }) {
-    const h = React.createElement;
-    const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
-    
-    return h(
-      "div",
-      { className: "tvs-progress" },
-      h(
-        "div",
-        { className: "tvs-progress__bar" },
-        h("div", {
-          className: "tvs-progress__fill",
-          style: { width: Math.min(progress, 100) + "%" }
-        })
-      ),
-      h(
-        "div",
-        { className: "tvs-progress__time" },
-        formatTime(currentTime) + " / " + formatTime(duration)
-      )
-    );
-  }
-
-  // ---------- Loading (spinner/skeleton) ----------
-  function Loading() {
-    const h = React.createElement;
-    return h(
-      "div",
-      { className: "tvs-loading", role: "status", "aria-live": "polite" },
-      // Løperen (ren inline SVG, animert via CSS)
-      h(
-        "svg",
-        { viewBox: "0 0 64 64", className: "tvs-runner", "aria-hidden": "true" },
-        // Track (bakken)
-        h("line", { x1: 4, y1: 60, x2: 60, y2: 60, stroke: "#bbb", strokeWidth: 2, className: "track" }),
-        // Hode
-        h("circle", { cx: 26, cy: 12, r: 5, fill: "none", stroke: "#111", strokeWidth: 2 }),
-        // Kropp
-        h("line", { x1: 26, y1: 17, x2: 26, y2: 35, stroke: "#111", strokeWidth: 2 }),
-        // Armer
-        h("line", { x1: 26, y1: 22, x2: 40, y2: 18, stroke: "#111", strokeWidth: 2, className: "arm front", style: { transformOrigin: "26px 22px" } }),
-        h("line", { x1: 26, y1: 22, x2: 12, y2: 26, stroke: "#111", strokeWidth: 2, className: "arm back", style: { transformOrigin: "26px 22px" } }),
-        // Bein
-        h("line", { x1: 26, y1: 35, x2: 40, y2: 48, stroke: "#111", strokeWidth: 2, className: "leg front", style: { transformOrigin: "26px 35px" } }),
-        h("line", { x1: 26, y1: 35, x2: 16, y2: 54, stroke: "#111", strokeWidth: 2, className: "leg back", style: { transformOrigin: "26px 35px" } })
-      ),
-      // Skeleton–tekst
-      h(
-        "div",
-        null,
-        h("div", { className: "tvs-skel line" }),
-        h("div", { className: "tvs-skel line sm" }),
-        h(
-          "div",
-          null,
-          h("span", { className: "tvs-skel block" }),
-          h("span", { className: "tvs-skel block" }),
-          h("span", { className: "tvs-skel block" })
-        )
-      )
-    );
-  }
+  // ProgressBar and Loading moved to components/
 
   // --- DevOverlay (avansert, beholdt én versjon) ---
   function useFPS(React) {
@@ -524,16 +406,24 @@
           showFlash('Could not start playback: ' + (e?.message || String(e)), 'error');
           throw e;
         }
-        // After playback starts, seek to 0 with a short timeout; if it fails, continue running.
+        // After playback starts, if we're already near 0 skip seeking to avoid flicker.
         try {
-          await withTimeout(player.setCurrentTime(0), 2000, 'setCurrentTime(0)');
-          log('Seeked to 0');
+          const t = await withTimeout(player.getCurrentTime(), 1500, 'getCurrentTime');
+          if (typeof t === 'number' && t > 0.5) {
+            // Give the player a brief moment before seeking to reduce visual flicker.
+            await delay(150);
+            await withTimeout(player.setCurrentTime(0), 2000, 'setCurrentTime(0)');
+            log('Seeked to 0');
+          } else {
+            log('Already at start, skipping seek');
+          }
         } catch (e) {
-          err('setCurrentTime(0) failed (continuing):', e);
+          log('Post-play seek skipped:', e?.message || String(e));
         }
         setSessionStartAt(new Date());
         setIsSessionActive(true);
         setLastStatus("running");
+        showFlash('Activity started');
       } catch (e) {
         err("Start session failed:", e);
         showFlash("Player not ready yet. Please wait a moment and try again.", 'error');
@@ -559,6 +449,7 @@
         }
         setIsSessionActive(true);
         setLastStatus('running');
+        showFlash('Activity resumed');
       } catch (e) {
         err('Resume session failed:', e);
         showFlash("Player not ready yet. Please wait a moment and try again.", 'error');
@@ -582,6 +473,7 @@
         }
         setIsSessionActive(false);
         setLastStatus("paused");
+        showFlash('Activity paused');
       } catch (e) {
         err('[TVS] Pause failed:', e);
         setLastStatus("error");
