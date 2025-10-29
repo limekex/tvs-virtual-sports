@@ -77,8 +77,8 @@ class TVS_Plugin {
     }
 
     public function render_my_activities_block( $attributes ) {
-        // Enqueue the React app if not already loaded
-        wp_enqueue_script( 'tvs-app' );
+        // Enqueue block-specific frontend script
+        wp_enqueue_script( 'tvs-block-my-activities' );
         wp_enqueue_style( 'tvs-public' );
 
         // Create a unique mount point for this block instance
@@ -87,14 +87,6 @@ class TVS_Plugin {
         ob_start();
         ?>
         <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
-        <script>
-        (function() {
-            if (typeof window.tvsMyActivitiesMount === 'undefined') {
-                window.tvsMyActivitiesMount = [];
-            }
-            window.tvsMyActivitiesMount.push('<?php echo esc_js( $mount_id ); ?>');
-        })();
-        </script>
         <?php
         return ob_get_clean();
     }
@@ -119,18 +111,20 @@ class TVS_Plugin {
         wp_register_script( 'tvs-flash', TVS_PLUGIN_URL . 'public/js/tvs-flash.js', array(), TVS_PLUGIN_VERSION, true );
         wp_enqueue_script( 'tvs-flash' );
 
-        // Register app script that depends on React and tvs-flash
-        wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
-        wp_enqueue_script( 'tvs-app' );
+    // Register app script (kept separate) and block script (frontend)
+    wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-my-activities', TVS_PLUGIN_URL . 'public/js/tvs-block-my-activities.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
-        wp_localize_script( 'tvs-app', 'TVS_SETTINGS', array(
+        $settings = array(
             'env'      => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
             'restRoot' => get_rest_url(),
             'nonce'    => wp_create_nonce( 'wp_rest' ),
             'version'  => TVS_PLUGIN_VERSION,
             'user'     => is_user_logged_in() ? wp_get_current_user()->user_login : null,
-        ) );
+        );
+        wp_localize_script( 'tvs-app', 'TVS_SETTINGS', $settings );
+        wp_localize_script( 'tvs-block-my-activities', 'TVS_SETTINGS', $settings );
     }
 
     /**

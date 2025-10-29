@@ -1,4 +1,6 @@
-export default function Loading(React) {
+import { React } from '../utils/reactMount.js';
+
+export default function Loading() {
   const h = React.createElement;
   return h(
     'div',

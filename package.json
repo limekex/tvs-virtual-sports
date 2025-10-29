@@ -4,10 +4,15 @@
   "version": "0.1.0",
   "description": "Build tooling for TVS Virtual Sports plugin",
   "scripts": {
-    "build": "esbuild src/index.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-app.js",
-    "dev": "esbuild src/index.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-app.js --watch"
+    "build:app": "esbuild src/index.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-app.js",
+    "build:block:my-activities": "esbuild src/blocks/my-activities/view.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-block-my-activities.js",
+    "build": "npm run build:app && npm run build:block:my-activities",
+    "dev:app": "esbuild src/index.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-app.js --watch",
+    "dev:block:my-activities": "esbuild src/blocks/my-activities/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-my-activities.js --watch",
+    "dev": "npm-run-all -p dev:app dev:block:my-activities"
   },
   "devDependencies": {
-    "esbuild": "0.17.19"
+    "esbuild": "0.17.19",
+    "npm-run-all": "4.1.5"
   }
 }
