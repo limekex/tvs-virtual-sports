@@ -25,38 +25,20 @@
   }
 
   // ---------- React mount helper ----------
-  // Always pair React with its matching renderer to avoid mismatches
-  const hasWindowReact = !!(window.React && window.ReactDOM);
-  const hasWpElement = !!(window.wp && window.wp.element);
-  const wpEl = hasWpElement ? window.wp.element : {};
-  const React = hasWindowReact ? window.React : (wpEl || {});
-  const ReactDOM = hasWindowReact ? window.ReactDOM : (wpEl || null);
+  const wpEl = (window.wp && window.wp.element) || {};
+  const React = window.React || wpEl;
+  const ReactDOM = window.ReactDOM || null;
 
-  // Track mounted roots to safely unmount/re-mount without DOM desyncs
-  const tvsRoots = new WeakMap();
-
-  // createRoot compatibility: use what's available from the chosen renderer
+  // createRoot-kompat: bruk det som finnes
   const hasCreateRoot =
     (ReactDOM && typeof ReactDOM.createRoot === "function") ||
     (wpEl && typeof wpEl.createRoot === "function");
 
   function mountReact(Component, props, node) {
     try {
-      // If we already mounted a root here, unmount it first to prevent React from
-      // attempting to reconcile against DOM mutated elsewhere (e.g., WordPress, third-party)
-      const existingRoot = tvsRoots.get(node);
-      if (existingRoot && typeof existingRoot.unmount === 'function') {
-        existingRoot.unmount();
-        tvsRoots.delete(node);
-      } else if (ReactDOM && typeof ReactDOM.unmountComponentAtNode === 'function') {
-        // Legacy unmount fallback
-        ReactDOM.unmountComponentAtNode(node);
-      }
-
       if (hasCreateRoot) {
-        const createRoot = (ReactDOM && ReactDOM.createRoot) || (wpEl && wpEl.createRoot);
+        const createRoot = (ReactDOM && ReactDOM.createRoot) || wpEl.createRoot;
         const root = createRoot(node);
-        tvsRoots.set(node, root);
         root.render(React.createElement(Component, props));
         return;
       }

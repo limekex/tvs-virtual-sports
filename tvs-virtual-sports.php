@@ -1,9 +1,9 @@
 <?php
 /**
  * Plugin Name: TVS Virtual Sports
- * Plugin URI:  https://example.com/plugins/tvs-virtual-sports
+ * Plugin URI:  https://virtualsport.online/
  * Description: MVP for Virtual Routes with video + map playback and user activity logging.
- * Version:           0.1.25
+ * Version:           0.1.26
  * Author:      TVS
  * Text Domain: tvs-virtual-sports
  * Domain Path: /languages
@@ -13,7 +13,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
 }
 
-define( 'TVS_PLUGIN_VERSION', '0.1.25' );
+define( 'TVS_PLUGIN_VERSION', '0.1.26' );
 define( 'TVS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TVS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 

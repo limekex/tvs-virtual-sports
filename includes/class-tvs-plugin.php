@@ -115,9 +115,14 @@ class TVS_Plugin {
         wp_register_script( 'tvs-react', 'https://unpkg.com/react@18/umd/react.production.min.js', array(), null, true );
         wp_register_script( 'tvs-react-dom', 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', array( 'tvs-react' ), null, true );
 
-        // Register app script that depends on React
-        wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
-        
+        // Register global flash script (must load before tvs-app)
+        wp_register_script( 'tvs-flash', TVS_PLUGIN_URL . 'public/js/tvs-flash.js', array(), TVS_PLUGIN_VERSION, true );
+        wp_enqueue_script( 'tvs-flash' );
+
+        // Register app script that depends on React and tvs-flash
+        wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+        wp_enqueue_script( 'tvs-app' );
+
         // Localize script with settings and nonce
         wp_localize_script( 'tvs-app', 'TVS_SETTINGS', array(
             'env'      => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
