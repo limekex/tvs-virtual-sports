@@ -316,7 +316,8 @@
     const [uploadingId, setUploadingId] = useState(null);
     const [lastStatus, setLastStatus] = useState(initialData ? "inline" : "loading");
     const [lastError, setLastError] = useState(null);
-    const [currentTime, setCurrentTime] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [isPlayerReady, setIsPlayerReady] = useState(false);
     const videoRef = useRef(null);
     const playerRef = useRef(null);
     
@@ -434,7 +435,10 @@
           }).catch(() => {});
 
           // Ready and timeupdate
-          player.ready().catch(() => {});
+          try {
+            await player.ready();
+            if (!unsubscribed) setIsPlayerReady(true);
+          } catch (_) {}
           player.on('timeupdate', (ev) => {
             if (typeof ev?.seconds === 'number') {
               setCurrentTime(ev.seconds);
@@ -452,8 +456,25 @@
           if (player && player.destroy) player.destroy();
         } catch (_) {}
         playerRef.current = null;
+        setIsPlayerReady(false);
       };
     }, [data]);
+
+    async function ensurePlayerReady(timeoutMs = 5000) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        const p = playerRef.current;
+        if (p) {
+          try {
+            await p.ready();
+            setIsPlayerReady(true);
+            return p;
+          } catch (_) { /* keep waiting */ }
+        }
+        await delay(100);
+      }
+      throw new Error('Video player is not ready');
+    }
 
     function estimateDistance(durationS) {
       const meta = data?.meta || {};
@@ -468,9 +489,8 @@
 
     async function startActivitySession() {
       try {
-        const player = playerRef.current;
-        if (!player) return;
         setIsPosting(true);
+        const player = await ensurePlayerReady();
         setLastStatus("starting");
         await player.setCurrentTime(0).catch(() => {});
         await player.play().catch(() => {});
@@ -479,6 +499,7 @@
         setLastStatus("running");
       } catch (e) {
         err("Start session failed:", e);
+        showFlash("Player not ready yet. Please wait a moment and try again.", 'error');
         setLastStatus("error");
       } finally {
         setIsPosting(false);
@@ -487,15 +508,15 @@
 
     async function resumeActivitySession() {
       try {
-        const player = playerRef.current;
-        if (!player) return;
         setIsPosting(true);
+        const player = await ensurePlayerReady();
         setLastStatus('starting');
         await player.play().catch(() => {});
         setIsSessionActive(true);
         setLastStatus('running');
       } catch (e) {
         err('Resume session failed:', e);
+        showFlash("Player not ready yet. Please wait a moment and try again.", 'error');
         setLastStatus('error');
       } finally {
         setIsPosting(false);
@@ -504,8 +525,7 @@
 
     async function pauseActivitySession() {
       try {
-        const player = playerRef.current;
-        if (!player) return;
+        const player = await ensurePlayerReady();
         await player.pause();
         setIsSessionActive(false);
         setLastStatus("paused");
@@ -518,9 +538,8 @@
 
     async function finishAndSaveActivity() {
       try {
-        const player = playerRef.current;
-        if (!player) return;
         setIsPosting(true);
+        const player = await ensurePlayerReady();
         setLastStatus("saving");
         await player.pause();
         const seconds = await player.getCurrentTime();
@@ -671,7 +690,7 @@
                         key: 'resume',
                         className: "tvs-btn",
                         onClick: resumeActivitySession,
-                        disabled: isPosting,
+                         disabled: isPosting || !isPlayerReady,
                       },
                       isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
                       isPosting ? " Starting..." : "Resume Activity"
@@ -682,7 +701,7 @@
                         key: 'finish',
                         className: "tvs-btn",
                         onClick: finishAndSaveActivity,
-                        disabled: isPosting,
+                          disabled: isPosting || !isPlayerReady,
                         style: { backgroundColor: '#10b981' }
                       },
                       isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
@@ -694,7 +713,7 @@
                         key: 'restart',
                         className: "tvs-btn",
                         onClick: startActivitySession,
-                        disabled: isPosting,
+                          disabled: isPosting || !isPlayerReady,
                         style: { backgroundColor: '#334155' }
                       },
                       "Restart from 0:00"
@@ -704,8 +723,8 @@
                      "button",
                      {
                        className: "tvs-btn",
-                       onClick: startActivitySession,
-                       disabled: isPosting,
+                        onClick: startActivitySession,
+                        disabled: isPosting || !isPlayerReady,
                      },
                      isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
                      isPosting ? " Starting..." : "Start Activity"
@@ -718,7 +737,7 @@
                    key: 'pause',
                    className: "tvs-btn",
                    onClick: pauseActivitySession,
-                   disabled: isPosting,
+                     disabled: isPosting || !isPlayerReady,
                    style: { backgroundColor: "#f59e0b" },
                  },
                  "Pause"
@@ -729,7 +748,7 @@
                    key: 'finish',
                    className: "tvs-btn",
                    onClick: finishAndSaveActivity,
-                   disabled: isPosting,
+                     disabled: isPosting || !isPlayerReady,
                    style: { backgroundColor: "#10b981" },
                  },
                  isPosting
