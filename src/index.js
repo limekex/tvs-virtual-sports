@@ -77,6 +77,20 @@
     return new Promise((res) => setTimeout(res, ms));
   }
 
+  async function withTimeout(promise, ms, label = 'operation') {
+    let timer;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(label + ' timed out')), ms);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // ---------- formatTime helper ----------
   function formatTime(seconds) {
     const mins = Math.floor(seconds / 60);
@@ -501,19 +515,21 @@
         log('Start clicked');
         const player = await ensurePlayerReady();
         setLastStatus("starting");
+        // Try playing first, then seek to 0. Some embeds hang on seek before play.
         try {
-          await player.setCurrentTime(0);
-          log('Seeked to 0');
-        } catch (e) {
-          err('setCurrentTime failed:', e);
-        }
-        try {
-          await player.play();
+          await withTimeout(player.play(), 4000, 'play()');
           log('Playback started');
         } catch (e) {
           err('play() failed:', e);
           showFlash('Could not start playback: ' + (e?.message || String(e)), 'error');
           throw e;
+        }
+        // After playback starts, seek to 0 with a short timeout; if it fails, continue running.
+        try {
+          await withTimeout(player.setCurrentTime(0), 2000, 'setCurrentTime(0)');
+          log('Seeked to 0');
+        } catch (e) {
+          err('setCurrentTime(0) failed (continuing):', e);
         }
         setSessionStartAt(new Date());
         setIsSessionActive(true);
