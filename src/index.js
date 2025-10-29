@@ -17,7 +17,7 @@
     });
   }
 
-  function log(...args) {
+    function log(...args) {
     if (DEBUG) console.debug("[TVS]", ...args);
   }
   function err(...args) {
@@ -426,6 +426,7 @@
           
           player = new window.Vimeo.Player(iframe);
           playerRef.current = player;
+          log('Vimeo Player constructed');
 
           // Prime duration from API if route meta is missing
           player.getDuration().then((d) => {
@@ -437,8 +438,13 @@
           // Ready and timeupdate
           try {
             await player.ready();
-            if (!unsubscribed) setIsPlayerReady(true);
-          } catch (_) {}
+            if (!unsubscribed) {
+              setIsPlayerReady(true);
+              log('Vimeo Player ready');
+            }
+          } catch (e) {
+            err('Vimeo ready() rejected:', e);
+          }
           player.on('timeupdate', (ev) => {
             if (typeof ev?.seconds === 'number') {
               setCurrentTime(ev.seconds);
@@ -460,7 +466,7 @@
       };
     }, [data]);
 
-    async function ensurePlayerReady(timeoutMs = 5000) {
+    async function ensurePlayerReady(timeoutMs = 8000) {
       const start = Date.now();
       while (Date.now() - start < timeoutMs) {
         const p = playerRef.current;
@@ -469,7 +475,9 @@
             await p.ready();
             setIsPlayerReady(true);
             return p;
-          } catch (_) { /* keep waiting */ }
+          } catch (e) {
+            // keep waiting
+          }
         }
         await delay(100);
       }
@@ -490,10 +498,23 @@
     async function startActivitySession() {
       try {
         setIsPosting(true);
+        log('Start clicked');
         const player = await ensurePlayerReady();
         setLastStatus("starting");
-        await player.setCurrentTime(0).catch(() => {});
-        await player.play().catch(() => {});
+        try {
+          await player.setCurrentTime(0);
+          log('Seeked to 0');
+        } catch (e) {
+          err('setCurrentTime failed:', e);
+        }
+        try {
+          await player.play();
+          log('Playback started');
+        } catch (e) {
+          err('play() failed:', e);
+          showFlash('Could not start playback: ' + (e?.message || String(e)), 'error');
+          throw e;
+        }
         setSessionStartAt(new Date());
         setIsSessionActive(true);
         setLastStatus("running");
@@ -509,9 +530,17 @@
     async function resumeActivitySession() {
       try {
         setIsPosting(true);
+        log('Resume clicked');
         const player = await ensurePlayerReady();
         setLastStatus('starting');
-        await player.play().catch(() => {});
+        try {
+          await player.play();
+          log('Playback resumed');
+        } catch (e) {
+          err('resume play() failed:', e);
+          showFlash('Could not resume playback: ' + (e?.message || String(e)), 'error');
+          throw e;
+        }
         setIsSessionActive(true);
         setLastStatus('running');
       } catch (e) {
@@ -525,13 +554,20 @@
 
     async function pauseActivitySession() {
       try {
+        log('Pause clicked');
         const player = await ensurePlayerReady();
-        await player.pause();
+        try {
+          await player.pause();
+          log('Playback paused');
+        } catch (e) {
+          err('pause() failed:', e);
+          showFlash('Failed to pause: ' + (e?.message || String(e)), 'error');
+          throw e;
+        }
         setIsSessionActive(false);
         setLastStatus("paused");
       } catch (e) {
         err('[TVS] Pause failed:', e);
-        showFlash("Failed to pause: " + (e?.message || String(e)), 'error');
         setLastStatus("error");
       }
     }
@@ -539,9 +575,15 @@
     async function finishAndSaveActivity() {
       try {
         setIsPosting(true);
+        log('Finish clicked');
         const player = await ensurePlayerReady();
         setLastStatus("saving");
-        await player.pause();
+        try {
+          await player.pause();
+          log('Playback paused before save');
+        } catch (e) {
+          err('pause before save failed:', e);
+        }
         const seconds = await player.getCurrentTime();
         const durationS = Math.max(0, Math.floor(seconds || 0));
         const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1000).toISOString();
