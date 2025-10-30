@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- REST API PHPUnit tests covering core endpoints
+	- GET /tvs/v1/routes (list + item)
+	- POST /tvs/v1/activities (auth required)
+	- POST /tvs/v1/strava/connect (auth + mocked token exchange)
+	- POST /tvs/v1/activities/{id}/strava (owner checks + mocked upload)
 - Progress bar component with real-time playback indicator
 	- Visual progress bar displays under video during playback
 	- Shows current time / total duration (e.g., "2:45 / 15:00")
