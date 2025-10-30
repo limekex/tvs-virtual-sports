@@ -275,6 +275,12 @@ class TVS_REST {
         $meta[ $k ] = get_post_meta( $post_id, $k, true );
     }
 
+    // Testing convenience: in development, force a known Vimeo ID for all routes
+    // to avoid external variability during demos/tests
+    if ( defined( 'WP_ENVIRONMENT_TYPE' ) && WP_ENVIRONMENT_TYPE === 'development' ) {
+        $meta['vimeo_id'] = '228740420';
+    }
+
     $regions  = wp_get_post_terms( $post_id, 'tvs_region', array( 'fields' => 'names' ) );
     $types    = wp_get_post_terms( $post_id, 'tvs_activity_type', array( 'fields' => 'names' ) );
     $thumb_id = get_post_thumbnail_id( $post_id );
