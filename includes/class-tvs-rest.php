@@ -6,6 +6,25 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
+// Invalidate all tvs_routes_* transients when a route is saved/updated
+if ( ! function_exists( 'tvs_invalidate_routes_cache' ) ) {
+    function tvs_invalidate_routes_cache( $post_id, $post, $update ) {
+        if ( ! $post || $post->post_type !== 'tvs_route' ) {
+            return;
+        }
+        global $wpdb;
+        // Purge both transient values and their timeouts
+        $like_value   = $wpdb->esc_like( '_transient_tvs_routes_' ) . '%';
+        $like_timeout = $wpdb->esc_like( '_transient_timeout_tvs_routes_' ) . '%';
+        $options      = $wpdb->options;
+        // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared -- Using esc_like + literals
+        $wpdb->query( "DELETE FROM {$options} WHERE option_name LIKE '{$like_value}' OR option_name LIKE '{$like_timeout}'" );
+        // Also bump cache-buster so all keys are invalidated reliably
+        update_option( 'tvs_routes_cache_buster', (string) time() );
+    }
+    add_action( 'save_post_tvs_route', 'tvs_invalidate_routes_cache', 10, 3 );
+}
+
 class TVS_REST {
     public function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_routes' ) );
@@ -40,6 +59,11 @@ class TVS_REST {
                 ),
                 'region' => array(
                     'description' => 'Region slug',
+                    'type'        => 'string',
+                    'default'     => '',
+                ),
+                'type' => array(
+                    'description' => 'Activity type slug for routes (optional)',
                     'type'        => 'string',
                     'default'     => '',
                 ),
@@ -143,6 +167,23 @@ class TVS_REST {
     $paged    = max( 1, (int) $request->get_param( 'page' ) ?: 1 );
     $search   = (string) $request->get_param( 'search' );
     $region   = (string) $request->get_param( 'region' );
+    $type     = (string) $request->get_param( 'type' );
+
+    // Transient cache key built from query params
+    $key_parts = array(
+        'page'     => (int) $paged,
+        'per_page' => (int) $per_page,
+        'search'   => (string) $search,
+        'region'   => (string) $region,
+        'type'     => (string) $type,
+    );
+    // Include cache-buster so we can invalidate cheaply without scanning options table
+    $buster    = (string) get_option( 'tvs_routes_cache_buster', '1' );
+    $cache_key = 'tvs_routes_' . md5( serialize( $key_parts ) . '|' . $buster );
+    $cached = get_transient( $cache_key );
+    if ( $cached ) {
+        return rest_ensure_response( $cached );
+    }
 
     $tax_query = array();
     if ( $region ) {
@@ -150,6 +191,14 @@ class TVS_REST {
             'taxonomy' => 'tvs_region',
             'field'    => 'slug',
             'terms'    => $region,
+        );
+    }
+    // Optional activity type taxonomy filter if provided (no-op if taxonomy not used on routes)
+    if ( $type ) {
+        $tax_query[] = array(
+            'taxonomy' => 'tvs_activity_type',
+            'field'    => 'slug',
+            'terms'    => $type,
         );
     }
 
@@ -170,13 +219,19 @@ class TVS_REST {
     }
     wp_reset_postdata();
 
-    return rest_ensure_response( array(
+    $response = array(
         'items'      => $out,
         'total'      => (int) $q->found_posts,
         'totalPages' => (int) $q->max_num_pages,
         'page'       => $paged,
         'perPage'    => $per_page,
-    ) );
+    );
+    // Store in cache with TTL (filterable)
+    $ttl = (int) apply_filters( 'tvs_routes_cache_ttl', 300 );
+    if ( $ttl > 0 ) {
+        set_transient( $cache_key, $response, $ttl );
+    }
+    return rest_ensure_response( $response );
 }
 
     public function get_route( $request ) {
@@ -247,6 +302,8 @@ class TVS_REST {
         ),
     );
 }
+
+// (moved invalidation function below class definition)
 
 
     public function get_route_payload( int $id ) {
