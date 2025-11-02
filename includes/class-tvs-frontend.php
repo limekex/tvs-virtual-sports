@@ -81,8 +81,11 @@ $json = wp_json_encode( $payload );
 $json = str_replace( '</script>', '<\/script>', $json );
 wp_add_inline_script( 'tvs-app', "window.tvs_route_payload = {$json};", 'before' );
 
-// 2) Kun mountpunkt i markup (unngå ekstra inline <script> i innholdet)
-$out = sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
+// 2) UI: Pakk inn i token-basert "card"-container (uten inline styles) iht. temaets UI-guidelines
+// Bruker klassenavn som temaets CSS allerede styler via tvs-tokens.css
+$out  = '<article class="tvs-route-card tvs-card">';
+$out .= sprintf( '<div id="tvs-app-root" class="tvs-app-host" data-route-id="%d"></div>', $id );
+$out .= '</article>';
 
 return $out;
 }

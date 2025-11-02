@@ -1,2 +1,739 @@
-(()=>{var M=new URLSearchParams(location.search).get("tvsdebug")==="1"||window.TVS_DEBUG===!0||localStorage.getItem("tvsDev")==="1";function l(...t){M&&console.debug("[TVS]",...t)}function m(...t){console.error("[TVS]",...t)}var le=!!(window.React&&window.ReactDOM),we=!!(window.wp&&window.wp.element),D=we?window.wp.element:{},x=le?window.React:D||{},_=le?window.ReactDOM:D||null,Z=new WeakMap,ge=_&&typeof _.createRoot=="function"||D&&typeof D.createRoot=="function";function de(t,r,c){try{let s=Z.get(c);if(s&&typeof s.unmount=="function"?(s.unmount(),Z.delete(c)):_&&typeof _.unmountComponentAtNode=="function"&&_.unmountComponentAtNode(c),ge){let u=(_&&_.createRoot||D&&D.createRoot)(c);Z.set(c,u),u.render(x.createElement(t,r));return}let g=_&&_.render||D&&D.render;if(g){g(x.createElement(t,r),c);return}m("Ingen render-funksjon tilgjengelig.")}catch(s){m("Mount feilet:",s)}}function W(t){return new Promise(r=>setTimeout(r,t))}async function K(t,r,c="operation"){let s;try{return await Promise.race([t,new Promise((g,a)=>{s=setTimeout(()=>a(new Error(c+" timed out")),r)})])}finally{clearTimeout(s)}}function ee({React:t,currentTime:r,duration:c}){let s=t.createElement,g=Math.floor(r/60),a=Math.floor(r%60),u=(C,d)=>C+":"+(d<10?"0":"")+d,U=c>0?r/c*100:0;return s("div",{className:"tvs-progress"},s("div",{className:"tvs-progress__bar"},s("div",{className:"tvs-progress__fill",style:{width:Math.min(U,100)+"%"}})),s("div",{className:"tvs-progress__time"},u(g,a)+" / "+u(Math.floor(c/60),Math.floor(c%60))))}function te(){let t=x.createElement;return t("div",{className:"tvs-loading",role:"status","aria-live":"polite"},t("svg",{viewBox:"0 0 64 64",className:"tvs-runner","aria-hidden":"true"},t("line",{x1:4,y1:60,x2:60,y2:60,stroke:"#bbb",strokeWidth:2,className:"track"}),t("circle",{cx:26,cy:12,r:5,fill:"none",stroke:"#111",strokeWidth:2}),t("line",{x1:26,y1:17,x2:26,y2:35,stroke:"#111",strokeWidth:2}),t("line",{x1:26,y1:22,x2:40,y2:18,stroke:"#111",strokeWidth:2,className:"arm front",style:{transformOrigin:"26px 22px"}}),t("line",{x1:26,y1:22,x2:12,y2:26,stroke:"#111",strokeWidth:2,className:"arm back",style:{transformOrigin:"26px 22px"}}),t("line",{x1:26,y1:35,x2:40,y2:48,stroke:"#111",strokeWidth:2,className:"leg front",style:{transformOrigin:"26px 35px"}}),t("line",{x1:26,y1:35,x2:16,y2:54,stroke:"#111",strokeWidth:2,className:"leg back",style:{transformOrigin:"26px 35px"}})),t("div",null,t("div",{className:"tvs-skel line"}),t("div",{className:"tvs-skel line sm"}),t("div",null,t("span",{className:"tvs-skel block"}),t("span",{className:"tvs-skel block"}),t("span",{className:"tvs-skel block"}))))}function ne({React:t,routeId:r,lastStatus:c,lastError:s,currentTime:g,duration:a}){let{useEffect:u,useRef:U,useState:C,createElement:d}=t;function f(L){let{useEffect:P,useRef:o,useState:O}=L,[A,b]=O(0),V=o(performance.now()),y=o(0);return P(()=>{let k,w=F=>{y.current+=1,F-V.current>=1e3&&(b(y.current),y.current=0,V.current=F),k=requestAnimationFrame(w)};return k=requestAnimationFrame(w),()=>cancelAnimationFrame(k)},[]),A}let T=f(t),X=U(null),[I,j]=C(!1),[R,se]=C({x:16,y:16});u(()=>{if(!X.current)return;let P,o,O,A,b=!1;function V(w){w.target.closest(".tvs-dev__header")&&(b=!0,P=w.clientX,o=w.clientY,O=R.x,A=R.y,w.preventDefault())}function y(w){b&&se({x:O+(w.clientX-P),y:A+(w.clientY-o)})}function k(){b=!1}return window.addEventListener("mousedown",V),window.addEventListener("mousemove",y),window.addEventListener("mouseup",k),()=>{window.removeEventListener("mousedown",V),window.removeEventListener("mousemove",y),window.removeEventListener("mouseup",k)}},[R]);let $=a>0?(g/a*100).toFixed(1):"0.0",p={env:window.TVS_SETTINGS?.env,version:window.TVS_SETTINGS?.version,restRoot:window.TVS_SETTINGS?.restRoot,user:window.TVS_SETTINGS?.user,routeId:r,lastStatus:c||"idle",lastError:s?String(s):null,currentTime:g?g.toFixed(1):"0.0",duration:a||0,progress:$+"%",fps:T};function h(L,P,o){return d("div",{className:"tvs-dev__row"},d("span",null,L),d("code",{className:o?"tvs-dev__err":""},P))}function re(){navigator.clipboard.writeText(JSON.stringify({...p,time:new Date().toISOString()},null,2)).catch(console.error)}return d("div",{ref:X,className:`tvs-dev ${I?"is-min":""}`,style:{left:R.x+"px",top:R.y+"px"}},d("div",{className:"tvs-dev__header"},d("strong",null,"TVS Dev"),d("div",{className:"tvs-dev__spacer"}),d("span",{className:"tvs-dev__pill"},p.env||"n/a"),d("button",{className:"tvs-dev__btn",onClick:()=>j(!I),"aria-label":"Minimize"},"\u2581")),d("div",{className:"tvs-dev__body"},h("Route",p.routeId??"n/a"),h("User",p.user??"guest"),h("REST",p.restRoot??"n/a"),h("Status",p.lastStatus),p.lastError?h("Error",p.lastError,!0):null,h("Duration",p.duration+"s"),h("Current",p.currentTime+"s"),h("Progress",p.progress),h("FPS",String(p.fps)),d("div",{className:"tvs-dev__actions"},d("button",{onClick:re,className:"tvs-dev__btn"},"Copy debug"),d("button",{onClick:()=>{localStorage.setItem("tvsDev","0"),location.reload()},className:"tvs-dev__btn tvs-dev__btn--ghost"},"Disable"))))}var B=Number(new URLSearchParams(location.search).get("tvsslow")||0);function ae({initialData:t,routeId:r}){let{useEffect:c,useState:s,useRef:g,createElement:a}=x,[u,U]=s(t||null),[C,d]=s(null),[f,T]=s(!1),[X,I]=s(!1),[j,R]=s(null),[se,$]=s([]),[p,h]=s(!1),[re,L]=s(null),[P,o]=s(t?"inline":"loading"),[O,A]=s(null),[b,V]=s(0),[y,k]=s(!1),w=g(null),F=g(null);function S(n,e="success"){typeof window.tvsFlash=="function"&&window.tvsFlash(n,e)}c(()=>{let n=new URLSearchParams(location.search).get("tvsforcefetch")==="1";if(u&&!n){l("Har inline payload, skipper fetch.",u);return}if(!r){d("Mangler routeId \u2013 hverken inline payload eller data-route-id.");return}(async()=>{try{l("Henter rute via REST:",r," (tvsslow:",B,"ms)"),o("loading"),B&&await W(B);let i=await(await fetch(`/wp-json/tvs/v1/routes/${encodeURIComponent(r)}`,{credentials:"same-origin"})).json();l("REST OK:",i),U(i),o("ok")}catch(e){m("REST FAIL:",e),d("Kunne ikke hente rutedata."),A(e?.message||String(e)),o("error")}})()},[r]),c(()=>{z()},[]);async function z(){try{h(!0);let e=await fetch("/wp-json/tvs/v1/activities/me",{credentials:"same-origin",headers:{"X-TVS-Nonce":window.TVS_SETTINGS?.nonce||""}});if(!e.ok)throw new Error("Failed to load activities");let i=await e.json(),E=Array.isArray(i)?i:i.activities||[];$(E)}catch(n){m("Load activities FAIL:",n),$([])}finally{h(!1)}}c(()=>{if(!u)return;let n=w.current;if(!n)return;let e=null,i=!1;function E(){return new Promise((v,Y)=>{if(window.Vimeo&&window.Vimeo.Player)return v();let G=document.querySelector('script[src="https://player.vimeo.com/api/player.js"]');if(G){G.addEventListener("load",()=>v()),G.addEventListener("error",()=>Y(new Error("Vimeo API failed to load")));return}let N=document.createElement("script");N.src="https://player.vimeo.com/api/player.js",N.async=!0,N.onload=()=>v(),N.onerror=()=>Y(new Error("Vimeo API failed to load")),document.head.appendChild(N)})}return(async()=>{try{if(await E(),i)return;e=new window.Vimeo.Player(n),F.current=e,l("Vimeo Player constructed"),e.getDuration().catch(()=>{});try{await e.ready(),i||(k(!0),l("Vimeo Player ready"))}catch(v){m("Vimeo ready() rejected:",v)}e.on("timeupdate",v=>{typeof v?.seconds=="number"&&V(v.seconds)})}catch{m("Vimeo API init failed")}})(),()=>{i=!0;try{e&&e.off&&e.off("timeupdate"),e&&e.destroy&&e.destroy()}catch{}F.current=null,k(!1)}},[u]);async function q(n=8e3){let e=Date.now();for(;Date.now()-e<n;){let i=F.current;if(i)try{return await i.ready(),k(!0),i}catch{}await W(100)}throw new Error("Video player is not ready")}function me(n){let e=u?.meta||{},i=Number(e.duration_s||0),E=Number(e.distance_m||0);if(i>0&&E>0&&n>=0){let v=Math.min(1,n/i);return Math.round(E*v)}return 0}async function oe(){try{T(!0),l("Start clicked");let n=await q();o("starting");try{await K(n.play(),4e3,"play()"),l("Playback started")}catch(e){throw m("play() failed:",e),S("Could not start playback: "+(e?.message||String(e)),"error"),e}try{let e=await K(n.getCurrentTime(),1500,"getCurrentTime");typeof e=="number"&&e>.5?(await W(150),await K(n.setCurrentTime(0),2e3,"setCurrentTime(0)"),l("Seeked to 0")):l("Already at start, skipping seek")}catch(e){l("Post-play seek skipped:",e?.message||String(e))}R(new Date),I(!0),o("running"),S("Activity started")}catch(n){m("Start session failed:",n),S("Player not ready yet. Please wait a moment and try again.","error"),o("error")}finally{T(!1)}}async function fe(){try{T(!0),l("Resume clicked");let n=await q();o("starting");try{await n.play(),l("Playback resumed")}catch(e){throw m("resume play() failed:",e),S("Could not resume playback: "+(e?.message||String(e)),"error"),e}I(!0),o("running"),S("Activity resumed")}catch(n){m("Resume session failed:",n),S("Player not ready yet. Please wait a moment and try again.","error"),o("error")}finally{T(!1)}}async function ve(){try{l("Pause clicked");let n=await q();try{await n.pause(),l("Playback paused")}catch(e){throw m("pause() failed:",e),S("Failed to pause: "+(e?.message||String(e)),"error"),e}I(!1),o("paused"),S("Activity paused")}catch(n){m("[TVS] Pause failed:",n),o("error")}}async function ie(){try{T(!0),l("Finish clicked");let n=await q();o("saving");try{await n.pause(),l("Playback paused before save")}catch(Q){m("pause before save failed:",Q)}let e=await n.getCurrentTime(),i=Math.max(0,Math.floor(e||0)),E=j?j.toISOString():new Date(Date.now()-i*1e3).toISOString(),v=me(i),Y={route_id:u.id,route_name:u.title||"Unknown Route",activity_date:new Date().toISOString(),started_at:E,duration_s:i,distance_m:v},G=window.TVS_SETTINGS?.nonce||"";B&&await W(B);let N=await fetch("/wp-json/tvs/v1/activities",{method:"POST",headers:{"Content-Type":"application/json","X-WP-Nonce":G},credentials:"same-origin",body:JSON.stringify(Y)});if(!N.ok){let Q=await N.json();throw new Error(Q.message||`HTTP ${N.status}`)}await N.json(),S("Activity saved!"),o("ok"),I(!1),R(null),await z(),window.dispatchEvent(new CustomEvent("tvs:activity-updated"))}catch(n){m("[TVS] Save activity failed:",n),S("Failed to save activity: "+(n?.message||String(n)),"error"),A(n?.message||String(n)),o("error")}finally{T(!1)}}async function he(n){try{L(n),o("uploading");let e=await fetch(`/wp-json/tvs/v1/activities/${n}/strava`,{method:"POST",headers:{"Content-Type":"application/json","X-WP-Nonce":window.TVS_SETTINGS?.nonce||""},credentials:"same-origin"}),i=await e.json();if(!e.ok)throw new Error(i.message||"Upload failed");S("Uploaded to Strava!"),o("ok"),await z(),window.dispatchEvent(new CustomEvent("tvs:activity-updated"))}catch(e){m("Strava upload FAIL:",e),S("Failed to upload to Strava: "+(e?.message||String(e)),"error"),A(e?.message||String(e)),o("error")}finally{L(null)}}if(C)return a("div",{className:"tvs-route tvs-error"},String(C));if(!u)return x.createElement(te,null);let pe=u.title||"Route",H=u.meta||{},ce=H.vimeo_id?String(H.vimeo_id):"",J=Number(H.duration_s||0),ye=!!window.TVS_SETTINGS?.user;return a("div",{className:"tvs-app"},a("h2",null,pe),ce?a("div",{className:"tvs-video"},a("iframe",{ref:w,width:560,height:315,src:"https://player.vimeo.com/video/"+encodeURIComponent(ce)+"?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0",frameBorder:0,allow:"autoplay; fullscreen; picture-in-picture",allowFullScreen:!0})):null,new URLSearchParams(location.search).get("tvsdebug")==="1"||window.TVS_DEBUG===!0||localStorage.getItem("tvsDev")==="1"?a("div",{className:"tvs-meta"},a("pre",null,JSON.stringify(H,null,2))):null,a(ee,{React:x,currentTime:b,duration:J}),a("div",{style:{display:"flex",gap:"8px",flexWrap:"wrap"}},ye?X?[a("button",{key:"pause",className:"tvs-btn",onClick:ve,disabled:f||!y,style:{backgroundColor:"#f59e0b"}},"Pause"),a("button",{key:"finish",className:"tvs-btn",onClick:ie,disabled:f||!y,style:{backgroundColor:"#10b981"}},f?a("span",{className:"tvs-spinner","aria-hidden":"true"}):null,f?" Saving...":"Finish & Save")]:b>0&&j&&(J===0||b<J-.5)?[a("button",{key:"resume",className:"tvs-btn",onClick:fe,disabled:f||!y},f?a("span",{className:"tvs-spinner","aria-hidden":"true"}):null,f?" Starting...":"Resume Activity"),a("button",{key:"finish",className:"tvs-btn",onClick:ie,disabled:f||!y,style:{backgroundColor:"#10b981"}},f?a("span",{className:"tvs-spinner","aria-hidden":"true"}):null,f?" Saving...":"Finish & Save"),a("button",{key:"restart",className:"tvs-btn",onClick:oe,disabled:f||!y,style:{backgroundColor:"#334155"}},"Restart from 0:00")]:a("button",{className:"tvs-btn",onClick:oe,disabled:f||!y},f?a("span",{className:"tvs-spinner","aria-hidden":"true"}):null,f?" Starting...":"Start Activity"):a("div",{style:{backgroundColor:"#fef3c7",border:"1px solid #f59e0b",padding:"1rem",margin:"0.5rem 0 0 0",borderRadius:"4px",width:"100%"}},a("strong",null,"\u26A0\uFE0F You must be logged in"),a("p",{style:{margin:"0.5rem 0 0 0"}},"Please ",a("a",{href:"/login",style:{color:"#1f2937",textDecoration:"underline"}},"log in")," to create activities and upload to Strava. Don't have an account? ",a("a",{href:"/register",style:{color:"#1f2937",textDecoration:"underline"}},"Register here"),"."))),M?a(ne,{React:x,routeId:r,lastStatus:P,lastError:O,currentTime:b,duration:J}):null)}M||document.addEventListener("keydown",t=>{if(t.key==="`"){try{localStorage.setItem("tvsDev","1")}catch{}location.reload()}});function ue(){let t=document.getElementById("tvs-app-root");if(t){let r=window.tvs_route_payload||null,c=t.getAttribute("data-route-id")||r&&r.id;l("Boot \u2192 routeId:",c,"inline payload:",!!r),de(ae,{initialData:r,routeId:c},t)}}M?l("Debug mode enabled."):document.addEventListener("keydown",function(t){if(t.key==="`"){let r=new URL(location.href);r.searchParams.set("tvsdebug","1"),location.href=r.toString()}});document.readyState==="loading"?document.addEventListener("DOMContentLoaded",ue):ue();})();
+(() => {
+  // src/utils/debug.js
+  var DEBUG = new URLSearchParams(location.search).get("tvsdebug") === "1" || window.TVS_DEBUG === true || localStorage.getItem("tvsDev") === "1";
+  function log(...args) {
+    if (DEBUG)
+      console.debug("[TVS]", ...args);
+  }
+  function err(...args) {
+    console.error("[TVS]", ...args);
+  }
+
+  // src/utils/reactMount.js
+  var hasWindowReact = !!(window.React && window.ReactDOM);
+  var hasWpElement = !!(window.wp && window.wp.element);
+  var wpEl = hasWpElement ? window.wp.element : {};
+  var React = hasWindowReact ? window.React : wpEl || {};
+  var ReactDOM = hasWindowReact ? window.ReactDOM : wpEl || null;
+  var tvsRoots = /* @__PURE__ */ new WeakMap();
+  var hasCreateRoot = ReactDOM && typeof ReactDOM.createRoot === "function" || wpEl && typeof wpEl.createRoot === "function";
+  function mountReact(Component, props, node) {
+    try {
+      const existingRoot = tvsRoots.get(node);
+      if (existingRoot && typeof existingRoot.unmount === "function") {
+        existingRoot.unmount();
+        tvsRoots.delete(node);
+      } else if (ReactDOM && typeof ReactDOM.unmountComponentAtNode === "function") {
+        ReactDOM.unmountComponentAtNode(node);
+      }
+      if (hasCreateRoot) {
+        const createRoot = ReactDOM && ReactDOM.createRoot || wpEl && wpEl.createRoot;
+        const root = createRoot(node);
+        tvsRoots.set(node, root);
+        root.render(React.createElement(Component, props));
+        return;
+      }
+      const legacyRender = ReactDOM && ReactDOM.render || wpEl && wpEl.render;
+      if (legacyRender) {
+        legacyRender(React.createElement(Component, props), node);
+        return;
+      }
+      err("Ingen render-funksjon tilgjengelig.");
+    } catch (e) {
+      err("Mount feilet:", e);
+    }
+  }
+
+  // src/utils/async.js
+  function delay(ms) {
+    return new Promise((res) => setTimeout(res, ms));
+  }
+  async function withTimeout(promise, ms, label = "operation") {
+    let timer;
+    try {
+      return await Promise.race([
+        promise,
+        new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(label + " timed out")), ms);
+        })
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  // src/components/ProgressBar.js
+  function ProgressBar({ React: React2, currentTime, duration }) {
+    const h = React2.createElement;
+    const mins = Math.floor(currentTime / 60);
+    const secs = Math.floor(currentTime % 60);
+    const fmt = (m, s) => m + ":" + (s < 10 ? "0" : "") + s;
+    const progress = duration > 0 ? currentTime / duration * 100 : 0;
+    return h(
+      "div",
+      { className: "tvs-progress" },
+      h(
+        "div",
+        { className: "tvs-progress__bar" },
+        h("div", {
+          className: "tvs-progress__fill",
+          style: { width: Math.min(progress, 100) + "%" }
+        })
+      ),
+      h("div", { className: "tvs-progress__time" }, fmt(mins, secs) + " / " + fmt(Math.floor(duration / 60), Math.floor(duration % 60)))
+    );
+  }
+
+  // src/components/Loading.js
+  function Loading() {
+    const h = React.createElement;
+    return h(
+      "div",
+      { className: "tvs-loading", role: "status", "aria-live": "polite" },
+      h(
+        "svg",
+        { viewBox: "0 0 64 64", className: "tvs-runner", "aria-hidden": "true" },
+        h("line", { x1: 4, y1: 60, x2: 60, y2: 60, stroke: "#bbb", strokeWidth: 2, className: "track" }),
+        h("circle", { cx: 26, cy: 12, r: 5, fill: "none", stroke: "#111", strokeWidth: 2 }),
+        h("line", { x1: 26, y1: 17, x2: 26, y2: 35, stroke: "#111", strokeWidth: 2 }),
+        h("line", { x1: 26, y1: 22, x2: 40, y2: 18, stroke: "#111", strokeWidth: 2, className: "arm front" }),
+        h("line", { x1: 26, y1: 22, x2: 12, y2: 26, stroke: "#111", strokeWidth: 2, className: "arm back" }),
+        h("line", { x1: 26, y1: 35, x2: 40, y2: 48, stroke: "#111", strokeWidth: 2, className: "leg front" }),
+        h("line", { x1: 26, y1: 35, x2: 16, y2: 54, stroke: "#111", strokeWidth: 2, className: "leg back" })
+      ),
+      h(
+        "div",
+        null,
+        h("div", { className: "tvs-skel line" }),
+        h("div", { className: "tvs-skel line sm" }),
+        h(
+          "div",
+          null,
+          h("span", { className: "tvs-skel block" }),
+          h("span", { className: "tvs-skel block" }),
+          h("span", { className: "tvs-skel block" })
+        )
+      )
+    );
+  }
+
+  // src/components/DevOverlay.js
+  function DevOverlay({ React: React2, routeId, lastStatus, lastError, currentTime, duration }) {
+    const { useEffect, useRef, useState, createElement: h } = React2;
+    function useFPS(React3) {
+      const { useEffect: useEffect2, useRef: useRef2, useState: useState2 } = React3;
+      const [fps2, setFps] = useState2(0);
+      const lastTime = useRef2(performance.now());
+      const frames = useRef2(0);
+      useEffect2(() => {
+        let raf;
+        const tick = (t) => {
+          frames.current += 1;
+          if (t - lastTime.current >= 1e3) {
+            setFps(frames.current);
+            frames.current = 0;
+            lastTime.current = t;
+          }
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+        return () => cancelAnimationFrame(raf);
+      }, []);
+      return fps2;
+    }
+    const fps = useFPS(React2);
+    const boxRef = useRef(null);
+    const [min, setMin] = useState(false);
+    const [pos, setPos] = useState({ x: 16, y: 16 });
+    useEffect(() => {
+      const el = boxRef.current;
+      if (!el)
+        return;
+      let sx, sy, ox, oy, moving = false;
+      function onDown(e) {
+        const header = e.target.closest(".tvs-dev__header");
+        if (!header)
+          return;
+        moving = true;
+        sx = e.clientX;
+        sy = e.clientY;
+        ox = pos.x;
+        oy = pos.y;
+        e.preventDefault();
+      }
+      function onMove(e) {
+        if (!moving)
+          return;
+        setPos({ x: ox + (e.clientX - sx), y: oy + (e.clientY - sy) });
+      }
+      function onUp() {
+        moving = false;
+      }
+      window.addEventListener("mousedown", onDown);
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+      return () => {
+        window.removeEventListener("mousedown", onDown);
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+    }, [pos]);
+    const progress = duration > 0 ? (currentTime / duration * 100).toFixed(1) : "0.0";
+    const data = {
+      env: window.TVS_SETTINGS?.env,
+      version: window.TVS_SETTINGS?.version,
+      restRoot: window.TVS_SETTINGS?.restRoot,
+      user: window.TVS_SETTINGS?.user,
+      routeId,
+      lastStatus: lastStatus || "idle",
+      lastError: lastError ? String(lastError) : null,
+      currentTime: currentTime ? currentTime.toFixed(1) : "0.0",
+      duration: duration || 0,
+      progress: progress + "%",
+      fps
+    };
+    function row(label, value, isErr) {
+      return h(
+        "div",
+        { className: "tvs-dev__row" },
+        h("span", null, label),
+        h("code", { className: isErr ? "tvs-dev__err" : "" }, value)
+      );
+    }
+    function copy() {
+      navigator.clipboard.writeText(
+        JSON.stringify({ ...data, time: (/* @__PURE__ */ new Date()).toISOString() }, null, 2)
+      ).catch(console.error);
+    }
+    return h(
+      "div",
+      { ref: boxRef, className: `tvs-dev ${min ? "is-min" : ""}`, style: { left: pos.x + "px", top: pos.y + "px" } },
+      h(
+        "div",
+        { className: "tvs-dev__header" },
+        h("strong", null, "TVS Dev"),
+        h("div", { className: "tvs-dev__spacer" }),
+        h("span", { className: "tvs-dev__pill" }, data.env || "n/a"),
+        h("button", { className: "tvs-dev__btn", onClick: () => setMin(!min), "aria-label": "Minimize" }, "\u2581")
+      ),
+      h(
+        "div",
+        { className: "tvs-dev__body" },
+        row("Route", data.routeId ?? "n/a"),
+        row("User", data.user ?? "guest"),
+        row("REST", data.restRoot ?? "n/a"),
+        row("Status", data.lastStatus),
+        data.lastError ? row("Error", data.lastError, true) : null,
+        row("Duration", data.duration + "s"),
+        row("Current", data.currentTime + "s"),
+        row("Progress", data.progress),
+        row("FPS", String(data.fps)),
+        h(
+          "div",
+          { className: "tvs-dev__actions" },
+          h("button", { onClick: copy, className: "tvs-dev__btn" }, "Copy debug"),
+          h("button", { onClick: () => {
+            localStorage.setItem("tvsDev", "0");
+            location.reload();
+          }, className: "tvs-dev__btn tvs-dev__btn--ghost" }, "Disable")
+        )
+      )
+    );
+  }
+
+  // src/app.js
+  var slowParam = Number(new URLSearchParams(location.search).get("tvsslow") || 0);
+  function App({ initialData, routeId }) {
+    const { useEffect, useState, useRef, createElement: h } = React;
+    const [data, setData] = useState(initialData || null);
+    const [error, setError] = useState(null);
+    const [isPosting, setIsPosting] = useState(false);
+    const [isSessionActive, setIsSessionActive] = useState(false);
+    const [sessionStartAt, setSessionStartAt] = useState(null);
+    const [activities, setActivities] = useState([]);
+    const [loadingActivities, setLoadingActivities] = useState(false);
+    const [uploadingId, setUploadingId] = useState(null);
+    const [lastStatus, setLastStatus] = useState(initialData ? "inline" : "loading");
+    const [lastError, setLastError] = useState(null);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [isPlayerReady, setIsPlayerReady] = useState(false);
+    const videoRef = useRef(null);
+    const playerRef = useRef(null);
+    function showFlash(message, type = "success") {
+      if (typeof window.tvsFlash === "function") {
+        window.tvsFlash(message, type);
+      }
+    }
+    useEffect(() => {
+      const forceFetch = new URLSearchParams(location.search).get("tvsforcefetch") === "1";
+      if (data && !forceFetch) {
+        log("Har inline payload, skipper fetch.", data);
+        return;
+      }
+      if (!routeId) {
+        setError("Mangler routeId \u2013 hverken inline payload eller data-route-id.");
+        return;
+      }
+      (async () => {
+        try {
+          log("Henter rute via REST:", routeId, " (tvsslow:", slowParam, "ms)");
+          setLastStatus("loading");
+          if (slowParam)
+            await delay(slowParam);
+          const r = await fetch(`/wp-json/tvs/v1/routes/${encodeURIComponent(routeId)}`, {
+            credentials: "same-origin"
+          });
+          const json = await r.json();
+          log("REST OK:", json);
+          setData(json);
+          setLastStatus("ok");
+        } catch (e) {
+          err("REST FAIL:", e);
+          setError("Kunne ikke hente rutedata.");
+          setLastError(e?.message || String(e));
+          setLastStatus("error");
+        }
+      })();
+    }, [routeId]);
+    useEffect(() => {
+      loadActivities();
+    }, []);
+    async function loadActivities() {
+      try {
+        setLoadingActivities(true);
+        const url = "/wp-json/tvs/v1/activities/me";
+        const r = await fetch(url, {
+          credentials: "same-origin",
+          headers: {
+            "X-TVS-Nonce": window.TVS_SETTINGS?.nonce || ""
+          }
+        });
+        if (!r.ok) {
+          throw new Error("Failed to load activities");
+        }
+        const json = await r.json();
+        const activitiesData = Array.isArray(json) ? json : json.activities || [];
+        setActivities(activitiesData);
+      } catch (e) {
+        err("Load activities FAIL:", e);
+        setActivities([]);
+      } finally {
+        setLoadingActivities(false);
+      }
+    }
+    useEffect(() => {
+      if (!data)
+        return;
+      const iframe = videoRef.current;
+      if (!iframe)
+        return;
+      let player = null;
+      let unsubscribed = false;
+      function loadVimeoAPI() {
+        return new Promise((resolve, reject) => {
+          if (window.Vimeo && window.Vimeo.Player)
+            return resolve();
+          const existing = document.querySelector('script[src="https://player.vimeo.com/api/player.js"]');
+          if (existing) {
+            existing.addEventListener("load", () => resolve());
+            existing.addEventListener("error", () => reject(new Error("Vimeo API failed to load")));
+            return;
+          }
+          const s = document.createElement("script");
+          s.src = "https://player.vimeo.com/api/player.js";
+          s.async = true;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error("Vimeo API failed to load"));
+          document.head.appendChild(s);
+        });
+      }
+      (async () => {
+        try {
+          await loadVimeoAPI();
+          if (unsubscribed)
+            return;
+          player = new window.Vimeo.Player(iframe);
+          playerRef.current = player;
+          log("Vimeo Player constructed");
+          player.getDuration().catch(() => {
+          });
+          try {
+            await player.ready();
+            if (!unsubscribed) {
+              setIsPlayerReady(true);
+              log("Vimeo Player ready");
+            }
+          } catch (e) {
+            err("Vimeo ready() rejected:", e);
+          }
+          player.on("timeupdate", (ev) => {
+            if (typeof ev?.seconds === "number") {
+              setCurrentTime(ev.seconds);
+            }
+          });
+        } catch (_) {
+          err("Vimeo API init failed");
+        }
+      })();
+      return () => {
+        unsubscribed = true;
+        try {
+          if (player && player.off)
+            player.off("timeupdate");
+          if (player && player.destroy)
+            player.destroy();
+        } catch (_) {
+        }
+        playerRef.current = null;
+        setIsPlayerReady(false);
+      };
+    }, [data]);
+    async function ensurePlayerReady(timeoutMs = 8e3) {
+      const start = Date.now();
+      while (Date.now() - start < timeoutMs) {
+        const p = playerRef.current;
+        if (p) {
+          try {
+            await p.ready();
+            setIsPlayerReady(true);
+            return p;
+          } catch (_) {
+          }
+        }
+        await delay(100);
+      }
+      throw new Error("Video player is not ready");
+    }
+    function estimateDistance(durationS) {
+      const meta2 = data?.meta || {};
+      const routeDur = Number(meta2.duration_s || 0);
+      const routeDist = Number(meta2.distance_m || 0);
+      if (routeDur > 0 && routeDist > 0 && durationS >= 0) {
+        const ratio = Math.min(1, durationS / routeDur);
+        return Math.round(routeDist * ratio);
+      }
+      return 0;
+    }
+    async function startActivitySession() {
+      try {
+        setIsPosting(true);
+        log("Start clicked");
+        const player = await ensurePlayerReady();
+        setLastStatus("starting");
+        try {
+          await withTimeout(player.play(), 4e3, "play()");
+          log("Playback started");
+        } catch (e) {
+          err("play() failed:", e);
+          showFlash("Could not start playback: " + (e?.message || String(e)), "error");
+          throw e;
+        }
+        try {
+          const t = await withTimeout(player.getCurrentTime(), 1500, "getCurrentTime");
+          if (typeof t === "number" && t > 0.5) {
+            await delay(150);
+            await withTimeout(player.setCurrentTime(0), 2e3, "setCurrentTime(0)");
+            log("Seeked to 0");
+          } else {
+            log("Already at start, skipping seek");
+          }
+        } catch (e) {
+          log("Post-play seek skipped:", e?.message || String(e));
+        }
+        setSessionStartAt(/* @__PURE__ */ new Date());
+        setIsSessionActive(true);
+        setLastStatus("running");
+        showFlash("Activity started");
+      } catch (e) {
+        err("Start session failed:", e);
+        showFlash("Player not ready yet. Please wait a moment and try again.", "error");
+        setLastStatus("error");
+      } finally {
+        setIsPosting(false);
+      }
+    }
+    async function resumeActivitySession() {
+      try {
+        setIsPosting(true);
+        log("Resume clicked");
+        const player = await ensurePlayerReady();
+        setLastStatus("starting");
+        try {
+          await player.play();
+          log("Playback resumed");
+        } catch (e) {
+          err("resume play() failed:", e);
+          showFlash("Could not resume playback: " + (e?.message || String(e)), "error");
+          throw e;
+        }
+        setIsSessionActive(true);
+        setLastStatus("running");
+        showFlash("Activity resumed");
+      } catch (e) {
+        err("Resume session failed:", e);
+        showFlash("Player not ready yet. Please wait a moment and try again.", "error");
+        setLastStatus("error");
+      } finally {
+        setIsPosting(false);
+      }
+    }
+    async function pauseActivitySession() {
+      try {
+        log("Pause clicked");
+        const player = await ensurePlayerReady();
+        try {
+          await player.pause();
+          log("Playback paused");
+        } catch (e) {
+          err("pause() failed:", e);
+          showFlash("Failed to pause: " + (e?.message || String(e)), "error");
+          throw e;
+        }
+        setIsSessionActive(false);
+        setLastStatus("paused");
+        showFlash("Activity paused");
+      } catch (e) {
+        err("[TVS] Pause failed:", e);
+        setLastStatus("error");
+      }
+    }
+    async function finishAndSaveActivity() {
+      try {
+        setIsPosting(true);
+        log("Finish clicked");
+        const player = await ensurePlayerReady();
+        setLastStatus("saving");
+        try {
+          await player.pause();
+          log("Playback paused before save");
+        } catch (e) {
+          err("pause before save failed:", e);
+        }
+        const seconds = await player.getCurrentTime();
+        const durationS = Math.max(0, Math.floor(seconds || 0));
+        const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1e3).toISOString();
+        const distanceM = estimateDistance(durationS);
+        const payload = {
+          route_id: data.id,
+          route_name: data.title || "Unknown Route",
+          activity_date: (/* @__PURE__ */ new Date()).toISOString(),
+          started_at: startISO,
+          duration_s: durationS,
+          distance_m: distanceM
+        };
+        const nonce = window.TVS_SETTINGS?.nonce || "";
+        if (slowParam)
+          await delay(slowParam);
+        const r = await fetch("/wp-json/tvs/v1/activities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-WP-Nonce": nonce },
+          credentials: "same-origin",
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) {
+          const res = await r.json();
+          throw new Error(res.message || `HTTP ${r.status}`);
+        }
+        await r.json();
+        showFlash("Activity saved!");
+        setLastStatus("ok");
+        setIsSessionActive(false);
+        setSessionStartAt(null);
+        await loadActivities();
+        window.dispatchEvent(new CustomEvent("tvs:activity-updated"));
+      } catch (e) {
+        err("[TVS] Save activity failed:", e);
+        showFlash("Failed to save activity: " + (e?.message || String(e)), "error");
+        setLastError(e?.message || String(e));
+        setLastStatus("error");
+      } finally {
+        setIsPosting(false);
+      }
+    }
+    async function uploadToStrava(activityId) {
+      try {
+        setUploadingId(activityId);
+        setLastStatus("uploading");
+        const r = await fetch(`/wp-json/tvs/v1/activities/${activityId}/strava`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-WP-Nonce": window.TVS_SETTINGS?.nonce || ""
+          },
+          credentials: "same-origin"
+        });
+        const res = await r.json();
+        if (!r.ok) {
+          throw new Error(res.message || "Upload failed");
+        }
+        showFlash("Uploaded to Strava!");
+        setLastStatus("ok");
+        await loadActivities();
+        window.dispatchEvent(new CustomEvent("tvs:activity-updated"));
+      } catch (e) {
+        err("Strava upload FAIL:", e);
+        showFlash("Failed to upload to Strava: " + (e?.message || String(e)), "error");
+        setLastError(e?.message || String(e));
+        setLastStatus("error");
+      } finally {
+        setUploadingId(null);
+      }
+    }
+    if (error)
+      return h("div", { className: "tvs-route tvs-error" }, String(error));
+    if (!data)
+      return React.createElement(Loading, null);
+    const title = data.title || "Route";
+    const meta = data.meta || {};
+    const vimeo = meta.vimeo_id ? String(meta.vimeo_id) : "";
+    const duration = Number(meta.duration_s || 0);
+    const isLoggedIn = !!window.TVS_SETTINGS?.user;
+    return h(
+      "div",
+      { className: "tvs-app" },
+      h("h2", null, title),
+      vimeo ? h(
+        "div",
+        { className: "tvs-video" },
+        h("iframe", {
+          ref: videoRef,
+          width: 560,
+          height: 315,
+          src: "https://player.vimeo.com/video/" + encodeURIComponent(vimeo) + "?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0",
+          frameBorder: 0,
+          allow: "autoplay; fullscreen; picture-in-picture",
+          allowFullScreen: true
+        })
+      ) : null,
+      new URLSearchParams(location.search).get("tvsdebug") === "1" || window.TVS_DEBUG === true || localStorage.getItem("tvsDev") === "1" ? h("div", { className: "tvs-meta" }, h("pre", null, JSON.stringify(meta, null, 2))) : null,
+      h(ProgressBar, { React, currentTime, duration }),
+      h(
+        "div",
+        { className: "tvs-btns" },
+        !isLoggedIn ? h(
+          "div",
+          { className: "tvs-alert tvs-alert--warning" },
+          h(
+            "div",
+            { className: "tvs-row tvs-mb-2" },
+            h("span", { className: "tvs-badge tvs-badge-warning" }, "Warning"),
+            h("strong", null, " You must be logged in")
+          ),
+          h(
+            "p",
+            null,
+            "Please ",
+            h("a", { href: "/login" }, "log in"),
+            " to create activities and upload to Strava. Don't have an account? ",
+            h("a", { href: "/register" }, "Register here"),
+            "."
+          )
+        ) : !isSessionActive ? currentTime > 0 && sessionStartAt && (duration === 0 || currentTime < duration - 0.5) ? [
+          h(
+            "button",
+            {
+              key: "resume",
+              className: "tvs-btn",
+              onClick: resumeActivitySession,
+              disabled: isPosting || !isPlayerReady
+            },
+            isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+            isPosting ? " Starting..." : "Resume Activity"
+          ),
+          h(
+            "button",
+            {
+              key: "finish",
+              className: "tvs-btn tvs-btn--success",
+              onClick: finishAndSaveActivity,
+              disabled: isPosting || !isPlayerReady
+            },
+            isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+            isPosting ? " Saving..." : "Finish & Save"
+          ),
+          h(
+            "button",
+            {
+              key: "restart",
+              className: "tvs-btn tvs-btn--muted",
+              onClick: startActivitySession,
+              disabled: isPosting || !isPlayerReady
+            },
+            "Restart from 0:00"
+          )
+        ] : h(
+          "button",
+          {
+            className: "tvs-btn",
+            onClick: startActivitySession,
+            disabled: isPosting || !isPlayerReady
+          },
+          isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+          isPosting ? " Starting..." : "Start Activity"
+        ) : [
+          h(
+            "button",
+            {
+              key: "pause",
+              className: "tvs-btn tvs-btn--warning",
+              onClick: pauseActivitySession,
+              disabled: isPosting || !isPlayerReady
+            },
+            "Pause"
+          ),
+          h(
+            "button",
+            {
+              key: "finish",
+              className: "tvs-btn tvs-btn--success",
+              onClick: finishAndSaveActivity,
+              disabled: isPosting || !isPlayerReady
+            },
+            isPosting ? h("span", { className: "tvs-spinner", "aria-hidden": "true" }) : null,
+            isPosting ? " Saving..." : "Finish & Save"
+          )
+        ]
+      ),
+      DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
+    );
+  }
+
+  // src/boot.js
+  if (!DEBUG) {
+    document.addEventListener("keydown", (ev) => {
+      if (ev.key === "`") {
+        try {
+          localStorage.setItem("tvsDev", "1");
+        } catch (_) {
+        }
+        location.reload();
+      }
+    });
+  }
+  function boot() {
+    const mount = document.getElementById("tvs-app-root");
+    if (mount) {
+      const inline = window.tvs_route_payload || null;
+      const routeId = mount.getAttribute("data-route-id") || inline && inline.id;
+      log("Boot \u2192 routeId:", routeId, "inline payload:", !!inline);
+      mountReact(App, { initialData: inline, routeId }, mount);
+    }
+  }
+  if (DEBUG) {
+    log("Debug mode enabled.");
+  } else {
+    document.addEventListener("keydown", function(ev) {
+      if (ev.key === "`") {
+        const url = new URL(location.href);
+        url.searchParams.set("tvsdebug", "1");
+        location.href = url.toString();
+      }
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
 //# sourceMappingURL=tvs-app.js.map
