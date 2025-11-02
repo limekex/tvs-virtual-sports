@@ -84,18 +84,11 @@ class TVS_Plugin {
         // Create a unique mount point for this block instance
         $mount_id = 'tvs-my-activities-' . uniqid();
         
-        // Wrap with token-based card container to follow new UI guidelines
-        $card_style = 'background:var(--tvs-card-bg);'
-            . 'border:1px solid var(--tvs-card-border);'
-            . 'border-radius:var(--tvs-card-radius);'
-            . 'padding:var(--tvs-card-padding);'
-            . 'box-shadow:var(--tvs-card-shadow);'
-            . 'transition:var(--tvs-transition-transform),var(--tvs-transition-shadow);';
-
+        // Wrapper with token-based card classes (no inline styles)
         ob_start();
         ?>
-        <article class="tvs-my-activities-card" style="<?php echo esc_attr( $card_style ); ?>">
-            <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
+        <article class="tvs-card tvs-activities-card">
+            <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block tvs-activities-block"></div>
         </article>
         <?php
         return ob_get_clean();

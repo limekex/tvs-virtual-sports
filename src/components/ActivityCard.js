@@ -1,3 +1,5 @@
+import StravaIcon from './icons/StravaIcon.js';
+
 export default function ActivityCard({ activity, uploadToStrava, uploading, React, compact, dummy }) {
   const { createElement: h, useState } = React;
   const meta = activity.meta || {};
@@ -27,74 +29,74 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
     const [showPopover, setShowPopover] = useState(false);
 
     if (dummy) {
-      return h('div', { className: 'tvs-activity-card-compact', style: { padding: '0.75rem', marginBottom: '0.5rem', borderRadius: '4px', background: 'linear-gradient(90deg, #f3f4f6 60%, #e5e7eb 100%)', fontSize: '0.9rem', position: 'relative', opacity: 0.6, filter: 'grayscale(0.7)', pointerEvents: 'none' } },
-        h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' } },
-          h('div', { style: { flex: 1, minWidth: 0 } },
-            h('div', { style: { fontWeight: '500', marginBottom: '0.25rem' } }, activityTitle),
-            h('div', { style: { fontSize: '0.85rem', color: '#888' } },
+      return h('div', { className: 'tvs-activity-card-compact is-disabled' },
+        h('div', { className: 'tvs-row between' },
+          h('div', { className: 'tvs-grow' },
+            h('div', null, activityTitle),
+            h('div', { className: 'tvs-muted' },
               distance > 0 ? (distance / 1000).toFixed(2) + ' km' : '',
               distance > 0 && duration > 0 ? ' · ' : '',
               duration > 0 ? Math.floor(duration / 60) + ' min' : ''
             )
           ),
-          h('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 } },
-            h('span', { style: { color: '#bbb', fontSize: '1.5rem', lineHeight: 1, display: 'flex', alignItems: 'center' }, title: 'Preview' }, '✓'),
-            h('div', { style: { width: '32px', height: '32px', borderRadius: '4px', backgroundColor: '#e5e7eb', color: '#ccc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' } }, 'S')
+          h('div', { className: 'tvs-row' },
+            h('span', { title: 'Preview' }, '✓'),
+            h('div', { className: 'tvs-btn tvs-btn-strava tvs-btn--square-sm', 'aria-label': 'Strava' }, h(StravaIcon, { React, size: 16 }))
           )
         )
       );
     }
 
-    return h('div', { className: 'tvs-activity-card-compact', style: { padding: '0.75rem', marginBottom: '0.5rem', borderRadius: '4px', backgroundColor: '#f9fafb', fontSize: '0.9rem', position: 'relative' } },
-      h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' } },
-        h('div', { style: { flex: 1, minWidth: 0 } },
-          h('div', { style: { fontWeight: '500', marginBottom: '0.25rem' } }, activityTitle),
-          h('div', { style: { fontSize: '0.85rem', color: '#666' } },
+    return h('div', { className: 'tvs-activity-card-compact' },
+      h('div', { className: 'tvs-row between' },
+        h('div', { className: 'tvs-grow' },
+          h('div', null, activityTitle),
+          h('div', { className: 'tvs-muted' },
             distance > 0 ? (distance / 1000).toFixed(2) + ' km' : '',
             distance > 0 && duration > 0 ? ' · ' : '',
             duration > 0 ? Math.floor(duration / 60) + ' min' : ''
           )
         ),
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 } },
+          h('div', { className: 'tvs-row tvs-no-shrink' },
           isSynced
-            ? h('span', { style: { color: '#10b981', fontSize: '1.5rem', lineHeight: 1, display: 'flex', alignItems: 'center' }, title: 'Synced to Strava' }, '✓')
+            ? h('span', { title: 'Synced to Strava' }, '✓')
             : null,
-          h('div', { style: { position: 'relative' } },
+          h('div', { className: 'tvs-relative' },
             isSynced
-              ? h('a', { href: stravaRemoteId ? 'https://www.strava.com/activities/' + stravaRemoteId : '#', target: '_blank', rel: 'noopener noreferrer', title: 'View on Strava', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '4px', backgroundColor: '#fc4c02', color: 'white', textDecoration: 'none', fontSize: '0.9rem', fontWeight: 'bold' } }, 'S')
-              : h('button', { onClick: (e) => { e.stopPropagation(); setShowPopover(!showPopover); }, disabled: uploading, title: 'Upload to Strava', style: { display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '4px', backgroundColor: uploading ? '#ccc' : '#fc4c02', color: 'white', border: 'none', cursor: uploading ? 'wait' : 'pointer', fontSize: '0.9rem', fontWeight: 'bold' } }, uploading ? '...' : 'S'),
+              ? h('a', { href: stravaRemoteId ? 'https://www.strava.com/activities/' + stravaRemoteId : '#', target: '_blank', rel: 'noopener noreferrer', title: 'View on Strava', className: 'tvs-btn tvs-btn-strava tvs-btn--square-sm', 'aria-label': 'View on Strava' }, h(StravaIcon, { React, size: 16 }))
+              : h('button', { onClick: (e) => { e.stopPropagation(); setShowPopover(!showPopover); }, disabled: uploading, title: 'Upload to Strava', className: 'tvs-btn tvs-btn-strava tvs-btn--square-sm', 'aria-label': 'Upload to Strava' }, uploading ? '…' : h(StravaIcon, { React, size: 16 })),
             showPopover && !isSynced && !uploading
-              ? h('div', { style: { position: 'absolute', right: 0, top: 'calc(100% + 0.5rem)', backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '0.75rem', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)', zIndex: 1000, minWidth: '200px', whiteSpace: 'nowrap' } },
-                  h('div', { style: { fontSize: '0.9rem', marginBottom: '0.5rem', color: '#374151' } }, 'Upload to Strava?'),
-                  h('div', { style: { display: 'flex', gap: '0.5rem' } },
-                    h('button', { onClick: (e) => { e.stopPropagation(); setShowPopover(false); uploadToStrava(activityId); }, style: { flex: 1, padding: '0.5rem 0.75rem', backgroundColor: '#fc4c02', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '500' } }, 'Upload'),
-                    h('button', { onClick: (e) => { e.stopPropagation(); setShowPopover(false); }, style: { flex: 1, padding: '0.5rem 0.75rem', backgroundColor: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' } }, 'Cancel')
+              ? h('div', { className: 'tvs-popover' },
+                  h('div', { className: 'tvs-muted tvs-mb-2' }, 'Upload to Strava?'),
+                  h('div', { className: 'tvs-row' },
+                    h('button', { onClick: (e) => { e.stopPropagation(); setShowPopover(false); uploadToStrava(activityId); }, className: 'tvs-btn tvs-btn-strava tvs-flex-1' }, 'Upload'),
+                    h('button', { onClick: (e) => { e.stopPropagation(); setShowPopover(false); }, className: 'tvs-btn tvs-btn--muted tvs-flex-1' }, 'Cancel')
                   )
                 )
               : null
           )
         )
       ),
-      showPopover ? h('div', { style: { position: 'fixed', inset: 0, zIndex: 999 }, onClick: () => setShowPopover(false) }) : null
+      showPopover ? h('div', { className: 'tvs-overlay', onClick: () => setShowPopover(false) }) : null
     );
   }
 
-  return h('div', { className: 'tvs-activity-card', style: { border: '1px solid #ddd', padding: '1rem', marginBottom: '1rem', borderRadius: '4px', backgroundColor: isSynced ? '#f0f9ff' : '#fff' } },
-    h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+  return h('div', { className: 'tvs-activity-card' + (isSynced ? ' is-synced' : '') },
+    h('div', { className: 'tvs-row between' },
       h('div', null,
         h('strong', null, activityTitle),
-        h('div', { style: { marginTop: '0.5rem', fontSize: '0.9rem', color: '#666' } },
+        h('div', { className: 'tvs-muted tvs-mt-2' },
           distance > 0 ? h('span', null, 'Distance: ' + (distance / 1000).toFixed(2) + ' km ') : null,
           duration > 0 ? h('span', null, 'Duration: ' + Math.floor(duration / 60) + ' min') : null
         )
       ),
-      h('div', null,
+      h('div', { className: 'tvs-text-right' },
         isSynced
-          ? h('div', { style: { textAlign: 'right' } },
-              h('span', { style: { color: '#10b981', fontWeight: 'bold' } }, '✓ Synced to Strava'),
-              stravaRemoteId ? h('a', { href: 'https://www.strava.com/activities/' + stravaRemoteId, target: '_blank', rel: 'noopener noreferrer', style: { display: 'block', marginTop: '0.25rem', fontSize: '0.85rem' } }, 'View on Strava →') : null
+          ? h('div', null,
+              h('span', null, '✓ Synced to Strava'),
+              stravaRemoteId ? h('a', { href: 'https://www.strava.com/activities/' + stravaRemoteId, target: '_blank', rel: 'noopener noreferrer', className: 'tvs-muted tvs-block tvs-mt-1' }, 'View on Strava →') : null
             )
-          : h('button', { className: 'tvs-btn tvs-btn-strava', onClick: () => uploadToStrava(activityId), disabled: uploading, style: { backgroundColor: '#fc4c02', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '4px', cursor: uploading ? 'wait' : 'pointer', opacity: uploading ? 0.6 : 1 } }, uploading ? 'Uploading...' : 'Upload to Strava')
+          : h('button', { className: 'tvs-btn tvs-btn-strava', onClick: () => uploadToStrava(activityId), disabled: uploading }, uploading ? 'Uploading...' : 'Upload to Strava')
       )
     )
   );

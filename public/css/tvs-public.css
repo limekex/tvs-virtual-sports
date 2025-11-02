@@ -89,25 +89,19 @@
 
 .tvs-app {
   box-sizing: border-box;
-  max-width: 800px;
-  margin: 3rem auto;
-  padding: 2rem;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
-    Arial, sans-serif;
-  color: #111;
-  line-height: 1.6;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: var(--tvs-font-sans);
+  color: var(--tvs-color-text-primary);
+  line-height: var(--tvs-leading-normal);
 }
 
 .tvs-app h2 {
-  font-size: 1.8rem;
-  font-weight: 700;
+  font-size: var(--tvs-text-2xl);
+  font-weight: var(--tvs-font-bold);
   margin-top: 0;
-  margin-bottom: 1.5rem;
-  text-align: center;
+  margin-bottom: var(--tvs-space-4);
 }
 
 .tvs-app .tvs-video {
@@ -115,9 +109,9 @@
   padding-bottom: 56.25%; /* 16:9 */
   height: 0;
   overflow: hidden;
-  margin-bottom: 1.5rem;
-  border-radius: 10px;
-  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  margin-bottom: var(--tvs-space-4);
+  border-radius: var(--tvs-radius-lg);
+  box-shadow: var(--tvs-shadow-md);
 }
 
 .tvs-app .tvs-video iframe {
@@ -130,14 +124,15 @@
 }
 
 .tvs-app .tvs-meta {
-  background: #f7f7f7;
-  border-radius: 8px;
-  padding: 1rem;
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  font-size: 0.85rem;
-  color: #333;
+  background: var(--tvs-panel-bg);
+  border: 1px solid var(--tvs-panel-border);
+  border-radius: var(--tvs-radius-md);
+  padding: var(--tvs-space-4);
+  font-family: var(--tvs-font-mono);
+  font-size: var(--tvs-text-sm);
+  color: var(--tvs-color-text-secondary);
   overflow-x: auto;
-  margin-bottom: 1.5rem;
+  margin-bottom: var(--tvs-space-4);
 }
 
 .tvs-app .tvs-meta pre {
@@ -146,34 +141,42 @@
   word-break: break-word;
 }
 
-.tvs-app button {
-  display: inline-block;
-  background: #111;
-  color: #fff;
-  font-size: 1rem;
-  padding: 0.75rem 1.5rem;
-  border: none;
-  border-radius: 6px;
+/* Button group */
+.tvs-btns { display: flex; gap: var(--tvs-space-2); flex-wrap: wrap; }
+
+/* Buttons */
+.tvs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--tvs-space-2);
+  background: var(--tvs-color-primary);
+  color: var(--tvs-color-text-on-primary);
+  font-size: var(--tvs-button-font-size);
+  font-weight: var(--tvs-button-font-weight);
+  padding: var(--tvs-button-padding-y) var(--tvs-button-padding-x);
+  border: 1px solid transparent;
+  border-radius: var(--tvs-button-radius);
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: var(--tvs-transition-colors), var(--tvs-transition-shadow), var(--tvs-transition-transform);
 }
+.tvs-btn:hover { filter: brightness(1.05); box-shadow: var(--tvs-shadow-sm); transform: translateY(-1px); }
+.tvs-btn:active { transform: translateY(0); box-shadow: none; }
+.tvs-btn[disabled] { opacity: .7; cursor: not-allowed; }
 
-.tvs-app button:hover {
-  background: #333;
-}
-
-.tvs-app button:active {
-  background: #000;
-}
+.tvs-btn--success { background: var(--tvs-color-success); color: var(--tvs-color-text-on-primary); }
+.tvs-btn--warning { background: var(--tvs-color-warning); color: var(--tvs-color-text-on-accent); }
+.tvs-btn--muted { background: var(--tvs-color-bg-elevated); color: var(--tvs-color-text-secondary); border-color: var(--tvs-color-border-default); }
+.tvs-btn--ghost { background: transparent; color: var(--tvs-color-text-secondary); border-color: var(--tvs-color-border-default); }
 
 /* ========== Error & Overlay States ========== */
 
 .tvs-route.tvs-error {
-  background: #fee;
-  border: 1px solid #f88;
-  color: #a00;
-  padding: 1rem;
-  border-radius: 8px;
+  background: rgba(231, 76, 60, 0.1);
+  border: 1px solid var(--tvs-color-error);
+  color: var(--tvs-color-error);
+  padding: var(--tvs-space-4);
+  border-radius: var(--tvs-radius-md);
   text-align: center;
 }
 
@@ -203,20 +206,20 @@
 .tvs-progress__bar {
   width: 100%;
   height: 8px;
-  background: #e5e7eb; /* gray-200 */
+  background: var(--tvs-color-border-subtle);
   border-radius: 999px;
   overflow: hidden;
 }
 .tvs-progress__fill {
   width: 0%;
   height: 100%;
-  background: #16a34a; /* green-600 */
+  background: var(--tvs-color-success);
   transition: width .2s ease;
 }
 .tvs-progress__time {
   margin-top: 6px;
-  font-size: .9rem;
-  color: #4b5563; /* gray-600 */
+  font-size: var(--tvs-text-sm);
+  color: var(--tvs-color-text-secondary);
 }
 
 /* ===== TVS Loading (runner + skeleton) ===== */
@@ -225,9 +228,9 @@
   align-items: center;
   gap: 16px;
   padding: 16px;
-  border: 1px dashed #ddd;
-  border-radius: 10px;
-  background: #fafafa;
+  border: 1px dashed var(--tvs-color-border-default);
+  border-radius: var(--tvs-radius-lg);
+  background: var(--tvs-panel-bg);
 }
 
 .tvs-loading .tvs-runner {
@@ -238,7 +241,7 @@
 /* Shimmer skeleton blocks */
 .tvs-skel {
   border-radius: 6px;
-  background: linear-gradient(90deg, #eee 25%, #f6f6f6 37%, #eee 63%);
+  background: linear-gradient(90deg, var(--tvs-color-glass-light) 25%, var(--tvs-color-glass-medium) 37%, var(--tvs-color-glass-light) 63%);
   background-size: 400% 100%;
   animation: tvs-shimmer 1.25s linear infinite;
 }
@@ -285,6 +288,7 @@
   display: inline-flex;
   align-items: center;
   gap: .5rem;
+  text-decoration: none;
 }
 
 .tvs-btn[disabled] {
@@ -295,7 +299,7 @@
 .tvs-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid #fff;
+  border: 2px solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
   animation: tvs-spin .7s linear infinite;
@@ -363,3 +367,100 @@
     transform: translateY(-0.5rem);
   }
 }
+
+/* ===== Activities block & cards ===== */
+.tvs-activities-block, .tvs-my-activities-block { /* container rendered by React / mount */
+  margin: 0; /* card wrapper provides padding/margins */
+}
+
+.tvs-activity-card-compact {
+  padding: var(--tvs-space-3);
+  margin-bottom: var(--tvs-space-2);
+  border-radius: var(--tvs-radius-md);
+  background-color: var(--tvs-color-surface-raised);
+  font-size: var(--tvs-text-sm);
+  position: relative;
+}
+.tvs-activity-card-compact.is-disabled {
+  opacity: 0.6;
+  filter: grayscale(.6);
+  pointer-events: none;
+}
+
+/* ===== Alerts ===== */
+.tvs-alert {
+  width: 100%;
+  padding: var(--tvs-space-4);
+  border-radius: var(--tvs-radius-md);
+  border: 1px solid var(--tvs-color-border-default);
+}
+.tvs-alert--warning {
+  background: color-mix(in oklab, var(--tvs-color-warning) 15%, transparent);
+  border-color: var(--tvs-color-warning);
+  color: var(--tvs-color-text-primary);
+}
+.tvs-alert a { color: var(--tvs-color-primary-light); text-decoration: underline; }
+
+/* Badge variants */
+.tvs-badge-warning { background: var(--tvs-color-warning); color: var(--tvs-color-text-on-accent); }
+
+/* Generic layout helpers (scoped) */
+.tvs-row { display: flex; align-items: center; gap: var(--tvs-space-2); }
+.tvs-row.between { justify-content: space-between; }
+.tvs-grow { flex: 1 1 0; min-width: 0; }
+.tvs-muted { color: var(--tvs-color-text-secondary); font-size: var(--tvs-text-sm); }
+
+/* Strava accent button */
+.tvs-btn-strava { background: #fc4c02; color: #fff; }
+.tvs-btn-strava[disabled] { opacity: .7; cursor: wait; }
+
+/* Button size variants */
+.tvs-btn--square-sm { width: 32px; height: 32px; padding: 0; }
+
+/* Popover */
+.tvs-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--tvs-space-2));
+  background: var(--tvs-card-bg);
+  border: 1px solid var(--tvs-card-border);
+  border-radius: var(--tvs-radius-lg);
+  padding: var(--tvs-space-3);
+  box-shadow: var(--tvs-shadow-lg);
+  z-index: var(--tvs-z-popover);
+  min-width: 200px;
+  white-space: nowrap;
+}
+.tvs-overlay { position: fixed; inset: 0; z-index: var(--tvs-z-modal-backdrop); }
+
+/* Full activity card */
+.tvs-activity-card {
+  border: 1px solid var(--tvs-card-border);
+  padding: var(--tvs-space-4);
+  margin-bottom: var(--tvs-space-4);
+  border-radius: var(--tvs-radius-md);
+  background: var(--tvs-card-bg);
+}
+.tvs-activity-card.is-synced { background: color-mix(in oklab, var(--tvs-color-primary) 12%, var(--tvs-card-bg)); }
+
+/* ===== Small utilities (scoped to tvs-*) ===== */
+.tvs-flex-1 { flex: 1 1 0; min-width: 0; }
+.tvs-no-shrink { flex-shrink: 0; }
+.tvs-relative { position: relative; }
+.tvs-block { display: block; }
+.tvs-text-right { text-align: right; }
+.tvs-text-center { text-align: center; }
+.tvs-mb-1 { margin-bottom: var(--tvs-space-1); }
+.tvs-mb-2 { margin-bottom: var(--tvs-space-2); }
+.tvs-mb-4 { margin-bottom: var(--tvs-space-4); }
+.tvs-mt-1 { margin-top: var(--tvs-space-1); }
+.tvs-mt-2 { margin-top: var(--tvs-space-2); }
+.tvs-pt-2 { padding-top: var(--tvs-space-2); }
+.tvs-mr-3 { margin-right: var(--tvs-space-3); }
+.tvs-border-top { border-top: 1px solid var(--tvs-card-border); }
+
+/* SVG limb-specific transform origins for Loading runner */
+.tvs-runner .arm.front { transform-origin: 26px 22px; }
+.tvs-runner .arm.back { transform-origin: 26px 22px; }
+.tvs-runner .leg.front { transform-origin: 26px 35px; }
+.tvs-runner .leg.back { transform-origin: 26px 35px; }

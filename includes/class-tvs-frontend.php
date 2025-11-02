@@ -81,17 +81,10 @@ $json = wp_json_encode( $payload );
 $json = str_replace( '</script>', '<\/script>', $json );
 wp_add_inline_script( 'tvs-app', "window.tvs_route_payload = {$json};", 'before' );
 
-// 2) UI: Pakk inn i token-basert "card"-container for å følge temaets nye UI-guidelines
-// Merk: bruker CSS-variabler fra tema (tvs-tokens.css) direkte i inline style
-$card_style = 'background:var(--tvs-card-bg);'
-    . 'border:1px solid var(--tvs-card-border);'
-    . 'border-radius:var(--tvs-card-radius);'
-    . 'padding:var(--tvs-card-padding);'
-    . 'box-shadow:var(--tvs-card-shadow);'
-    . 'transition:var(--tvs-transition-transform),var(--tvs-transition-shadow);';
-
-$out  = '<article class="tvs-route-card" style="' . esc_attr( $card_style ) . '">';
-$out .= sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
+// 2) UI: Pakk inn i token-basert "card"-container (uten inline styles) iht. temaets UI-guidelines
+// Bruker klassenavn som temaets CSS allerede styler via tvs-tokens.css
+$out  = '<article class="tvs-route-card tvs-card">';
+$out .= sprintf( '<div id="tvs-app-root" class="tvs-app-host" data-route-id="%d"></div>', $id );
 $out .= '</article>';
 
 return $out;
