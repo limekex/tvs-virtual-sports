@@ -84,11 +84,11 @@ export default function MyActivitiesStandalone({ React }) {
     }));
     return h(
       "div",
-      { className: "tvs-activities-block", style: { marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: "8px", background: "#fff", padding: "1rem" } },
-      h("h3", { style: { marginTop: 0 } }, "My Activities"),
+      { className: "tvs-activities-block" },
+      h("h3", null, "My Activities"),
       h(
         "div",
-        { className: "tvs-activities-list", style: { marginBottom: "1rem" } },
+  { className: "tvs-activities-list tvs-mb-4" },
         dummyActivities.map((activity) =>
           h(ActivityCard, {
             key: activity.id,
@@ -101,20 +101,20 @@ export default function MyActivitiesStandalone({ React }) {
       ),
       h(
         "div",
-        { style: { textAlign: "center", color: "#888", fontSize: "0.95rem", marginBottom: "0.5rem" } },
+  { className: 'tvs-muted tvs-text-center tvs-mb-2' },
         "Sign in to see your recent activities."
       ),
       h(
         "div",
-        { style: { textAlign: "center" } },
+  { className: 'tvs-text-center' },
         h(
           "a",
-          { href: "/login", style: { color: '#1f2937', textDecoration: 'underline', marginRight: 12 } },
+          { href: "/login", className: 'tvs-btn tvs-btn--muted tvs-mr-3' },
           "Log in"
         ),
         h(
           "a",
-          { href: "/register", style: { color: '#1f2937', textDecoration: 'underline' } },
+          { href: "/register", className: 'tvs-btn tvs-btn--muted' },
           "Register"
         )
       )

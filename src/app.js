@@ -400,28 +400,22 @@ export default function App({ initialData, routeId }) {
     h(ProgressBar, { React, currentTime, duration }),
     h(
       'div',
-      { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
+      { className: 'tvs-btns' },
       !isLoggedIn
         ? h(
             'div',
-            {
-              style: {
-                backgroundColor: '#fef3c7',
-                border: '1px solid #f59e0b',
-                padding: '1rem',
-                margin: '0.5rem 0 0 0',
-                borderRadius: '4px',
-                width: '100%',
-              },
-            },
-            h('strong', null, '⚠️ You must be logged in'),
+            { className: 'tvs-alert tvs-alert--warning' },
+            h('div', { className: 'tvs-row tvs-mb-2' },
+              h('span', { className: 'tvs-badge tvs-badge-warning' }, 'Warning'),
+              h('strong', null, ' You must be logged in')
+            ),
             h(
               'p',
-              { style: { margin: '0.5rem 0 0 0' } },
+              null,
               'Please ',
-              h('a', { href: '/login', style: { color: '#1f2937', textDecoration: 'underline' } }, 'log in'),
+              h('a', { href: '/login' }, 'log in'),
               " to create activities and upload to Strava. Don't have an account? ",
-              h('a', { href: '/register', style: { color: '#1f2937', textDecoration: 'underline' } }, 'Register here'),
+              h('a', { href: '/register' }, 'Register here'),
               '.'
             )
           )
@@ -446,10 +440,9 @@ export default function App({ initialData, routeId }) {
                     'button',
                     {
                       key: 'finish',
-                      className: 'tvs-btn',
+                      className: 'tvs-btn tvs-btn--success',
                       onClick: finishAndSaveActivity,
                       disabled: isPosting || !isPlayerReady,
-                      style: { backgroundColor: '#10b981' },
                     },
                     isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : null,
                     isPosting ? ' Saving...' : 'Finish & Save'
@@ -458,10 +451,9 @@ export default function App({ initialData, routeId }) {
                     'button',
                     {
                       key: 'restart',
-                      className: 'tvs-btn',
+                      className: 'tvs-btn tvs-btn--muted',
                       onClick: startActivitySession,
                       disabled: isPosting || !isPlayerReady,
-                      style: { backgroundColor: '#334155' },
                     },
                     'Restart from 0:00'
                   ),
@@ -482,10 +474,9 @@ export default function App({ initialData, routeId }) {
               'button',
               {
                 key: 'pause',
-                className: 'tvs-btn',
+                className: 'tvs-btn tvs-btn--warning',
                 onClick: pauseActivitySession,
                 disabled: isPosting || !isPlayerReady,
-                style: { backgroundColor: '#f59e0b' },
               },
               'Pause'
             ),
@@ -493,10 +484,9 @@ export default function App({ initialData, routeId }) {
               'button',
               {
                 key: 'finish',
-                className: 'tvs-btn',
+                className: 'tvs-btn tvs-btn--success',
                 onClick: finishAndSaveActivity,
                 disabled: isPosting || !isPlayerReady,
-                style: { backgroundColor: '#10b981' },
               },
               isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : null,
               isPosting ? ' Saving...' : 'Finish & Save'

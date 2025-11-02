@@ -66,14 +66,19 @@ class TVS_Frontend {
     }
 
     // Sørg for at skriptet finnes (registrert) og enqueue det
-if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
-    // optional fallback hvis temaet ikke registrerte
-    $fallback = plugin_dir_url( __FILE__ ) . 'public/js/tvs-app.js';
-    if ( file_exists( plugin_dir_path( __FILE__ ) . 'public/js/tvs-app.js' ) ) {
-        wp_register_script( 'tvs-app', $fallback, array( 'wp-element' ), null, true );
+    if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
+        // optional fallback hvis temaet ikke registrerte
+        // NB: __FILE__ peker til includes/-mappen. Bruk __DIR__ (plugin-roten) for riktig sti.
+        $base_url      = plugin_dir_url( __DIR__ );
+        $base_path     = plugin_dir_path( __DIR__ );
+        $fallback_url  = $base_url . 'public/js/tvs-app.js';
+        $fallback_path = $base_path . 'public/js/tvs-app.js';
+
+        if ( file_exists( $fallback_path ) ) {
+            wp_register_script( 'tvs-app', $fallback_url, array( 'wp-element' ), null, true );
+        }
     }
-}
-wp_enqueue_script( 'tvs-app' );
+    wp_enqueue_script( 'tvs-app' );
 
 // 1) Legg data på en trygg måte før app-skriptet
 $json = wp_json_encode( $payload );
@@ -81,8 +86,11 @@ $json = wp_json_encode( $payload );
 $json = str_replace( '</script>', '<\/script>', $json );
 wp_add_inline_script( 'tvs-app', "window.tvs_route_payload = {$json};", 'before' );
 
-// 2) Kun mountpunkt i markup (unngå ekstra inline <script> i innholdet)
-$out = sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
+// 2) UI: Pakk inn i token-basert "card"-container (uten inline styles) iht. temaets UI-guidelines
+// Bruker klassenavn som temaets CSS allerede styler via tvs-tokens.css
+$out  = '<article class="tvs-route-card tvs-card">';
+$out .= sprintf( '<div id="tvs-app-root" class="tvs-app-host" data-route-id="%d"></div>', $id );
+$out .= '</article>';
 
 return $out;
 }
