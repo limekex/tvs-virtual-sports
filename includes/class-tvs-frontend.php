@@ -66,14 +66,19 @@ class TVS_Frontend {
     }
 
     // Sørg for at skriptet finnes (registrert) og enqueue det
-if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
-    // optional fallback hvis temaet ikke registrerte
-    $fallback = plugin_dir_url( __FILE__ ) . 'public/js/tvs-app.js';
-    if ( file_exists( plugin_dir_path( __FILE__ ) . 'public/js/tvs-app.js' ) ) {
-        wp_register_script( 'tvs-app', $fallback, array( 'wp-element' ), null, true );
+    if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
+        // optional fallback hvis temaet ikke registrerte
+        // NB: __FILE__ peker til includes/-mappen. Bruk __DIR__ (plugin-roten) for riktig sti.
+        $base_url      = plugin_dir_url( __DIR__ );
+        $base_path     = plugin_dir_path( __DIR__ );
+        $fallback_url  = $base_url . 'public/js/tvs-app.js';
+        $fallback_path = $base_path . 'public/js/tvs-app.js';
+
+        if ( file_exists( $fallback_path ) ) {
+            wp_register_script( 'tvs-app', $fallback_url, array( 'wp-element' ), null, true );
+        }
     }
-}
-wp_enqueue_script( 'tvs-app' );
+    wp_enqueue_script( 'tvs-app' );
 
 // 1) Legg data på en trygg måte før app-skriptet
 $json = wp_json_encode( $payload );
