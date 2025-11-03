@@ -375,132 +375,136 @@ export default function App({ initialData, routeId }) {
   return h(
     'div',
     { className: 'tvs-app' },
-    vimeo
-      ? h(
-          'div',
-          { className: 'tvs-video' },
-          h('iframe', {
-            ref: videoRef,
-            width: 560,
-            height: 315,
-            src:
-              'https://player.vimeo.com/video/' +
-              encodeURIComponent(vimeo) +
-              '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
-            frameBorder: 0,
-            allow: 'autoplay; fullscreen; picture-in-picture',
-            allowFullScreen: true,
-          })
-        )
-      : null,
-    (new URLSearchParams(location.search).get('tvsdebug') === '1' || window.TVS_DEBUG === true || localStorage.getItem('tvsDev') === '1')
-      ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
-      : null,
-    h(ProgressBar, { React, currentTime, duration }),
     h(
       'div',
-      { className: 'tvs-btns' },
-      !isLoggedIn
+      { className: 'tvs-panel tvs-app__container' },
+      vimeo
         ? h(
             'div',
-            { className: 'tvs-alert tvs-alert--warning' },
-            h(
-              'div',
-              { className: 'tvs-row tvs-mb-2' },
-              h('span', { className: 'tvs-badge tvs-badge-warning' }, 'Warning'),
-              h('strong', null, ' You must be logged in')
-            ),
-            h(
-              'p',
-              null,
-              'Please ',
-              h('a', { href: '/login' }, 'log in'),
-              " to create activities and upload to Strava. Don't have an account? ",
-              h('a', { href: '/register' }, 'Register here'),
-              '.'
-            )
+            { className: 'tvs-video' },
+            h('iframe', {
+              ref: videoRef,
+              width: 560,
+              height: 315,
+              src:
+                'https://player.vimeo.com/video/' +
+                encodeURIComponent(vimeo) +
+                '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
+              frameBorder: 0,
+              allow: 'autoplay; fullscreen; picture-in-picture',
+              allowFullScreen: true,
+            })
           )
-        : !isSessionActive
-        ? (
-            currentTime > 0 &&
-            sessionStartAt &&
-            (duration === 0 || currentTime < duration - 0.5)
-              ? [
-                  h(
+        : null,
+      (new URLSearchParams(location.search).get('tvsdebug') === '1' || window.TVS_DEBUG === true || localStorage.getItem('tvsDev') === '1')
+        ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
+        : null,
+      h(ProgressBar, { React, currentTime, duration }),
+      h(
+        'div',
+        { className: 'tvs-btns' },
+        !isLoggedIn
+          ? h(
+              'div',
+              { className: 'tvs-alert tvs-alert--warning' },
+              h(
+                'div',
+                { className: 'tvs-row tvs-mb-2' },
+                h('span', { className: 'tvs-badge tvs-badge-warning' }, 'Warning'),
+                h('strong', null, ' You must be logged in')
+              ),
+              h(
+                'p',
+                null,
+                'Please ',
+                h('a', { href: '/login' }, 'log in'),
+                " to create activities and upload to Strava. Don't have an account? ",
+                h('a', { href: '/register' }, 'Register here'),
+                '.'
+              )
+            )
+          : !isSessionActive
+          ? (
+              currentTime > 0 &&
+              sessionStartAt &&
+              (duration === 0 || currentTime < duration - 0.5)
+                ? [
+                    h(
+                      'button',
+                      {
+                        key: 'resume',
+                        className: 'tvs-btn',
+                        onClick: resumeActivitySession,
+                        disabled: isPosting || !isPlayerReady,
+                        'aria-label': 'Resume activity',
+                        title: 'Resume activity',
+                      },
+                      isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
+                    ),
+                    h(
+                      'button',
+                      {
+                        key: 'finish',
+                        className: 'tvs-btn tvs-btn--success',
+                        onClick: finishAndSaveActivity,
+                        disabled: isPosting || !isPlayerReady,
+                        'aria-label': 'Finish and save activity',
+                        title: 'Finish and save activity',
+                      },
+                      isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
+                    ),
+                    h(
+                      'button',
+                      {
+                        key: 'restart',
+                        className: 'tvs-btn tvs-btn--muted',
+                        onClick: startActivitySession,
+                        disabled: isPosting || !isPlayerReady,
+                        'aria-label': 'Restart from beginning',
+                        title: 'Restart from beginning',
+                      },
+                      '⟲'
+                    ),
+                  ]
+                : h(
                     'button',
                     {
-                      key: 'resume',
                       className: 'tvs-btn',
-                      onClick: resumeActivitySession,
-                      disabled: isPosting || !isPlayerReady,
-                      'aria-label': 'Resume activity',
-                      title: 'Resume activity',
-                    },
-                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
-                  ),
-                  h(
-                    'button',
-                    {
-                      key: 'finish',
-                      className: 'tvs-btn tvs-btn--success',
-                      onClick: finishAndSaveActivity,
-                      disabled: isPosting || !isPlayerReady,
-                      'aria-label': 'Finish and save activity',
-                      title: 'Finish and save activity',
-                    },
-                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
-                  ),
-                  h(
-                    'button',
-                    {
-                      key: 'restart',
-                      className: 'tvs-btn tvs-btn--muted',
                       onClick: startActivitySession,
                       disabled: isPosting || !isPlayerReady,
-                      'aria-label': 'Restart from beginning',
-                      title: 'Restart from beginning',
+                      'aria-label': 'Start activity',
+                      title: 'Start activity',
                     },
-                    '⟲'
-                  ),
-                ]
-              : h(
-                  'button',
-                  {
-                    className: 'tvs-btn',
-                    onClick: startActivitySession,
-                    disabled: isPosting || !isPlayerReady,
-                    'aria-label': 'Start activity',
-                    title: 'Start activity',
-                  },
-                  isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
-                )
-          )
-        : [
-            h(
-              'button',
-              {
-                key: 'pause',
-                className: 'tvs-btn tvs-btn--warning',
-                onClick: pauseActivitySession,
-                disabled: isPosting || !isPlayerReady,
-                'aria-label': 'Pause activity',
-                title: 'Pause activity',
-              },
-              '⏸'
-            ),
-            h(
-              'button',
-              {
-                key: 'finish',
-                className: 'tvs-btn tvs-btn--success',
-                onClick: finishAndSaveActivity,
-                disabled: isPosting || !isPlayerReady,
-                'aria-label': 'Finish and save activity',
-                title: 'Finish and save activity',
-              },
-              isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
-            ),
-          ]
+                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
+                  )
+            )
+          : [
+              h(
+                'button',
+                {
+                  key: 'pause',
+                  className: 'tvs-btn tvs-btn--warning',
+                  onClick: pauseActivitySession,
+                  disabled: isPosting || !isPlayerReady,
+                  'aria-label': 'Pause activity',
+                  title: 'Pause activity',
+                },
+                '⏸'
+              ),
+              h(
+                'button',
+                {
+                  key: 'finish',
+                  className: 'tvs-btn tvs-btn--success',
+                  onClick: finishAndSaveActivity,
+                  disabled: isPosting || !isPlayerReady,
+                  'aria-label': 'Finish and save activity',
+                  title: 'Finish and save activity',
+                },
+                isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
+              ),
+            ]
+      )
     ),
     DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
   );

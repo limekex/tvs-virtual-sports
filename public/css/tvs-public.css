@@ -253,19 +253,36 @@
 
 
 /* ===== TVS Button Spinner ===== */
-.tvs-btn {
+/* Base button (scoped to the app) */
+.tvs-app .tvs-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
+  justify-content: center;
+  gap: var(--tvs-space-2);
+  padding: var(--tvs-button-padding-y) var(--tvs-button-padding-x);
+  border-radius: var(--tvs-button-radius);
+  font-size: var(--tvs-button-font-size);
+  font-weight: var(--tvs-button-font-weight);
+  border: 1px solid var(--tvs-color-border-default);
+  background: var(--tvs-color-bg-elevated);
+  color: var(--tvs-color-text-primary);
+  transition: var(--tvs-transition-colors), var(--tvs-transition-shadow);
+}
+.tvs-app .tvs-btn:hover {
+  background: var(--tvs-color-surface-raised);
+}
+.tvs-app .tvs-btn:focus {
+  outline: 2px solid var(--tvs-color-border-accent);
+  outline-offset: 2px;
 }
 
-.tvs-btn[disabled] {
+.tvs-app .tvs-btn[disabled] {
   opacity: .7;
   cursor: not-allowed;
 }
 
-.tvs-spinner {
+.tvs-app .tvs-spinner {
   width: 16px;
   height: 16px;
   border: 2px solid currentColor;
@@ -275,7 +292,34 @@
 }
 
 /* Simple button group layout */
-.tvs-btns { display: flex; gap: .5rem; flex-wrap: wrap; }
+/* Button group */
+.tvs-app .tvs-btns { display: flex; gap: var(--tvs-space-2); flex-wrap: wrap; }
+
+/* Semantic button variants */
+.tvs-app .tvs-btn--success {
+  background: var(--tvs-color-success);
+  border-color: var(--tvs-color-success);
+  color: var(--tvs-color-text-on-primary);
+}
+.tvs-app .tvs-btn--success:hover {
+  filter: brightness(1.05);
+}
+.tvs-app .tvs-btn--warning {
+  background: var(--tvs-color-warning);
+  border-color: var(--tvs-color-warning);
+  color: var(--tvs-color-text-on-accent);
+}
+.tvs-app .tvs-btn--warning:hover {
+  filter: brightness(1.05);
+}
+.tvs-app .tvs-btn--muted {
+  background: var(--tvs-color-bg-tertiary);
+  border-color: var(--tvs-color-border-subtle);
+  color: var(--tvs-color-text-secondary);
+}
+.tvs-app .tvs-btn--muted:hover {
+  background: var(--tvs-color-bg-secondary);
+}
 
 @keyframes tvs-spin {
   to { transform: rotate(360deg); }
