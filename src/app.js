@@ -2,6 +2,7 @@ import { DEBUG, log, err } from './utils/debug.js';
 import { delay, withTimeout } from './utils/async.js';
 import { React } from './utils/reactMount.js';
 import ProgressBar from './components/ProgressBar.js';
+import { RiRunLine, RiRestartLine, RiUserLine } from 'react-icons/ri';
 import Loading from './components/Loading.js';
 import DevOverlay from './components/DevOverlay.js';
 
@@ -433,13 +434,13 @@ export default function App({ initialData, routeId }) {
                       'button',
                       {
                         key: 'resume',
-                        className: 'tvs-btn',
+                        className: 'tvs-btn tvs-btn--primary',
                         onClick: resumeActivitySession,
                         disabled: isPosting || !isPlayerReady,
                         'aria-label': 'Resume activity',
                         title: 'Resume activity',
                       },
-                      isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
+                      isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : h(RiRunLine, { 'aria-hidden': true })
                     ),
                     h(
                       'button',
@@ -457,25 +458,25 @@ export default function App({ initialData, routeId }) {
                       'button',
                       {
                         key: 'restart',
-                        className: 'tvs-btn tvs-btn--muted',
+                        className: 'tvs-btn tvs-btn--outline',
                         onClick: startActivitySession,
                         disabled: isPosting || !isPlayerReady,
                         'aria-label': 'Restart from beginning',
                         title: 'Restart from beginning',
                       },
-                      '⟲'
+                      h(RiRestartLine, { 'aria-hidden': true })
                     ),
                   ]
                 : h(
                     'button',
                     {
-                      className: 'tvs-btn',
+                      className: 'tvs-btn tvs-btn--primary',
                       onClick: startActivitySession,
                       disabled: isPosting || !isPlayerReady,
                       'aria-label': 'Start activity',
                       title: 'Start activity',
                     },
-                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
+                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : h(RiRunLine, { 'aria-hidden': true })
                   )
             )
           : [
@@ -489,7 +490,7 @@ export default function App({ initialData, routeId }) {
                   'aria-label': 'Pause activity',
                   title: 'Pause activity',
                 },
-                '⏸'
+                h(RiUserLine, { 'aria-hidden': true })
               ),
               h(
                 'button',

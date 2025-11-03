@@ -296,6 +296,13 @@
 .tvs-app .tvs-btns { display: flex; gap: var(--tvs-space-2); flex-wrap: wrap; }
 
 /* Semantic button variants */
+.tvs-app .tvs-btn--primary {
+  background: var(--tvs-color-primary);
+  border-color: var(--tvs-color-primary);
+  color: var(--tvs-color-text-on-primary);
+}
+.tvs-app .tvs-btn--primary:hover { opacity: .92; }
+
 .tvs-app .tvs-btn--success {
   background: var(--tvs-color-success);
   border-color: var(--tvs-color-success);
@@ -319,6 +326,21 @@
 }
 .tvs-app .tvs-btn--muted:hover {
   background: var(--tvs-color-bg-secondary);
+}
+
+/* Outline button */
+.tvs-app .tvs-btn--outline {
+  background: transparent;
+  color: var(--tvs-color-primary);
+  border-color: var(--tvs-color-primary);
+}
+.tvs-app .tvs-btn--outline:hover {
+  background: color-mix(in srgb, var(--tvs-color-primary) 12%, transparent);
+}
+
+/* Normalize icon size inside buttons */
+.tvs-app .tvs-btn svg {
+  width: 1.25rem; height: 1.25rem; display: block;
 }
 
 @keyframes tvs-spin {
