@@ -375,7 +375,6 @@ export default function App({ initialData, routeId }) {
   return h(
     'div',
     { className: 'tvs-app' },
-    h('h2', null, title),
     vimeo
       ? h(
           'div',
@@ -434,9 +433,10 @@ export default function App({ initialData, routeId }) {
                       className: 'tvs-btn',
                       onClick: resumeActivitySession,
                       disabled: isPosting || !isPlayerReady,
+                      'aria-label': 'Resume activity',
+                      title: 'Resume activity',
                     },
-                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : null,
-                    isPosting ? ' Starting...' : 'Resume Activity'
+                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
                   ),
                   h(
                     'button',
@@ -445,9 +445,10 @@ export default function App({ initialData, routeId }) {
                       className: 'tvs-btn tvs-btn--success',
                       onClick: finishAndSaveActivity,
                       disabled: isPosting || !isPlayerReady,
+                      'aria-label': 'Finish and save activity',
+                      title: 'Finish and save activity',
                     },
-                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : null,
-                    isPosting ? ' Saving...' : 'Finish & Save'
+                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
                   ),
                   h(
                     'button',
@@ -456,8 +457,10 @@ export default function App({ initialData, routeId }) {
                       className: 'tvs-btn tvs-btn--muted',
                       onClick: startActivitySession,
                       disabled: isPosting || !isPlayerReady,
+                      'aria-label': 'Restart from beginning',
+                      title: 'Restart from beginning',
                     },
-                    'Restart from 0:00'
+                    '⟲'
                   ),
                 ]
               : h(
@@ -466,9 +469,10 @@ export default function App({ initialData, routeId }) {
                     className: 'tvs-btn',
                     onClick: startActivitySession,
                     disabled: isPosting || !isPlayerReady,
+                    'aria-label': 'Start activity',
+                    title: 'Start activity',
                   },
-                  isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : null,
-                  isPosting ? ' Starting...' : 'Start Activity'
+                  isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '▶'
                 )
           )
         : [
@@ -476,22 +480,25 @@ export default function App({ initialData, routeId }) {
               'button',
               {
                 key: 'pause',
-                  className: 'tvs-btn tvs-btn--warning',
+                className: 'tvs-btn tvs-btn--warning',
                 onClick: pauseActivitySession,
                 disabled: isPosting || !isPlayerReady,
+                'aria-label': 'Pause activity',
+                title: 'Pause activity',
               },
-              'Pause'
+              '⏸'
             ),
             h(
               'button',
               {
                 key: 'finish',
-                  className: 'tvs-btn tvs-btn--success',
+                className: 'tvs-btn tvs-btn--success',
                 onClick: finishAndSaveActivity,
                 disabled: isPosting || !isPlayerReady,
+                'aria-label': 'Finish and save activity',
+                title: 'Finish and save activity',
               },
-              isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : null,
-              isPosting ? ' Saving...' : 'Finish & Save'
+              isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
             ),
           ]
     ),
