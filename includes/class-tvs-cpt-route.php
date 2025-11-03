@@ -10,6 +10,8 @@ class TVS_CPT_Route {
     public function __construct() {
         add_action( 'init', array( $this, 'register_post_type' ) );
         add_action( 'save_post_tvs_route', array( $this, 'save_meta' ), 10, 2 );
+        // Always bust routes cache on any route save (separate from meta save/nonce)
+        add_action( 'save_post_tvs_route', array( $this, 'bust_routes_cache' ), 99, 2 );
         add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
     }
 
@@ -65,6 +67,24 @@ class TVS_CPT_Route {
                 update_post_meta( $post_id, $k, $v );
             }
         }
+
+        // Invalidate routes REST cache when meta saved through the metabox form
+        update_option( 'tvs_routes_cache_buster', time() );
+    }
+
+    /**
+     * Bust the routes list cache on any route save (independent of meta box nonce)
+     */
+    public function bust_routes_cache( $post_id, $post ) {
+        // Skip for autosave/revision like in save_meta
+        if ( defined( 'DOING_AUTOSAVE' ) && DOING_AUTOSAVE ) {
+            return;
+        }
+        if ( wp_is_post_revision( $post_id ) ) {
+            return;
+        }
+        // Update the cache buster option unconditionally on valid route saves
+        update_option( 'tvs_routes_cache_buster', time() );
     }
 
     /**

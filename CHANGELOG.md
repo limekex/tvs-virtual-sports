@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2025-11-03
+
+### Added
+- UI token alignment for the app container and controls (icon buttons with labels, variants, hover).
+- Strava settings page in WP Admin (Client ID/Secret, templates, privacy toggle) with validation/sanitization.
+- Strava status in user profile and REST endpoints for connect/status/upload.
+
+### Changed
+- Reworked button variants to use theme tokens (primary/outline/success/warning) and consistent react-icons.
+- Containerized the app (no title) with full-width video and progress indicator.
+
+### Performance
+- Added transient caching for `GET /tvs/v1/routes` responses (5 min TTL) with safe invalidation on `save_post_tvs_route` via a cache-buster option. Dev bypass via `?tvsforcefetch=1`.
+
+### Security
+- Capability checks for managing Strava settings; secure storage in options.
+
 ### Added
 - REST API PHPUnit tests covering core endpoints
 	- GET /tvs/v1/routes (list + item)

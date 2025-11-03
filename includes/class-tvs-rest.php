@@ -139,11 +139,34 @@ class TVS_REST {
     } */
 
         public function get_routes( $request ) {
+    // Params
     $per_page = max( 1, min( 50, (int) $request->get_param( 'per_page' ) ?: 20 ) );
     $paged    = max( 1, (int) $request->get_param( 'page' ) ?: 1 );
     $search   = (string) $request->get_param( 'search' );
     $region   = (string) $request->get_param( 'region' );
 
+    // Optional dev bypass of cache
+    $force    = isset( $_GET['tvsforcefetch'] ) && $_GET['tvsforcefetch'];
+
+    // Build cache key using params and a global cache buster
+    $buster   = (int) get_option( 'tvs_routes_cache_buster', 0 );
+    $key_base = array(
+        'per_page' => $per_page,
+        'page'     => $paged,
+        'search'   => $search,
+        'region'   => $region,
+        'buster'   => $buster,
+    );
+    $cache_key = 'tvs_routes_' . md5( wp_json_encode( $key_base ) );
+
+    if ( ! $force ) {
+        $cached = get_transient( $cache_key );
+        if ( $cached !== false ) {
+            return rest_ensure_response( $cached );
+        }
+    }
+
+    // Build query
     $tax_query = array();
     if ( $region ) {
         $tax_query[] = array(
@@ -170,13 +193,18 @@ class TVS_REST {
     }
     wp_reset_postdata();
 
-    return rest_ensure_response( array(
+    $response = array(
         'items'      => $out,
         'total'      => (int) $q->found_posts,
         'totalPages' => (int) $q->max_num_pages,
         'page'       => $paged,
         'perPage'    => $per_page,
-    ) );
+    );
+
+    // Cache for 5 minutes (avoid caching user-specific fields; response is route-only)
+    set_transient( $cache_key, $response, 5 * MINUTE_IN_SECONDS );
+
+    return rest_ensure_response( $response );
 }
 
     public function get_route( $request ) {
