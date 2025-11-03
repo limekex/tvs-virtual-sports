@@ -342,6 +342,11 @@
 .tvs-app .tvs-btn svg {
   width: 1.25rem; height: 1.25rem; display: block;
 }
+.tvs-app .tvs-btn__label {
+  text-transform: uppercase;
+  letter-spacing: var(--tvs-tracking-wide);
+  font-size: var(--tvs-text-sm);
+}
 
 @keyframes tvs-spin {
   to { transform: rotate(360deg); }

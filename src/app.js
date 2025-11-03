@@ -2,7 +2,7 @@ import { DEBUG, log, err } from './utils/debug.js';
 import { delay, withTimeout } from './utils/async.js';
 import { React } from './utils/reactMount.js';
 import ProgressBar from './components/ProgressBar.js';
-import { RiRunLine, RiRestartLine, RiUserLine } from 'react-icons/ri';
+import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine } from 'react-icons/ri';
 import Loading from './components/Loading.js';
 import DevOverlay from './components/DevOverlay.js';
 
@@ -440,7 +440,15 @@ export default function App({ initialData, routeId }) {
                         'aria-label': 'Resume activity',
                         title: 'Resume activity',
                       },
-                      isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : h(RiRunLine, { 'aria-hidden': true })
+                      isPosting
+                        ? [
+                            h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                            h('span', { className: 'tvs-btn__label' }, 'RESUME'),
+                          ]
+                        : [
+                            h(RiRunLine, { 'aria-hidden': true }),
+                            h('span', { className: 'tvs-btn__label' }, 'RESUME'),
+                          ]
                     ),
                     h(
                       'button',
@@ -452,7 +460,15 @@ export default function App({ initialData, routeId }) {
                         'aria-label': 'Finish and save activity',
                         title: 'Finish and save activity',
                       },
-                      isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
+                      isPosting
+                        ? [
+                            h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                            h('span', { className: 'tvs-btn__label' }, 'SAVE'),
+                          ]
+                        : [
+                            h(RiSaveLine, { 'aria-hidden': true }),
+                            h('span', { className: 'tvs-btn__label' }, 'SAVE'),
+                          ]
                     ),
                     h(
                       'button',
@@ -464,7 +480,15 @@ export default function App({ initialData, routeId }) {
                         'aria-label': 'Restart from beginning',
                         title: 'Restart from beginning',
                       },
-                      h(RiRestartLine, { 'aria-hidden': true })
+                      isPosting
+                        ? [
+                            h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                            h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
+                          ]
+                        : [
+                            h(RiRestartLine, { 'aria-hidden': true }),
+                            h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
+                          ]
                     ),
                   ]
                 : h(
@@ -476,7 +500,15 @@ export default function App({ initialData, routeId }) {
                       'aria-label': 'Start activity',
                       title: 'Start activity',
                     },
-                    isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : h(RiRunLine, { 'aria-hidden': true })
+                    isPosting
+                      ? [
+                          h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                          h('span', { className: 'tvs-btn__label' }, 'START'),
+                        ]
+                      : [
+                          h(RiRunLine, { 'aria-hidden': true }),
+                          h('span', { className: 'tvs-btn__label' }, 'START'),
+                        ]
                   )
             )
           : [
@@ -490,7 +522,8 @@ export default function App({ initialData, routeId }) {
                   'aria-label': 'Pause activity',
                   title: 'Pause activity',
                 },
-                h(RiUserLine, { 'aria-hidden': true })
+                h(RiUserLine, { 'aria-hidden': true }),
+                h('span', { className: 'tvs-btn__label' }, 'PAUSE')
               ),
               h(
                 'button',
@@ -502,7 +535,15 @@ export default function App({ initialData, routeId }) {
                   'aria-label': 'Finish and save activity',
                   title: 'Finish and save activity',
                 },
-                isPosting ? h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }) : '✔'
+                isPosting
+                  ? [
+                      h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                      h('span', { className: 'tvs-btn__label' }, 'SAVE'),
+                    ]
+                  : [
+                      h(RiSaveLine, { 'aria-hidden': true }),
+                      h('span', { className: 'tvs-btn__label' }, 'SAVE'),
+                    ]
               ),
             ]
       )
