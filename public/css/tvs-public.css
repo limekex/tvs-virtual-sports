@@ -268,10 +268,9 @@
   background: var(--tvs-color-bg-elevated);
   color: var(--tvs-color-text-primary);
   transition: var(--tvs-transition-colors), var(--tvs-transition-shadow);
+  min-width: 150px;
 }
-.tvs-app .tvs-btn:hover {
-  background: var(--tvs-color-surface-raised);
-}
+
 .tvs-app .tvs-btn:focus {
   outline: 2px solid var(--tvs-color-border-accent);
   outline-offset: 2px;
@@ -309,7 +308,7 @@
   color: var(--tvs-color-text-on-primary);
 }
 .tvs-app .tvs-btn--success:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.15);
 }
 .tvs-app .tvs-btn--warning {
   background: var(--tvs-color-warning);
@@ -317,7 +316,7 @@
   color: var(--tvs-color-text-on-accent);
 }
 .tvs-app .tvs-btn--warning:hover {
-  filter: brightness(1.05);
+  filter: brightness(1.15);
 }
 .tvs-app .tvs-btn--muted {
   background: var(--tvs-color-bg-tertiary);
