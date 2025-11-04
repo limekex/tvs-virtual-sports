@@ -176,6 +176,80 @@ class TVS_REST {
         return $set;
     }
 
+    /**
+     * Ensure a featured image is set based on season, using default images in uploads.
+     * Will attempt to locate or register attachments for:
+     *  - ActivitySpring.jpg, ActivitySummer.jpg, ActivityFall.jpg, ActivityWinter.jpg
+     */
+    private function maybe_set_season_thumbnail( $post_id, $season ) {
+        if ( ! $post_id || ! $season ) return;
+        if ( has_post_thumbnail( $post_id ) ) return; // don't override if already set
+
+        $map = array(
+            'spring' => 'ActivitySpring.jpg',
+            'summer' => 'ActivitySummer.jpg',
+            'autumn' => 'ActivityFall.jpg',
+            'fall'   => 'ActivityFall.jpg',
+            'winter' => 'ActivityWinter.jpg',
+        );
+        $season = strtolower( (string) $season );
+        if ( ! isset( $map[ $season ] ) ) return;
+        $filename = $map[ $season ];
+
+        $upload = wp_upload_dir();
+        if ( ! empty( $upload['error'] ) ) return;
+        $candidates = array(
+            '10/' . $filename,
+            gmdate('Y') . '/10/' . $filename,
+            $filename,
+        );
+
+        $attach_id = 0;
+        foreach ( $candidates as $rel ) {
+            $file = trailingslashit( $upload['basedir'] ) . $rel;
+            $url  = trailingslashit( $upload['baseurl'] ) . $rel;
+
+            // Try by URL -> attachment id
+            $id = attachment_url_to_postid( $url );
+            if ( $id ) { $attach_id = $id; break; }
+
+            // Try by _wp_attached_file meta
+            $maybe = get_posts( array(
+                'post_type'  => 'attachment',
+                'numberposts'=> 1,
+                'fields'     => 'ids',
+                'meta_query' => array(
+                    array( 'key' => '_wp_attached_file', 'value' => $rel ),
+                ),
+            ) );
+            if ( ! empty( $maybe ) ) { $attach_id = (int) $maybe[0]; break; }
+
+            // If file exists, register it as attachment once
+            if ( file_exists( $file ) ) {
+                require_once ABSPATH . 'wp-admin/includes/image.php';
+                $filetype = wp_check_filetype( $file, null );
+                $attachment = array(
+                    'guid'           => $url,
+                    'post_mime_type' => isset( $filetype['type'] ) ? $filetype['type'] : 'image/jpeg',
+                    'post_title'     => preg_replace( '/\.[^.]+$/', '', $filename ),
+                    'post_content'   => '',
+                    'post_status'    => 'inherit',
+                );
+                $id = wp_insert_attachment( $attachment, $file );
+                if ( ! is_wp_error( $id ) && $id ) {
+                    $meta = wp_generate_attachment_metadata( $id, $file );
+                    if ( $meta ) wp_update_attachment_metadata( $id, $meta );
+                    $attach_id = (int) $id;
+                    break;
+                }
+            }
+        }
+
+        if ( $attach_id ) {
+            set_post_thumbnail( $post_id, $attach_id );
+        }
+    }
+
     public function register_routes() {
         $ns = 'tvs/v1';
 
@@ -1045,6 +1119,11 @@ class TVS_REST {
 
             // Also save scalar top-level fields with strava_ prefix
             $this->save_scalar_meta_from_array( $pid, $data, 'strava_' );
+
+            // Set default featured image based on derived season
+            if ( ! empty( $dy['season'] ) ) {
+                $this->maybe_set_season_thumbnail( $pid, $dy['season'] );
+            }
         }
 
         // Optional: Try to store a GPX export URL reference (Strava requires auth; leave blank if not usable)
@@ -1200,6 +1279,11 @@ class TVS_REST {
     foreach ( $loc as $k => $v ) { if ( $v !== '' ) update_post_meta( $pid, $k, $v ); }
     // Also mirror scalar top-level fields with prefix for convenience
     $this->save_scalar_meta_from_array( $pid, $activity, 'strava_' );
+
+        // Set default featured image based on derived season
+        if ( ! empty( $dy['season'] ) ) {
+            $this->maybe_set_season_thumbnail( $pid, $dy['season'] );
+        }
 
         // Build GPX from streams and attach
         $gpx = $strava->build_gpx_from_streams( $streams, $title );
