@@ -410,4 +410,303 @@ class TVS_Strava {
     public function create_activity( $user_id, $activity_post_id ) {
         return $this->upload_activity( $user_id, $activity_post_id );
     }
+
+    /**
+     * List athlete routes from Strava API
+     * Returns [ 'items' => [ { id, name, distance_m, elevation_m, type, updated_at } ], 'total'?, 'totalPages'? ]
+     */
+    public function list_routes( $user_id, $page = 1, $per_page = 20 ) {
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) {
+            return $token;
+        }
+        $access = $token['access'];
+
+        $url = add_query_arg( array(
+            'page' => max( 1, (int) $page ),
+            'per_page' => max( 1, min( 50, (int) $per_page ) ),
+        ), $this->api_base . '/athlete/routes' );
+
+        $resp = wp_remote_get( $url, array(
+            'headers' => array( 'Authorization' => 'Bearer ' . $access ),
+            'timeout' => 15,
+        ) );
+        if ( is_wp_error( $resp ) ) {
+            return $resp;
+        }
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( $code === 401 ) {
+            // try refresh once
+            $refreshed = $this->refresh_token( $user_id, $token );
+            if ( is_wp_error( $refreshed ) ) {
+                return new WP_Error( 'unauthorized', 'Strava auth failed; please reconnect', array( 'status' => 401 ) );
+            }
+            $access = $refreshed['access'];
+            $resp = wp_remote_get( $url, array(
+                'headers' => array( 'Authorization' => 'Bearer ' . $access ),
+                'timeout' => 15,
+            ) );
+            $code = wp_remote_retrieve_response_code( $resp );
+            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        }
+        if ( $code !== 200 ) {
+            $msg = isset( $body['message'] ) ? $body['message'] : 'HTTP ' . $code;
+            return new WP_Error( 'strava_error', 'Failed to list routes: ' . $msg, array( 'status' => $code ) );
+        }
+
+        $items = array();
+        if ( is_array( $body ) ) {
+            foreach ( $body as $r ) {
+                $map_summary = ( isset( $r['map'] ) && is_array( $r['map'] ) && isset( $r['map']['summary_polyline'] ) ) ? (string) $r['map']['summary_polyline'] : null;
+                $map_id      = ( isset( $r['map'] ) && is_array( $r['map'] ) && isset( $r['map']['id'] ) ) ? (string) $r['map']['id'] : null;
+                $map_state   = ( isset( $r['map'] ) && is_array( $r['map'] ) && isset( $r['map']['resource_state'] ) ) ? $r['map']['resource_state'] : null;
+                $items[] = array(
+                    'id'                     => isset( $r['id'] ) ? (int) $r['id'] : null,
+                    'name'                   => isset( $r['name'] ) ? (string) $r['name'] : '',
+                    'distance_m'             => isset( $r['distance'] ) ? floatval( $r['distance'] ) : null,
+                    'elevation_m'            => isset( $r['elevation_gain'] ) ? floatval( $r['elevation_gain'] ) : null,
+                    'type'                   => isset( $r['type'] ) ? (string) $r['type'] : null,
+                    'updated_at'             => isset( $r['updated_at'] ) ? (string) $r['updated_at'] : null,
+                    'map_summary_polyline'   => $map_summary,
+                    'map_id'                 => $map_id,
+                    'map_resource_state'     => $map_state,
+                );
+            }
+        }
+
+        // Strava provides pagination via Link headers; we return items only
+        return array( 'items' => $items );
+    }
+
+    /**
+     * Get single route detail from Strava API
+     */
+    public function get_route( $user_id, $route_id ) {
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) {
+            return $token;
+        }
+        $access = $token['access'];
+        $url = $this->api_base . '/routes/' . intval( $route_id );
+
+        $resp = wp_remote_get( $url, array(
+            'headers' => array( 'Authorization' => 'Bearer ' . $access ),
+            'timeout' => 15,
+        ) );
+        if ( is_wp_error( $resp ) ) {
+            return $resp;
+        }
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( $code === 401 ) {
+            $refreshed = $this->refresh_token( $user_id, $token );
+            if ( is_wp_error( $refreshed ) ) {
+                return new WP_Error( 'unauthorized', 'Strava auth failed; please reconnect', array( 'status' => 401 ) );
+            }
+            $access = $refreshed['access'];
+            $resp = wp_remote_get( $url, array(
+                'headers' => array( 'Authorization' => 'Bearer ' . $access ),
+                'timeout' => 15,
+            ) );
+            $code = wp_remote_retrieve_response_code( $resp );
+            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        }
+        if ( $code === 404 ) {
+            return new WP_Error( 'not_found', 'Strava route not found', array( 'status' => 404 ) );
+        }
+        if ( $code !== 200 ) {
+            $msg = isset( $body['message'] ) ? $body['message'] : 'HTTP ' . $code;
+            return new WP_Error( 'strava_error', 'Failed to get route: ' . $msg, array( 'status' => $code ) );
+        }
+        return $body;
+    }
+
+    /**
+     * List athlete activities. Optionally filter client-side to those with GPS.
+     * Returns array( 'items' => [ { id, name, distance_m, elevation_m, moving_time_s, has_gps, start_date } ] )
+     */
+    public function list_activities( $user_id, $page = 1, $per_page = 20 ) {
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) {
+            return $token;
+        }
+        $access = $token['access'];
+        $url = add_query_arg( array(
+            'page'     => max( 1, (int) $page ),
+            'per_page' => max( 1, min( 50, (int) $per_page ) ),
+        ), $this->api_base . '/athlete/activities' );
+
+        $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 20 ) );
+        if ( is_wp_error( $resp ) ) return $resp;
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( $code === 401 ) {
+            $refreshed = $this->refresh_token( $user_id, $token );
+            if ( is_wp_error( $refreshed ) ) {
+                return new WP_Error( 'unauthorized', 'Strava auth failed; please reconnect', array( 'status' => 401 ) );
+            }
+            $access = $refreshed['access'];
+            $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 20 ) );
+            $code = wp_remote_retrieve_response_code( $resp );
+            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        }
+        if ( $code !== 200 ) {
+            $msg = isset( $body['message'] ) ? $body['message'] : 'HTTP ' . $code;
+            return new WP_Error( 'strava_error', 'Failed to list activities: ' . $msg, array( 'status' => $code ) );
+        }
+        $items = array();
+        if ( is_array( $body ) ) {
+            foreach ( $body as $a ) {
+                $items[] = array(
+                    'id'              => isset( $a['id'] ) ? (int) $a['id'] : null,
+                    'name'            => isset( $a['name'] ) ? (string) $a['name'] : '',
+                    'distance_m'      => isset( $a['distance'] ) ? floatval( $a['distance'] ) : null,
+                    'elevation_m'     => isset( $a['total_elevation_gain'] ) ? floatval( $a['total_elevation_gain'] ) : null,
+                    'moving_time_s'   => isset( $a['moving_time'] ) ? (int) $a['moving_time'] : null,
+                    'has_gps'         => ! empty( $a['map']['summary_polyline'] ),
+                    'start_date'      => isset( $a['start_date'] ) ? (string) $a['start_date'] : null,
+                    'type'            => isset( $a['type'] ) ? (string) $a['type'] : null,
+                );
+            }
+        }
+        return array( 'items' => $items );
+    }
+
+    /** Get a single activity */
+    public function get_activity( $user_id, $activity_id ) {
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) return $token;
+        $access = $token['access'];
+        $url = $this->api_base . '/activities/' . intval( $activity_id );
+        $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 20 ) );
+        if ( is_wp_error( $resp ) ) return $resp;
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( $code === 401 ) {
+            $refreshed = $this->refresh_token( $user_id, $token );
+            if ( is_wp_error( $refreshed ) ) return new WP_Error( 'unauthorized', 'Strava auth failed; please reconnect', array( 'status' => 401 ) );
+            $access = $refreshed['access'];
+            $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 20 ) );
+            $code = wp_remote_retrieve_response_code( $resp );
+            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        }
+        if ( $code !== 200 ) {
+            $msg = isset( $body['message'] ) ? $body['message'] : 'HTTP ' . $code;
+            return new WP_Error( 'strava_error', 'Failed to get activity: ' . $msg, array( 'status' => $code ) );
+        }
+        return $body;
+    }
+
+    /** Get activity streams (latlng, altitude, time, distance) */
+    public function get_activity_streams( $user_id, $activity_id ) {
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) return $token;
+        $access = $token['access'];
+        $url = $this->api_base . '/activities/' . intval( $activity_id ) . '/streams?keys=latlng,altitude,time,distance&key_by_type=true';
+        $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 25 ) );
+        if ( is_wp_error( $resp ) ) return $resp;
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        if ( $code === 401 ) {
+            $refreshed = $this->refresh_token( $user_id, $token );
+            if ( is_wp_error( $refreshed ) ) return new WP_Error( 'unauthorized', 'Strava auth failed; please reconnect', array( 'status' => 401 ) );
+            $access = $refreshed['access'];
+            $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 25 ) );
+            $code = wp_remote_retrieve_response_code( $resp );
+            $body = json_decode( wp_remote_retrieve_body( $resp ), true );
+        }
+        if ( $code !== 200 || empty( $body ) ) {
+            $msg = is_array( $body ) ? 'invalid streams' : (string) $body;
+            return new WP_Error( 'strava_error', 'Failed to get streams: ' . $msg, array( 'status' => $code ) );
+        }
+        return $body; // associative array keyed by stream type
+    }
+
+    /** Fetch GPX for a Strava route */
+    public function fetch_route_gpx( $user_id, $route_id ) {
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) return $token;
+        $access = $token['access'];
+        $url = $this->api_base . '/routes/' . intval( $route_id ) . '/export_gpx';
+        $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 30 ) );
+        if ( is_wp_error( $resp ) ) return $resp;
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = wp_remote_retrieve_body( $resp );
+        if ( $code === 401 ) {
+            $refreshed = $this->refresh_token( $user_id, $token );
+            if ( is_wp_error( $refreshed ) ) return new WP_Error( 'unauthorized', 'Strava auth failed; please reconnect', array( 'status' => 401 ) );
+            $access = $refreshed['access'];
+            $resp = wp_remote_get( $url, array( 'headers' => array( 'Authorization' => 'Bearer ' . $access ), 'timeout' => 30 ) );
+            $code = wp_remote_retrieve_response_code( $resp );
+            $body = wp_remote_retrieve_body( $resp );
+        }
+        if ( $code !== 200 || empty( $body ) ) {
+            return new WP_Error( 'strava_error', 'Failed to fetch route GPX (HTTP ' . $code . ')' );
+        }
+        return $body; // raw GPX XML
+    }
+
+    /** Build GPX XML from streams */
+    public function build_gpx_from_streams( $streams, $name = 'Activity' ) {
+        if ( empty( $streams['latlng']['data'] ) ) {
+            return new WP_Error( 'no_gps', 'No latlng stream available' );
+        }
+        $latlng  = $streams['latlng']['data'];
+        $time    = isset( $streams['time']['data'] ) ? $streams['time']['data'] : array();
+        $alt     = isset( $streams['altitude']['data'] ) ? $streams['altitude']['data'] : array();
+        $nowIso  = gmdate( 'c' );
+        $xml  = '<?xml version="1.0" encoding="UTF-8"?>\n';
+        $xml .= '<gpx version="1.1" creator="TVS" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">';
+        $xml .= '<metadata><time>' . esc_html( $nowIso ) . '</time><name>' . esc_html( $name ) . '</name></metadata>';
+        $xml .= '<trk><name>' . esc_html( $name ) . '</name><trkseg>';
+        $count = count( $latlng );
+        for ( $i = 0; $i < $count; $i++ ) {
+            $pt = $latlng[$i];
+            $lat = isset( $pt[0] ) ? floatval( $pt[0] ) : 0;
+            $lng = isset( $pt[1] ) ? floatval( $pt[1] ) : 0;
+            $ele = isset( $alt[$i] ) ? floatval( $alt[$i] ) : null;
+            $t   = isset( $time[$i] ) ? (int) $time[$i] : null;
+            $xml .= '<trkpt lat="' . $lat . '" lon="' . $lng . '">';
+            if ( $ele !== null ) $xml .= '<ele>' . $ele . '</ele>';
+            if ( $t !== null ) $xml .= '<time>' . esc_html( gmdate( 'c', $t ) ) . '</time>';
+            $xml .= '</trkpt>';
+        }
+        $xml .= '</trkseg></trk></gpx>';
+        return $xml;
+    }
+
+    /** Save GPX string as attachment and return attachment id */
+    public function save_gpx_attachment( $post_id, $gpx_string, $filename = 'track.gpx' ) {
+        if ( empty( $gpx_string ) ) {
+            return new WP_Error( 'empty_gpx', 'Empty GPX content' );
+        }
+        $upload = wp_upload_dir();
+        if ( ! empty( $upload['error'] ) ) {
+            return new WP_Error( 'upload_dir', $upload['error'] );
+        }
+        $dir  = trailingslashit( $upload['path'] );
+        $url  = trailingslashit( $upload['url'] );
+        $base = sanitize_file_name( $filename );
+        $path = $dir . $base;
+        $ok = file_put_contents( $path, $gpx_string );
+        if ( ! $ok ) {
+            return new WP_Error( 'write_failed', 'Unable to write GPX file' );
+        }
+        $filetype = wp_check_filetype( $base, null );
+        if ( empty( $filetype['type'] ) ) {
+            $filetype['type'] = 'application/gpx+xml';
+        }
+        $attachment = array(
+            'post_mime_type' => $filetype['type'],
+            'post_title'     => preg_replace( '/\.[^.]+$/', '', $base ),
+            'post_content'   => '',
+            'post_status'    => 'inherit'
+        );
+        $attach_id = wp_insert_attachment( $attachment, $path, $post_id );
+        if ( is_wp_error( $attach_id ) ) return $attach_id;
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        wp_update_attachment_metadata( $attach_id, wp_generate_attachment_metadata( $attach_id, $path ) );
+        return $attach_id;
+    }
 }

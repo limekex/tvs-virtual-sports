@@ -15,6 +15,23 @@ function tvs_route_meta_keys() {
         'difficulty',
         'location',
         'season',
+        // Enriched/derived metadata
+        'route_name',
+        'activity_date',
+        'route_created_at',
+        'year',
+        'start_lat',
+        'start_lng',
+        'end_lat',
+        'end_lng',
+        'sport_type',
+        'strava_type',
+        'strava_sub_type',
+        'summary_polyline',
+        'polyline',
+        'map_id',
+        'map_resource_state',
+        'timezone',
     );
 }
 
