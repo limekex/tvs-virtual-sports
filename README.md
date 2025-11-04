@@ -86,3 +86,43 @@ We plan to add tiny tests for utils (e.g., `withTimeout`) and a smoke render to 
 1. Open a route page that mounts the app.
 2. Start/pause/resume/finish; verify flash messages and that My Activities refreshes.
 3. Try uploading a recent activity to Strava and confirm status updates.
+
+## Internationalization (i18n)
+
+- Text domain: `tvs-virtual-sports`
+- Translations are loaded from `languages/` by the plugin. Any strings in related blocks (theme or plugin) using the same domain will resolve from here.
+- For block metadata, ensure `block.json` contains a `"textdomain": "tvs-virtual-sports"` field.
+- To generate/update a POT file, you can use WP-CLI:
+
+  Optional (if you use WP-CLI locally):
+
+  ```sh
+  wp i18n make-pot wp-content/plugins/tvs-virtual-sports wp-content/plugins/tvs-virtual-sports/languages/tvs-virtual-sports.pot
+  ```
+
+## Favorites API (per-user)
+
+Simple per-user favorites for routes are available via REST. These require authentication.
+
+- Namespace: `tvs/v1`
+- Storage: `user_meta` key `tvs_favorites_routes` (array of route IDs)
+
+Endpoints:
+
+- `GET /wp-json/tvs/v1/favorites`
+  - Returns: `{ ids: number[] }`
+  - Errors: `401` if not authenticated
+
+- `POST /wp-json/tvs/v1/favorites/{id}`
+  - Toggles favorite for the provided route ID
+  - Returns: `{ favorited: boolean, ids: number[] }`
+  - Errors: `400` if ID is not a `tvs_route`, `401` if not authenticated
+
+- `DELETE /wp-json/tvs/v1/favorites/{id}`
+  - Removes the route ID from favorites
+  - Returns: `{ favorited: false, ids: number[] }`
+  - Errors: `401` if not authenticated
+
+Notes:
+- All IDs are sanitized and stored as unique ints.
+- For UI, SSR can preload the current user’s `ids` to set initial state for bookmark buttons.

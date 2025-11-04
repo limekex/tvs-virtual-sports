@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2025-11-04
+
+### Added
+- Favorites MVP (per-user):
+	- REST endpoints under `tvs/v1` namespace
+		- `GET /tvs/v1/favorites` — returns `{ ids: number[] }` for the current user
+		- `POST /tvs/v1/favorites/{id}` — toggles favorite for a route ID, returns `{ favorited, ids }`
+		- `DELETE /tvs/v1/favorites/{id}` — removes a route ID from favorites, returns `{ favorited: false, ids }`
+	- Data stored in `user_meta` as `tvs_favorites_routes` (array of route IDs)
+	- Input sanitization and auth guards (401 for unauthenticated)
+
+### Changed
+- Internationalization: standardized all strings to the `tvs-virtual-sports` text domain across PHP and JS.
+	- Added `textdomain` to relevant `block.json` files and localized previously hardcoded strings
+	- Localized pagination labels, aria-labels, and empty-state messages
+	- Related blocks in the theme now also use this text domain so translations can be loaded from the plugin
+
+### Fixed
+- Avoided nested anchors in CTA areas where applicable to prevent invalid HTML and accidental navigation when toggling favorites.
+
 ## [1.1.0] - 2025-11-03
 
 ### Added

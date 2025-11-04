@@ -278,7 +278,7 @@ class TVS_Admin {
 
 		$rest_root = esc_url( get_rest_url() );
 		$nonce     = wp_create_nonce( 'wp_rest' );
-		$connect_url = esc_url( home_url( '/connect-strava' ) );
+	$connect_url = esc_url( home_url( '/connect-strava/?mode=popup' ) );
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Import routes from Strava', 'tvs-virtual-sports' ); ?></h1>

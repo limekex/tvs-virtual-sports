@@ -430,6 +430,31 @@ class TVS_REST {
                 ),
             ),
         ) );
+
+        // Favorites (user-scoped)
+        register_rest_route( $ns, '/favorites', array(
+            'methods'  => 'GET',
+            'callback' => array( $this, 'favorites_list' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+        ) );
+        register_rest_route( $ns, '/favorites/(?P<id>\d+)', array(
+            array(
+                'methods'  => 'POST',
+                'callback' => array( $this, 'favorites_toggle' ),
+                'permission_callback' => array( $this, 'permissions_for_activities' ),
+                'args' => array(
+                    'id' => array( 'type' => 'integer', 'required' => true, 'minimum' => 1 ),
+                ),
+            ),
+            array(
+                'methods'  => 'DELETE',
+                'callback' => array( $this, 'favorites_remove' ),
+                'permission_callback' => array( $this, 'permissions_for_activities' ),
+                'args' => array(
+                    'id' => array( 'type' => 'integer', 'required' => true, 'minimum' => 1 ),
+                ),
+            ),
+        ) );
     }
 
  /*    public function get_routes( $request ) {
@@ -1318,5 +1343,58 @@ class TVS_REST {
         $user_id = get_current_user_id();
         delete_user_meta( $user_id, 'tvs_strava' );
         return rest_ensure_response( array( 'disconnected' => true ) );
+    }
+
+    // -------- Favorites --------
+    private function get_user_favorites( $user_id ) {
+        $ids = get_user_meta( $user_id, 'tvs_favorites_routes', true );
+        if ( is_string( $ids ) ) {
+            $maybe = json_decode( $ids, true );
+            if ( is_array( $maybe ) ) $ids = $maybe;
+        }
+        if ( ! is_array( $ids ) ) $ids = array();
+        // sanitize to ints and unique
+        $ids = array_values( array_unique( array_map( 'intval', $ids ) ) );
+        return $ids;
+    }
+
+    public function favorites_list( $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        }
+        $ids = $this->get_user_favorites( $user_id );
+        return rest_ensure_response( array( 'ids' => $ids ) );
+    }
+
+    public function favorites_toggle( $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        $id = (int) $request['id'];
+        if ( get_post_type( $id ) !== 'tvs_route' ) {
+            return new WP_Error( 'invalid', 'Not a route', array( 'status' => 400 ) );
+        }
+        $ids = $this->get_user_favorites( $user_id );
+        $idx = array_search( $id, $ids, true );
+        $favorited = false;
+        if ( $idx === false ) {
+            $ids[] = $id;
+            $favorited = true;
+        } else {
+            array_splice( $ids, $idx, 1 );
+            $favorited = false;
+        }
+        update_user_meta( $user_id, 'tvs_favorites_routes', $ids );
+        return rest_ensure_response( array( 'favorited' => $favorited, 'ids' => $ids ) );
+    }
+
+    public function favorites_remove( $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        $id = (int) $request['id'];
+        $ids = $this->get_user_favorites( $user_id );
+        $ids = array_values( array_filter( $ids, function( $rid ) use ( $id ) { return (int)$rid !== $id; } ) );
+        update_user_meta( $user_id, 'tvs_favorites_routes', $ids );
+        return rest_ensure_response( array( 'favorited' => false, 'ids' => $ids ) );
     }
 }

@@ -126,3 +126,22 @@ The "My Activities" block shows only your 5 most recent activities for a clean, 
 
 ## How are activity names formatted?
 Activities are now named in the format "Route name (date)", for example: "Eik Forest Trail (Oct 27, 2025)". This makes it much easier to identify activities at a glance compared to the old "Activity #123" format.
+
+## How do I disconnect my Strava account?
+Use the REST endpoint `POST /wp-json/tvs/v1/strava/disconnect` while authenticated. This deletes your stored Strava tokens from your WordPress user meta and the connection status will immediately reflect as disconnected on the `/connect-strava/` page.
+
+## How do favorites/bookmarks work for routes?
+Favorites are per-user and private by default. When you mark a route as a favorite, its ID is stored in your user meta under `tvs_favorites_routes`.
+
+- API Namespace: `tvs/v1`
+   - `GET /wp-json/tvs/v1/favorites` → `{ ids: number[] }` (requires login)
+   - `POST /wp-json/tvs/v1/favorites/{id}` → toggles favorite: `{ favorited, ids }` (requires login)
+   - `DELETE /wp-json/tvs/v1/favorites/{id}` → removes an ID: `{ favorited: false, ids }` (requires login)
+- UI: Bookmark buttons can reflect your current state and toggle without navigating away.
+- Data: Only valid `tvs_route` post IDs can be favorited; inputs are sanitized and stored as integers.
+
+## Can I see other users’ favorites?
+Not yet. The current MVP stores favorites privately per user. A future enhancement may provide aggregate counts (`post_meta`) and separate “People’s Favorites” listings.
+
+## What text domain do translations use?
+All strings use the `tvs-virtual-sports` text domain across PHP and JS (including related blocks). Translations are loaded from the plugin’s `languages/` directory.
