@@ -84,11 +84,11 @@ export default function MyActivitiesStandalone({ React }) {
     }));
     return h(
       "div",
-      { className: "tvs-activities-block", style: { marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: "8px", background: "#fff", padding: "1rem" } },
-      h("h3", { style: { marginTop: 0 } }, "My Activities"),
+      { className: "tvs-activities-block tvs-panel" },
+      h("h3", { className: "tvs-activities-title" }, "My Activities"),
       h(
         "div",
-        { className: "tvs-activities-list", style: { marginBottom: "1rem" } },
+        { className: "tvs-activities-list" },
         dummyActivities.map((activity) =>
           h(ActivityCard, {
             key: activity.id,
@@ -101,21 +101,13 @@ export default function MyActivitiesStandalone({ React }) {
       ),
       h(
         "div",
-        { style: { textAlign: "center", color: "#888", fontSize: "0.95rem", marginBottom: "0.5rem" } },
-        "Sign in to see your recent activities."
-      ),
-      h(
-        "div",
-        { style: { textAlign: "center" } },
+        { className: "tvs-activities-footer" },
+        h("div", { className: "tvs-text-muted", style: { marginBottom: '0.5rem' } }, "Sign in to see your recent activities."),
         h(
-          "a",
-          { href: "/login", style: { color: '#1f2937', textDecoration: 'underline', marginRight: 12 } },
-          "Log in"
-        ),
-        h(
-          "a",
-          { href: "/register", style: { color: '#1f2937', textDecoration: 'underline' } },
-          "Register"
+          "div",
+          null,
+          h("a", { href: "/login", className: "tvs-link", style: { marginRight: 12 } }, "Log in"),
+          h("a", { href: "/register", className: "tvs-link" }, "Register")
         )
       )
     );

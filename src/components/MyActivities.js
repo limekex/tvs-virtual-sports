@@ -8,19 +8,16 @@ export default function MyActivities({ React, activities, loadingActivities, upl
 
   return h(
     "div",
-    {
-      className: "tvs-activities-block",
-      style: { marginTop: "1rem", border: "1px solid #e5e7eb", borderRadius: "8px", background: "#fff", padding: "1rem" }
-    },
+    { className: "tvs-activities-block tvs-panel" },
     h(
       "div",
-      { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" } },
-      h("h3", { style: { margin: 0, fontSize: "1.25rem" } }, "Recent Activities"),
+      { className: "tvs-activities-header" },
+      h("h3", { className: "tvs-activities-title" }, "Recent Activities"),
       h(
         "button",
         {
           onClick: () => setMin(!min),
-          style: { fontSize: "1.2em", background: "none", border: "none", cursor: "pointer", color: "#666" },
+          className: "tvs-icon-btn",
           "aria-label": min ? "Expand" : "Minimize"
         },
         min ? "▸" : "▾"
@@ -29,15 +26,15 @@ export default function MyActivities({ React, activities, loadingActivities, upl
     min
       ? null
       : loadingActivities
-      ? h("p", { style: { color: "#666" } }, "Loading activities...")
+      ? h("p", { className: "tvs-text-muted" }, "Loading activities...")
       : recentActivities.length === 0
-      ? h("p", { style: { color: "#666" } }, "Start a new activity when you're ready")
+      ? h("p", { className: "tvs-text-muted" }, "Start a new activity when you're ready")
       : h(
           "div",
           null,
           h(
             "div",
-            { className: "tvs-activities-list", style: { marginBottom: "1rem" } },
+            { className: "tvs-activities-list" },
             recentActivities.map((activity) =>
               h(ActivityCard, {
                 key: activity.id,
@@ -51,13 +48,10 @@ export default function MyActivities({ React, activities, loadingActivities, upl
           ),
           h(
             "div",
-            { style: { textAlign: "center", paddingTop: "0.5rem", borderTop: "1px solid #e5e7eb" } },
+            { className: "tvs-activities-footer" },
             h(
               "a",
-              {
-                href: "/my-activities",
-                style: { color: "#2563eb", textDecoration: "none", fontSize: "0.9rem" }
-              },
+              { href: "/my-activities", className: "tvs-link tvs-text-sm" },
               "Go to my activities →"
             )
           )

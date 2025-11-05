@@ -506,3 +506,87 @@
   border-color: var(--tvs-color-danger, #ef4444);
   color: var(--tvs-color-danger-strong, #7f1d1d);
 }
+
+/* ===== My Activities block (scoped) ===== */
+.tvs-app .tvs-activities-block { margin-top: var(--tvs-space-4, 1rem); }
+.tvs-app .tvs-activities-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--tvs-space-4, 1rem);
+}
+.tvs-app .tvs-activities-title { margin: 0; font-size: var(--tvs-text-xl, 1.25rem); }
+.tvs-app .tvs-activities-list { display: grid; gap: var(--tvs-space-2, .5rem); margin-bottom: var(--tvs-space-4, 1rem); }
+.tvs-app .tvs-activities-footer { text-align: center; padding-top: var(--tvs-space-2, .5rem); border-top: 1px solid var(--tvs-color-border-subtle, #e5e7eb); }
+
+/* generic helpers */
+.tvs-app .tvs-text-muted { color: var(--tvs-color-text-tertiary, #6b7280); }
+.tvs-app .tvs-text-success { color: var(--tvs-color-success, #16a34a); }
+.tvs-app .tvs-link { color: var(--tvs-color-primary, #2563eb); text-decoration: none; }
+.tvs-app .tvs-link:hover { text-decoration: underline; }
+.tvs-app .tvs-icon-btn {
+  background: transparent; color: var(--tvs-color-text-secondary, #6b7280);
+  border: 1px solid transparent; border-radius: var(--tvs-radius-md, 8px);
+  padding: 4px 8px; cursor: pointer;
+}
+.tvs-app .tvs-icon-btn:hover { background: var(--tvs-color-bg-tertiary, #f3f4f6); color: var(--tvs-color-text-primary, #111827); }
+.tvs-app .tvs-icon-btn:focus { outline: 2px solid var(--tvs-color-border-accent, #4aa6e0); outline-offset: 2px; }
+
+/* Activity card (list items) */
+.tvs-app .tvs-activity-card {
+  border: 1px solid var(--tvs-color-border-subtle, #e5e7eb);
+  padding: var(--tvs-space-4, 1rem);
+  margin-bottom: var(--tvs-space-4, 1rem);
+  border-radius: var(--tvs-radius-md, 8px);
+  background: var(--tvs-color-bg-elevated, #fff);
+}
+.tvs-app .tvs-activity-card--synced {
+  background: color-mix(in srgb, var(--tvs-color-info, #0ea5e9) 10%, #fff);
+}
+.tvs-app .tvs-activity-card__row { display:flex; align-items:center; justify-content:space-between; gap: var(--tvs-space-3, .75rem); }
+.tvs-app .tvs-activity-card__title { font-weight: var(--tvs-font-medium, 500); }
+.tvs-app .tvs-activity-card__meta { margin-top: var(--tvs-space-2, .5rem); font-size: var(--tvs-text-sm, .875rem); }
+.tvs-app .tvs-activity-card__actions { display:flex; align-items:center; gap: var(--tvs-space-2, .5rem); }
+.tvs-app .tvs-activity-card__right { text-align: right; }
+
+/* Compact card */
+.tvs-app .tvs-activity-card-compact {
+  padding: var(--tvs-space-3, .75rem);
+  border-radius: var(--tvs-radius-md, 8px);
+  background: var(--tvs-color-bg-secondary, #f9fafb);
+  font-size: var(--tvs-text-sm, .9rem);
+  position: relative;
+}
+.tvs-app .tvs-activity-card-compact.is-dummy {
+  background: linear-gradient(90deg, #f3f4f6 60%, #e5e7eb 100%);
+  opacity: .6; filter: grayscale(.7);
+  pointer-events: none;
+}
+.tvs-app .tvs-activity-card-compact .tvs-activity-card__row { display:flex; align-items:center; justify-content:space-between; gap: var(--tvs-space-2, .5rem); }
+.tvs-app .tvs-activity-card-compact .tvs-activity-card__meta { font-size: .85rem; }
+
+/* Strava styles */
+.tvs-app .tvs-btn-strava {
+  background: #fc4c02; border-color: #fc4c02; color: #fff;
+}
+.tvs-app .tvs-btn-strava:hover { filter: brightness(1.08); }
+.tvs-app .tvs-strava-square {
+  width: 32px; height: 32px; border-radius: var(--tvs-radius-sm, 6px);
+  background: #fc4c02; color: #fff;
+  display:flex; align-items:center; justify-content:center;
+  text-decoration: none; font-weight: 700; font-size: .9rem;
+  border: none; cursor: pointer;
+}
+.tvs-app .tvs-strava-square[disabled] { opacity: .6; cursor: wait; }
+
+/* Generic popover */
+.tvs-app .tvs-popover {
+  position: absolute; right: 0; top: calc(100% + var(--tvs-space-2, .5rem));
+  background: var(--tvs-color-bg-elevated, #fff);
+  border: 1px solid var(--tvs-color-border-subtle, #e5e7eb);
+  border-radius: var(--tvs-radius-lg, 12px);
+  padding: var(--tvs-space-3, .75rem);
+  box-shadow: var(--tvs-shadow-lg, 0 4px 16px rgba(0,0,0,.15));
+  z-index: var(--tvs-z-popover, 1500);
+  min-width: 200px;
+}
+.tvs-app .tvs-popover__title { font-size: var(--tvs-text-sm, .9rem); margin-bottom: var(--tvs-space-2, .5rem); color: var(--tvs-color-text-primary, #111827); }
+.tvs-app .tvs-popover__actions { display:flex; gap: var(--tvs-space-2, .5rem); }

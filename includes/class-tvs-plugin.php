@@ -104,7 +104,9 @@ class TVS_Plugin {
         
         ob_start();
         ?>
-        <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
+        <div class="tvs-app tvs-app--activities">
+            <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
+        </div>
         <?php
         return ob_get_clean();
     }
