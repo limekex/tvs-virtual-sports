@@ -11,6 +11,99 @@ class TVS_REST {
         add_action( 'rest_api_init', array( $this, 'register_routes' ) );
     }
 
+    /** Parse invitation codes option into a normalized uppercase array */
+    private function get_invite_codes() {
+        // Deprecated: kept for backward compatibility if options were used previously
+        $raw = (string) get_option( 'tvs_invite_codes', '' );
+        $lines = preg_split( '/\r?\n/', $raw );
+        $out = array();
+        foreach ( (array) $lines as $line ) {
+            $k = strtoupper( trim( (string) $line ) );
+            if ( $k !== '' ) $out[$k] = true;
+        }
+        return $out;
+    }
+
+    /** Remove a code from the stored list if present; return true if consumed */
+    private function consume_invite_code( $code ) {
+        // Deprecated: option-store consumption; prefer DB table
+        $code = strtoupper( trim( (string) $code ) );
+        if ( $code === '' ) return false;
+        $codes = $this->get_invite_codes();
+        if ( empty( $codes[ $code ] ) ) return false;
+        unset( $codes[ $code ] );
+        update_option( 'tvs_invite_codes', implode( "\n", array_keys( $codes ) ) );
+        return true;
+    }
+
+    /** Check if an invite code is valid and unused in DB; return row or false */
+    private function db_invite_check( $code ) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'tvs_invites';
+        $hash = hash( 'sha256', strtoupper( trim( (string) $code ) ) );
+        return $wpdb->get_row( $wpdb->prepare( "SELECT * FROM {$table} WHERE code_hash = %s", $hash ) );
+    }
+
+    /** Mark invite code as used by user_id */
+    private function db_invite_mark_used( $code, $user_id ) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'tvs_invites';
+        $hash = hash( 'sha256', strtoupper( trim( (string) $code ) ) );
+        return (bool) $wpdb->update( $table, array( 'used_by' => (int) $user_id, 'used_at' => current_time( 'mysql' ) ), array( 'code_hash' => $hash, 'used_by' => null ) );
+    }
+
+    /** Get reCAPTCHA v3 secret from option or constant */
+    private function get_recaptcha_secret() {
+        $opt = (string) get_option( 'tvs_recaptcha_secret', '' );
+        if ( $opt !== '' ) return $opt;
+        if ( defined( 'TVS_RECAPTCHA_SECRET' ) ) return (string) TVS_RECAPTCHA_SECRET;
+        return '';
+    }
+
+    /** Verify reCAPTCHA v3 token; returns array(score, action) or WP_Error on hard fail. If not configured, returns pass. */
+    private function verify_recaptcha( $token, $expected_action = '' ) {
+        $secret = $this->get_recaptcha_secret();
+        if ( $secret === '' ) {
+            // Not configured -> treat as pass
+            return array( 'success' => true, 'score' => 1.0, 'action' => $expected_action );
+        }
+        $token = (string) $token;
+        if ( $token === '' ) {
+            return new WP_Error( 'captcha_failed', 'reCAPTCHA token missing', array( 'status' => 400 ) );
+        }
+        $resp = wp_remote_post( 'https://www.google.com/recaptcha/api/siteverify', array(
+            'timeout' => 8,
+            'body' => array(
+                'secret'   => $secret,
+                'response' => $token,
+                'remoteip' => isset( $_SERVER['REMOTE_ADDR'] ) ? sanitize_text_field( $_SERVER['REMOTE_ADDR'] ) : '',
+            ),
+        ) );
+        if ( is_wp_error( $resp ) ) {
+            return new WP_Error( 'captcha_failed', 'reCAPTCHA unreachable', array( 'status' => 400 ) );
+        }
+        $code = wp_remote_retrieve_response_code( $resp );
+        $body = json_decode( (string) wp_remote_retrieve_body( $resp ), true );
+        if ( $code !== 200 || ! is_array( $body ) ) {
+            return new WP_Error( 'captcha_failed', 'reCAPTCHA invalid response', array( 'status' => 400 ) );
+        }
+        $ok    = ! empty( $body['success'] );
+        $score = isset( $body['score'] ) ? floatval( $body['score'] ) : 0.0;
+        $act   = isset( $body['action'] ) ? (string) $body['action'] : '';
+        // Basic checks: success + score threshold; optionally action must match if provided
+        if ( ! $ok ) {
+            return new WP_Error( 'captcha_failed', 'reCAPTCHA verification failed', array( 'status' => 400 ) );
+        }
+        if ( $score < 0.5 ) {
+            return new WP_Error( 'captcha_low_score', 'reCAPTCHA score too low', array( 'status' => 400 ) );
+        }
+        if ( $expected_action !== '' && $act !== '' && strtolower( $act ) !== strtolower( $expected_action ) ) {
+            // Action mismatch: suspicious, but treat as fail to be safe
+            return new WP_Error( 'captcha_action_mismatch', 'reCAPTCHA action mismatch', array( 'status' => 400 ) );
+        }
+        return array( 'success' => true, 'score' => $score, 'action' => $act );
+    }
+
     /**
      * Save scalar top-level fields from an array as post meta with a prefix.
      * Arrays/objects are ignored (the full JSON is stored separately).
@@ -252,6 +345,67 @@ class TVS_REST {
 
     public function register_routes() {
         $ns = 'tvs/v1';
+        // Invites (user-owned management)
+        register_rest_route( $ns, '/invites/mine', array(
+            'methods'  => 'GET',
+            'callback' => array( $this, 'invites_list_mine' ),
+            'permission_callback' => array( $this, 'permissions_logged_in_strict' ),
+        ) );
+
+        register_rest_route( $ns, '/invites/create', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'invites_create' ),
+            'permission_callback' => array( $this, 'permissions_logged_in_strict' ),
+        ) );
+
+        register_rest_route( $ns, '/invites/(?P<id>\d+)/deactivate', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'invites_deactivate' ),
+            'permission_callback' => array( $this, 'permissions_logged_in_strict' ),
+        ) );
+        // -------- Invites validation (public) --------
+        register_rest_route( $ns, '/invites/validate', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'invites_validate' ),
+            'permission_callback' => '__return_true',
+        ) );
+        // -------- Auth endpoints (public) --------
+        register_rest_route( $ns, '/auth/register', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'auth_register' ),
+            'permission_callback' => '__return_true',
+        ) );
+
+        register_rest_route( $ns, '/auth/strava', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'auth_strava' ),
+            'permission_callback' => '__return_true',
+        ) );
+
+        register_rest_route( $ns, '/auth/login', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'auth_login' ),
+            'permission_callback' => '__return_true',
+        ) );
+
+        // Lightweight availability check for username/email
+        register_rest_route( $ns, '/auth/check', array(
+            'methods'  => 'GET',
+            'callback' => array( $this, 'auth_check' ),
+            'permission_callback' => '__return_true',
+            'args' => array(
+                'username' => array(
+                    'description' => 'Username to check',
+                    'type'        => 'string',
+                    'required'    => false,
+                ),
+                'email' => array(
+                    'description' => 'Email to check',
+                    'type'        => 'string',
+                    'required'    => false,
+                ),
+            ),
+        ) );
 
         // /tvs/v1/routes (LIST)
         register_rest_route( $ns, '/routes', array(
@@ -324,16 +478,9 @@ class TVS_REST {
         register_rest_route( $ns, '/strava/connect', array(
             'methods' => 'POST',
             'callback' => array( $this, 'strava_connect' ),
-            // Allow via normal cookies OR presence of a REST nonce (cross-domain dev workaround)
-            'permission_callback' => function( $request ) {
-                if ( is_user_logged_in() ) {
-                    return true;
-                }
-                $nonce = $request->get_header( 'X-WP-Nonce' );
-                if ( $nonce && strlen( $nonce ) > 5 ) {
-                    // Cross-domain: accept nonce presence as proof the user had an authenticated page
-                    return true;
-                }
+            // Strict: must be logged in. Unauth flows should use /auth/strava via popup + postMessage
+            'permission_callback' => function() {
+                if ( is_user_logged_in() ) return true;
                 return new WP_Error( 'rest_forbidden', __( 'You must be logged in.' ), array( 'status' => 401 ) );
             },
         ) );
@@ -455,6 +602,129 @@ class TVS_REST {
                 ),
             ),
         ) );
+    }
+
+    /** Strict logged-in only (no cross-domain nonce fallback) */
+    public function permissions_logged_in_strict( $request ) {
+        if ( is_user_logged_in() ) return true;
+        return new WP_Error( 'rest_forbidden', __( 'You must be logged in.' ), array( 'status' => 401 ) );
+    }
+
+    /** GET /tvs/v1/invites/mine */
+    public function invites_list_mine( $request ) {
+        $user_id = get_current_user_id();
+        global $wpdb;
+        $table = $wpdb->prefix . 'tvs_invites';
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT id, code_hint, invitee_email, created_at, is_active, used_by, used_at FROM {$table} WHERE created_by = %d ORDER BY id DESC",
+            $user_id
+        ) );
+        $items = array();
+        foreach ( (array) $rows as $r ) {
+            $items[] = array(
+                'id'         => (int) $r->id,
+                'hint'       => $r->code_hint,
+                'email'      => $r->invitee_email ?: null,
+                'created_at' => $r->created_at,
+                'is_active'  => (bool) $r->is_active,
+                'used_by'    => $r->used_by ? (int) $r->used_by : null,
+                'used_at'    => $r->used_at ?: null,
+                'status'     => ( ! $r->is_active ) ? 'inactive' : ( $r->used_by ? 'used' : 'available' ),
+            );
+        }
+        return rest_ensure_response( array( 'items' => $items ) );
+    }
+
+    /** POST /tvs/v1/invites/create {count?, hint?, email?} */
+    public function invites_create( $request ) {
+        $user_id = get_current_user_id();
+        $p = $request->get_json_params();
+        $count = isset( $p['count'] ) ? max( 1, min( 10, intval( $p['count'] ) ) ) : 1;
+        $hint  = isset( $p['hint'] ) ? sanitize_text_field( (string) $p['hint'] ) : '';
+        $email = isset( $p['email'] ) ? sanitize_email( (string) $p['email'] ) : '';
+        if ( $email !== '' && ! is_email( $email ) ) {
+            return new WP_Error( 'invalid_email', 'Invalid email', array( 'status' => 400 ) );
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'tvs_invites';
+        $out   = array();
+        for ( $i = 0; $i < $count; $i++ ) {
+            $tries = 0; $max_tries = 5; $done = false;
+            while ( ! $done && $tries < $max_tries ) {
+                $tries++;
+                // Generate strong code: 16 chars A-Z0-9
+                $raw = wp_generate_password( 20, false, false );
+                $code = strtoupper( preg_replace( '/[^A-Z0-9]/', '', $raw ) );
+                if ( strlen( $code ) < 12 ) { $code = $code . strtoupper( wp_generate_password( 12, false, false ) ); }
+                $code = substr( $code, 0, 16 );
+                $hash = hash( 'sha256', $code );
+                $code_hint = $hint !== '' ? $hint : substr( $code, -4 );
+                $ins = $wpdb->insert( $table, array(
+                    'code_hash'  => $hash,
+                    'code_hint'  => $code_hint,
+                    'invitee_email' => ( $email !== '' ? $email : null ),
+                    'created_by' => $user_id,
+                    'is_active'  => 1,
+                ), array( '%s','%s','%s','%d','%d' ) );
+                if ( $ins ) {
+                    $id = (int) $wpdb->insert_id;
+                    $out[] = array( 'id' => $id, 'code' => $code, 'hint' => $code_hint, 'email' => ( $email !== '' ? $email : null ) );
+                    $done = true;
+                }
+            }
+        }
+        return rest_ensure_response( array( 'created' => $out ) );
+    }
+
+    /** POST /tvs/v1/invites/{id}/deactivate */
+    public function invites_deactivate( $request ) {
+        $user_id = get_current_user_id();
+        $id = (int) $request['id'];
+        global $wpdb;
+        $table = $wpdb->prefix . 'tvs_invites';
+        // Only allow deactivating own codes that are not used yet
+        $row = $wpdb->get_row( $wpdb->prepare( "SELECT id, used_by FROM {$table} WHERE id=%d AND created_by=%d", $id, $user_id ) );
+        if ( ! $row ) return new WP_Error( 'not_found', 'Invite not found', array( 'status' => 404 ) );
+        if ( ! empty( $row->used_by ) ) return new WP_Error( 'conflict', 'Invite already used', array( 'status' => 409 ) );
+        $wpdb->update( $table, array( 'is_active' => 0 ), array( 'id' => $id ), array( '%d' ), array( '%d' ) );
+        return rest_ensure_response( array( 'deactivated' => true, 'id' => $id ) );
+    }
+
+    /** POST /tvs/v1/invites/validate {code} -> { valid: true } or WP_Error codes invite_invalid / invite_used */
+    public function invites_validate( $request ) {
+        $p = $request->get_json_params();
+        $code = (string) ( $p['code'] ?? '' );
+        // Optional (enforced if configured): reCAPTCHA v3 check for public validation endpoint
+        $rc_token = isset( $p['recaptcha_token'] ) ? (string) $p['recaptcha_token'] : '';
+        $rc_secret = $this->get_recaptcha_secret();
+        if ( $rc_secret !== '' ) {
+            $vr = $this->verify_recaptcha( $rc_token, 'invite_validate' );
+            if ( is_wp_error( $vr ) ) return $vr;
+        }
+        $email = isset( $request->get_json_params()['email'] ) ? sanitize_email( (string) $request->get_json_params()['email'] ) : '';
+        $code = strtoupper( trim( $code ) );
+        if ( $code === '' ) {
+            return new WP_Error( 'invite_invalid', 'Invalid invitation code', array( 'status' => 400 ) );
+        }
+        global $wpdb;
+        $table = $wpdb->prefix . 'tvs_invites';
+        $hash = hash( 'sha256', $code );
+        $row  = $wpdb->get_row( $wpdb->prepare( "SELECT id, used_by, is_active, invitee_email FROM {$table} WHERE code_hash = %s", $hash ) );
+        if ( ! $row || ! intval( $row->is_active ) ) {
+            return new WP_Error( 'invite_invalid', 'Invalid invitation code', array( 'status' => 404 ) );
+        }
+        if ( ! empty( $row->used_by ) ) {
+            return new WP_Error( 'invite_used', 'This code is already used', array( 'status' => 409 ) );
+        }
+        if ( ! empty( $row->invitee_email ) ) {
+            if ( $email === '' ) {
+                return new WP_Error( 'invite_email_required', 'Email required for this invite', array( 'status' => 400 ) );
+            }
+            if ( strtolower( $email ) !== strtolower( (string) $row->invitee_email ) ) {
+                return new WP_Error( 'invite_email_mismatch', 'Invitation is tied to a different email', array( 'status' => 409 ) );
+            }
+        }
+        return rest_ensure_response( array( 'valid' => true ) );
     }
 
  /*    public function get_routes( $request ) {
@@ -837,18 +1107,6 @@ class TVS_REST {
                 'athlete'    => isset($res['athlete']) ? $res['athlete'] : null,
             );
             error_log( 'TVS strava_connect: tokens parsed, scope=' . ( $tokens['scope'] ?: 'null' ) );
-            
-            // Cross-domain dev fallback: if no cookies, attach to first admin so we don't drop the tokens
-            if ( ! $user_id ) {
-                $nonce = $request->get_header( 'X-WP-Nonce' );
-                if ( $nonce && strlen( $nonce ) > 5 ) {
-                    $admins = get_users( array( 'role' => 'administrator', 'number' => 1 ) );
-                    if ( ! empty( $admins ) ) {
-                        $user_id = $admins[0]->ID;
-                        error_log( 'TVS: Using admin user ' . $user_id . ' for cross-domain Strava connect' );
-                    }
-                }
-            }
             if ( ! $user_id ) {
                 error_log( 'TVS strava_connect: no user_id, returning 401' );
                 return new WP_Error( 'forbidden', 'Authentication required', array( 'status' => 401 ) );
@@ -1396,5 +1654,269 @@ class TVS_REST {
         $ids = array_values( array_filter( $ids, function( $rid ) use ( $id ) { return (int)$rid !== $id; } ) );
         update_user_meta( $user_id, 'tvs_favorites_routes', $ids );
         return rest_ensure_response( array( 'favorited' => false, 'ids' => $ids ) );
+    }
+
+    // -------- Auth handlers --------
+    public function auth_register( $request ) {
+        $params = $request->get_json_params();
+        $username = isset($params['username']) ? sanitize_user( $params['username'] ) : '';
+        $email    = isset($params['email']) ? sanitize_email( $params['email'] ) : '';
+        $password = isset($params['password']) ? (string) $params['password'] : '';
+        $first    = isset($params['first_name']) ? sanitize_text_field( $params['first_name'] ) : '';
+        $last     = isset($params['last_name']) ? sanitize_text_field( $params['last_name'] ) : '';
+        $accept   = ! empty( $params['accept_terms'] );
+        $news     = ! empty( $params['newsletter'] );
+        $invite   = isset($params['invite_code']) ? (string) $params['invite_code'] : '';
+        // reCAPTCHA v3 (if configured)
+        $rc_token = isset( $params['recaptcha_token'] ) ? (string) $params['recaptcha_token'] : '';
+        $rc_secret = $this->get_recaptcha_secret();
+        if ( $rc_secret !== '' ) {
+            $vr = $this->verify_recaptcha( $rc_token, 'register' );
+            if ( is_wp_error( $vr ) ) return $vr;
+        }
+
+        $invite_only = (bool) get_option( 'tvs_invite_only', false );
+        if ( $invite_only ) {
+            if ( ! $invite ) {
+                return new WP_Error( 'invite_required', 'Invitation code required', array( 'status' => 403 ) );
+            }
+            $row = $this->db_invite_check( $invite );
+            if ( ! $row || ! intval( $row->is_active ) ) {
+                return new WP_Error( 'invite_invalid', 'Invalid invitation code', array( 'status' => 404 ) );
+            }
+            if ( ! empty( $row->used_by ) ) {
+                return new WP_Error( 'invite_used', 'This code is already used', array( 'status' => 409 ) );
+            }
+            // If invite is tied to an email, enforce match
+            if ( ! empty( $row->invitee_email ) ) {
+                if ( strtolower( (string) $email ) !== strtolower( (string) $row->invitee_email ) ) {
+                    return new WP_Error( 'invite_email_mismatch', 'Invitation is tied to a different email', array( 'status' => 409 ) );
+                }
+            }
+        }
+
+        if ( ! $username || ! $email || ! $password ) {
+            return new WP_Error( 'invalid', 'Missing username, email or password', array( 'status' => 400 ) );
+        }
+        if ( ! $accept ) {
+            return new WP_Error( 'consent_required', 'Consent required', array( 'status' => 400 ) );
+        }
+        if ( empty( $first ) || empty( $last ) ) {
+            return new WP_Error( 'name_required', 'First and last name are required', array( 'status' => 400 ) );
+        }
+        if ( username_exists( $username ) ) {
+            return new WP_Error( 'username_exists', 'That username is taken', array( 'status' => 409 ) );
+        }
+        if ( email_exists( $email ) ) {
+            return new WP_Error( 'email_exists', 'An account with this email already exists', array( 'status' => 409 ) );
+        }
+        // Password strength: min 10 chars, must include lower + upper + special
+        $has_lower = preg_match('/[a-z]/', $password);
+        $has_upper = preg_match('/[A-Z]/', $password);
+        $has_spec  = preg_match('/[^a-zA-Z0-9]/', $password);
+        if ( strlen( $password ) < 10 || ! $has_lower || ! $has_upper || ! $has_spec ) {
+            return new WP_Error( 'weak_password', 'Password must be at least 10 characters and include lowercase, uppercase, and a special character', array( 'status' => 400 ) );
+        }
+
+        $user_id = wp_insert_user( array(
+            'user_login' => $username,
+            'user_pass'  => $password,
+            'user_email' => $email,
+            'first_name' => $first,
+            'last_name'  => $last,
+            'display_name' => trim( $first . ' ' . $last ) ?: $username,
+            'role'       => 'tvs_athlete',
+        ) );
+        if ( is_wp_error( $user_id ) ) {
+            return $user_id;
+        }
+        if ( $news ) {
+            update_user_meta( $user_id, 'tvs_newsletter_optin', 1 );
+        }
+        if ( $invite_only && $invite ) {
+            update_user_meta( $user_id, 'tvs_invite_code_used', sanitize_text_field( $invite ) );
+            // Mark invite as used
+            $this->db_invite_mark_used( $invite, $user_id );
+        }
+        // Log user in
+        wp_set_current_user( $user_id );
+        wp_set_auth_cookie( $user_id, true );
+        return rest_ensure_response( array( 'logged_in' => true, 'user' => array( 'id' => (int)$user_id, 'role' => 'tvs_athlete' ) ) );
+    }
+
+    /**
+     * GET /tvs/v1/auth/check?username=...&email=...
+     * Returns existence flags for quick client-side validation
+     */
+    public function auth_check( $request ) {
+        $username = isset( $request['username'] ) ? sanitize_user( (string) $request['username'] ) : '';
+        $email    = isset( $request['email'] ) ? sanitize_email( (string) $request['email'] ) : '';
+        $resp = array();
+        if ( $username !== '' ) {
+            $resp['username'] = array( 'exists' => (bool) username_exists( $username ) );
+        }
+        if ( $email !== '' ) {
+            $resp['email'] = array( 'exists' => (bool) email_exists( $email ) );
+        }
+        return rest_ensure_response( $resp );
+    }
+
+    public function auth_strava( $request ) {
+        $p = $request->get_json_params();
+        $code   = isset($p['code']) ? (string) $p['code'] : '';
+        $email  = isset($p['email']) ? sanitize_email( $p['email'] ) : '';
+        $accept = ! empty( $p['accept_terms'] );
+        $news   = ! empty( $p['newsletter'] );
+        $check_only = ! empty( $p['check_only'] );
+        $invite = isset($p['invite_code']) ? (string) $p['invite_code'] : '';
+        $rc_token = isset( $p['recaptcha_token'] ) ? (string) $p['recaptcha_token'] : '';
+        if ( ! $code ) return new WP_Error( 'invalid', 'code required', array( 'status' => 400 ) );
+
+        $strava = new TVS_Strava();
+        $res = $strava->exchange_code_for_token( $code );
+        if ( is_wp_error( $res ) ) return $res;
+        if ( empty( $res['access_token'] ) || empty( $res['refresh_token'] ) ) {
+            return new WP_Error( 'invalid_response', 'Missing tokens from Strava', array( 'status' => 502 ) );
+        }
+
+        $athlete = isset( $res['athlete'] ) && is_array( $res['athlete'] ) ? $res['athlete'] : array();
+        $athlete_id = isset( $athlete['id'] ) ? intval( $athlete['id'] ) : 0;
+        $athlete_user = isset( $athlete['username'] ) ? sanitize_user( (string) $athlete['username'], true ) : '';
+        $first = isset( $athlete['firstname'] ) ? sanitize_text_field( (string) $athlete['firstname'] ) : '';
+        $last  = isset( $athlete['lastname'] ) ? sanitize_text_field( (string) $athlete['lastname'] ) : '';
+
+        // If no email provided, try to find an already-linked user via athlete_id
+        if ( ! $email ) {
+            if ( $athlete_id ) {
+                $users = get_users( array(
+                    'meta_key'   => 'tvs_strava_athlete_id',
+                    'meta_value' => $athlete_id,
+                    'number'     => 1,
+                    'fields'     => array( 'ID' ),
+                ) );
+                if ( ! empty( $users ) ) {
+                    $uid = (int) $users[0]->ID;
+                    // Update tokens regardless (user requested auth just now)
+                    update_user_meta( $uid, 'tvs_strava', array(
+                        'access'     => $res['access_token'],
+                        'refresh'    => $res['refresh_token'],
+                        'expires_at' => isset($res['expires_at']) ? $res['expires_at'] : null,
+                        'scope'      => isset($res['scope']) ? $res['scope'] : null,
+                        'athlete'    => $athlete,
+                    ) );
+                    if ( $check_only ) {
+                        // Register page UX: inform that account exists; do NOT log in
+                        return rest_ensure_response( array( 'linked' => true, 'user' => array( 'id' => $uid ) ) );
+                    }
+                    // Default (login flow): log user in
+                    wp_set_current_user( $uid );
+                    wp_set_auth_cookie( $uid, true );
+                    return rest_ensure_response( array( 'logged_in' => true, 'user' => array( 'id' => $uid ) ) );
+                }
+            }
+            // No linked account found
+            if ( $check_only ) {
+                return rest_ensure_response( array( 'linked' => false ) );
+            }
+            // Registration flow requires email to register/link
+            return new WP_Error( 'email_required', 'email required', array( 'status' => 400 ) );
+        }
+
+        // Email provided -> consent required for (new) registration/linking
+        if ( ! $accept ) return new WP_Error( 'consent_required', 'Consent required', array( 'status' => 400 ) );
+
+        // If email exists, attach tokens and login that user
+        $existing_by_email = get_user_by( 'email', $email );
+        if ( $existing_by_email ) {
+            $uid = (int) $existing_by_email->ID;
+            update_user_meta( $uid, 'tvs_strava', array(
+                'access'     => $res['access_token'],
+                'refresh'    => $res['refresh_token'],
+                'expires_at' => isset($res['expires_at']) ? $res['expires_at'] : null,
+                'scope'      => isset($res['scope']) ? $res['scope'] : null,
+                'athlete'    => $athlete,
+            ) );
+            if ( $athlete_id ) update_user_meta( $uid, 'tvs_strava_athlete_id', $athlete_id );
+            if ( $news ) update_user_meta( $uid, 'tvs_newsletter_optin', 1 );
+            wp_set_current_user( $uid );
+            wp_set_auth_cookie( $uid, true );
+            return rest_ensure_response( array( 'logged_in' => true, 'user' => array( 'id' => $uid ) ) );
+        }
+
+        // New user path -> enforce captcha (if configured) and invite-only if enabled
+        $rc_secret = $this->get_recaptcha_secret();
+        if ( $rc_secret !== '' ) {
+            $vr = $this->verify_recaptcha( $rc_token, 'strava_register' );
+            if ( is_wp_error( $vr ) ) return $vr;
+        }
+        // New user path -> enforce invite-only if enabled
+        $invite_only = (bool) get_option( 'tvs_invite_only', false );
+        if ( $invite_only ) {
+            if ( ! $invite ) {
+                return new WP_Error( 'invite_required', 'Invitation code required', array( 'status' => 403 ) );
+            }
+            $row = $this->db_invite_check( $invite );
+            if ( ! $row || ! intval( $row->is_active ) ) {
+                return new WP_Error( 'invite_invalid', 'Invalid invitation code', array( 'status' => 404 ) );
+            }
+            if ( ! empty( $row->used_by ) ) {
+                return new WP_Error( 'invite_used', 'This code is already used', array( 'status' => 409 ) );
+            }
+            if ( ! empty( $row->invitee_email ) ) {
+                if ( strtolower( (string) $email ) !== strtolower( (string) $row->invitee_email ) ) {
+                    return new WP_Error( 'invite_email_mismatch', 'Invitation is tied to a different email', array( 'status' => 409 ) );
+                }
+            }
+        }
+
+        // Create new user with role tvs_athlete
+        $base = $athlete_user ?: ( $athlete_id ? 'strava_' . $athlete_id : 'strava_user' );
+        $uname = $base;
+        $i = 1;
+        while ( username_exists( $uname ) ) { $uname = $base . '_' . $i; $i++; }
+        $password = wp_generate_password( 20, true );
+        $user_id = wp_insert_user( array(
+            'user_login' => $uname,
+            'user_pass'  => $password,
+            'user_email' => $email,
+            'first_name' => $first,
+            'last_name'  => $last,
+            'display_name' => trim( $first . ' ' . $last ) ?: $uname,
+            'role'       => 'tvs_athlete',
+        ) );
+        if ( is_wp_error( $user_id ) ) return $user_id;
+
+        update_user_meta( $user_id, 'tvs_strava', array(
+            'access'     => $res['access_token'],
+            'refresh'    => $res['refresh_token'],
+            'expires_at' => isset($res['expires_at']) ? $res['expires_at'] : null,
+            'scope'      => isset($res['scope']) ? $res['scope'] : null,
+            'athlete'    => $athlete,
+        ) );
+        if ( $athlete_id ) update_user_meta( $user_id, 'tvs_strava_athlete_id', $athlete_id );
+        if ( $news ) update_user_meta( $user_id, 'tvs_newsletter_optin', 1 );
+        if ( $invite_only && $invite ) {
+            update_user_meta( $user_id, 'tvs_invite_code_used', sanitize_text_field( $invite ) );
+            $this->db_invite_mark_used( $invite, $user_id );
+        }
+
+        wp_set_current_user( $user_id );
+        wp_set_auth_cookie( $user_id, true );
+        return rest_ensure_response( array( 'logged_in' => true, 'user' => array( 'id' => (int)$user_id, 'role' => 'tvs_athlete' ) ) );
+    }
+
+    public function auth_login( $request ) {
+        $p = $request->get_json_params();
+        $username = isset($p['username']) ? sanitize_user( $p['username'] ) : '';
+        $password = isset($p['password']) ? (string) $p['password'] : '';
+        if ( ! $username || ! $password ) {
+            return new WP_Error( 'invalid', 'Missing username or password', array( 'status' => 400 ) );
+        }
+        $creds = array( 'user_login' => $username, 'user_password' => $password, 'remember' => true );
+        $user = wp_signon( $creds, is_ssl() );
+        if ( is_wp_error( $user ) ) {
+            return new WP_Error( 'unauthorized', 'Invalid credentials', array( 'status' => 401 ) );
+        }
+        return rest_ensure_response( array( 'logged_in' => true, 'user' => array( 'id' => (int)$user->ID, 'roles' => $user->roles ) ) );
     }
 }

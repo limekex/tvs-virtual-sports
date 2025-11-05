@@ -119,6 +119,16 @@ class TVS_Admin {
 			'tvs-strava-import',
 			array( $this, 'render_strava_import_page' )
 		);
+
+		// Add Invitational submenu (administrators)
+		add_submenu_page(
+			'tvs-settings',
+			__( 'Invitational', 'tvs-virtual-sports' ),
+			__( 'Invitational', 'tvs-virtual-sports' ),
+			'manage_options',
+			'tvs-invitational',
+			array( $this, 'render_invitational_page' )
+		);
 	}
 
 	/**
@@ -231,6 +241,73 @@ class TVS_Admin {
 			'tvs-strava-settings',
 			'tvs_strava_settings_section'
 		);
+
+		// Invitational settings (separate page)
+		add_settings_section(
+			'tvs_invites_settings_section',
+			__( 'Invitational', 'tvs-virtual-sports' ),
+			function() {
+				echo '<p>' . esc_html__( 'Enable invite-only mode and manage default options. Use the tools below to generate and manage codes in the database.', 'tvs-virtual-sports' ) . '</p>';
+				echo '<p>' . esc_html__( 'Optional: Configure reCAPTCHA v3 for public endpoints (invite validation and registration). If the secret is not set, verification is skipped automatically.', 'tvs-virtual-sports' ) . '</p>';
+			},
+			'tvs-invitational'
+		);
+
+		register_setting(
+			'tvs_invites_settings',
+			'tvs_invite_only',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => function( $v ) { return ! empty( $v ); },
+				'default'           => false,
+			)
+		);
+
+		// reCAPTCHA v3 settings
+		register_setting(
+			'tvs_invites_settings',
+			'tvs_recaptcha_site_key',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => '',
+			)
+		);
+		register_setting(
+			'tvs_invites_settings',
+			'tvs_recaptcha_secret',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => '',
+			)
+		);
+
+		// Deprecated legacy textarea for seeding removed: invites are always auto-generated
+
+		add_settings_field(
+			'tvs_invite_only',
+			__( 'Invite-only registration', 'tvs-virtual-sports' ),
+			array( $this, 'render_invite_only_field' ),
+			'tvs-invitational',
+			'tvs_invites_settings_section'
+		);
+
+		// reCAPTCHA fields
+		add_settings_field(
+			'tvs_recaptcha_site_key',
+			__( 'reCAPTCHA Site Key', 'tvs-virtual-sports' ),
+			array( $this, 'render_recaptcha_site_key_field' ),
+			'tvs-invitational',
+			'tvs_invites_settings_section'
+		);
+		add_settings_field(
+			'tvs_recaptcha_secret',
+			__( 'reCAPTCHA Secret', 'tvs-virtual-sports' ),
+			array( $this, 'render_recaptcha_secret_field' ),
+			'tvs-invitational',
+			'tvs_invites_settings_section'
+		);
 	}
 
 	/**
@@ -264,6 +341,144 @@ class TVS_Admin {
 				?>
 			</form>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Render the Invitational admin page: toggle + code management UI
+	 */
+	public function render_invitational_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions.', 'tvs-virtual-sports' ) );
+		}
+		$rest_root = esc_url( get_rest_url() );
+		$nonce     = wp_create_nonce( 'wp_rest' );
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( 'tvs_invites_settings' );
+				do_settings_sections( 'tvs-invitational' );
+				submit_button( __( 'Save', 'tvs-virtual-sports' ) );
+				?>
+			</form>
+
+			<hr />
+			<h2><?php esc_html_e( 'Manage invitation codes', 'tvs-virtual-sports' ); ?></h2>
+			<p class="description"><?php esc_html_e( 'Create codes that can be shared with users. Codes are stored securely (hashed) and are one-time-use.', 'tvs-virtual-sports' ); ?></p>
+			<div class="tvs-app">
+				<div id="tvs-invites-admin" class="tvs-card tvs-glass" style="padding:12px;"></div>
+			</div>
+		</div>
+		<script>
+		(function(){
+			const rest = <?php echo wp_json_encode( $rest_root ); ?>;
+			const nonce = <?php echo wp_json_encode( $nonce ); ?>;
+			const root = document.getElementById('tvs-invites-admin');
+			function el(t,c,txt){ const e=document.createElement(t); if(c) e.className=c; if(txt!=null) e.textContent=txt; return e; }
+			async function copyText(text, onSuccess, onFail){
+				try {
+					if (navigator.clipboard && navigator.clipboard.writeText) {
+						await navigator.clipboard.writeText(text);
+						if (onSuccess) onSuccess();
+						return true;
+					}
+				} catch(e) {}
+				try {
+					const ta=document.createElement('textarea');
+					ta.value=text; ta.setAttribute('readonly',''); ta.style.position='absolute'; ta.style.left='-9999px';
+					document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+					const ok=document.execCommand('copy'); document.body.removeChild(ta);
+					if (ok){ if (onSuccess) onSuccess(); return true; }
+				} catch(e2){}
+				if (onFail) onFail(); return false;
+			}
+			async function getJSON(url, opts){
+				const r = await fetch(url, { ...(opts||{}), headers: { 'X-WP-Nonce': nonce, ...(opts&&opts.headers||{}) } });
+				const t = await r.text(); let data; try{ data=JSON.parse(t);}catch{ data=t; }
+				return { ok:r.ok, status:r.status, data };
+			}
+			function render(){
+				root.innerHTML='';
+				const actions = el('div','tvs-invites-actions tvs-btns');
+				const email = el('input','tvs-input'); email.type='email'; email.placeholder = '<?php echo esc_js( __( 'Invitee email (optional)', 'tvs-virtual-sports' ) ); ?>'; email.autocomplete='off';
+				const createBtn = el('button','tvs-btn tvs-btn--outline','<?php echo esc_js( __( 'Create code', 'tvs-virtual-sports' ) ); ?>');
+				actions.appendChild(email); actions.appendChild(createBtn);
+				const status = el('div'); status.style.marginTop='8px';
+				const list = el('div'); list.style.marginTop='12px';
+				root.appendChild(actions); root.appendChild(status); root.appendChild(list);
+
+				async function refresh(){
+					list.textContent = '<?php echo esc_js( __( 'Loading...', 'tvs-virtual-sports' ) ); ?>';
+					const res = await getJSON(rest+'tvs/v1/invites/mine');
+					if(!res.ok){ list.textContent = 'Error '+res.status; return; }
+					const items = (res.data&&res.data.items)||[];
+					if(!items.length){ list.innerHTML = '<em><?php echo esc_js( __( 'No invites yet.', 'tvs-virtual-sports' ) ); ?></em>'; return; }
+					const table = el('table','widefat tvs-table'); table.style.width = '100%';
+					const thead = el('thead'); const trh=el('tr');
+					['ID','<?php echo esc_js( __( 'Email', 'tvs-virtual-sports' ) ); ?>','<?php echo esc_js( __( 'Hint', 'tvs-virtual-sports' ) ); ?>','<?php echo esc_js( __( 'Status', 'tvs-virtual-sports' ) ); ?>','<?php echo esc_js( __( 'Created', 'tvs-virtual-sports' ) ); ?>','<?php echo esc_js( __( 'Used by', 'tvs-virtual-sports' ) ); ?>','<?php echo esc_js( __( 'Used at', 'tvs-virtual-sports' ) ); ?>',''].forEach(h=>{ const th=el('th'); th.textContent=h; trh.appendChild(th); });
+					thead.appendChild(trh); table.appendChild(thead);
+					const tbody = el('tbody');
+					function fmt(s){ try{return new Date(s).toLocaleString();}catch{return s||'';} }
+					items.forEach(it=>{
+						const tr = el('tr');
+						const statusTxt = it.status==='available' ? '<?php echo esc_js( __( 'Available', 'tvs-virtual-sports' ) ); ?>' : (it.status==='used' ? '<?php echo esc_js( __( 'Used', 'tvs-virtual-sports' ) ); ?>' : '<?php echo esc_js( __( 'Inactive', 'tvs-virtual-sports' ) ); ?>');
+						const tdId=el('td',null,String(it.id));
+						const tdEmail=el('td',null,it.email||'');
+						const tdHint=el('td',null,it.hint||'');
+						const tdStatus=el('td',null,statusTxt);
+						const tdCreated=el('td',null,fmt(it.created_at));
+						const tdUsedBy=el('td',null,it.used_by?('#'+it.used_by):'');
+						const tdUsedAt=el('td',null, it.used_at ? fmt(it.used_at) : '<?php echo esc_js(__('Not used yet','tvs-virtual-sports')); ?>');
+						const tdAct = el('td');
+						if(it.status==='available'){
+							const deact = el('button','tvs-btn tvs-btn--outline','<?php echo esc_js( __( 'Deactivate', 'tvs-virtual-sports' ) ); ?>');
+							deact.addEventListener('click', async ()=>{
+								const resp = await getJSON(rest+'tvs/v1/invites/'+it.id+'/deactivate', { method:'POST' });
+								if(resp.ok){ refresh(); }
+								else { status.textContent = 'Error '+resp.status; }
+							});
+							tdAct.appendChild(deact);
+						}
+						tr.appendChild(tdId); tr.appendChild(tdEmail); tr.appendChild(tdHint); tr.appendChild(tdStatus); tr.appendChild(tdCreated); tr.appendChild(tdUsedBy); tr.appendChild(tdUsedAt); tr.appendChild(tdAct);
+						tbody.appendChild(tr);
+					});
+					table.appendChild(tbody);
+					list.innerHTML=''; list.appendChild(table);
+				}
+
+				createBtn.addEventListener('click', async ()=>{
+					status.textContent = '<?php echo esc_js( __( 'Creating…', 'tvs-virtual-sports' ) ); ?>';
+					const payload = { count: 1 };
+					const eml = (email.value||'').trim(); if (eml) payload.email = eml;
+					const resp = await getJSON(rest+'tvs/v1/invites/create', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+					if(!resp.ok){ status.textContent = 'Error '+resp.status; return; }
+					const created = (resp.data&&resp.data.created)||[];
+					if(!created.length){ status.textContent = '<?php echo esc_js( __( 'No code created', 'tvs-virtual-sports' ) ); ?>'; return; }
+					status.textContent = '<?php echo esc_js( __( 'Invite code created — copy now (shown only once)', 'tvs-virtual-sports' ) ); ?>';
+					const c = created[0].code;
+					const box = el('div'); box.style.marginTop='8px';
+					const pre = el('code','tvs-code',c);
+					const copyBtn = el('button','tvs-btn tvs-btn--outline','<?php echo esc_js( __( 'Copy', 'tvs-virtual-sports' ) ); ?>'); copyBtn.style.marginLeft='8px';
+					copyBtn.addEventListener('click', ()=>{
+						const old = copyBtn.textContent;
+						copyText(c, ()=>{
+							copyBtn.textContent = '<?php echo esc_js( __( 'Copied', 'tvs-virtual-sports' ) ); ?>';
+							copyBtn.disabled = true;
+							setTimeout(()=>{ copyBtn.textContent = old; copyBtn.disabled = false; }, 1500);
+						});
+					});
+					box.appendChild(pre); box.appendChild(copyBtn);
+					root.insertBefore(box, list);
+					refresh();
+				});
+
+				refresh();
+			}
+			render();
+		})();
+		</script>
 		<?php
 	}
 
@@ -590,6 +805,61 @@ class TVS_Admin {
 		<p class="description">
 			<?php esc_html_e( 'Note: Strava does not allow setting activities as "Only You" via API. To make an activity fully private, you must change it manually on Strava after upload.', 'tvs-virtual-sports' ); ?>
 		</p>
+		<?php
+	}
+
+	/** Render invite-only toggle */
+	public function render_invite_only_field() {
+		$value = (bool) get_option( 'tvs_invite_only', false );
+		?>
+		<label>
+			<input type="checkbox" id="tvs_invite_only" name="tvs_invite_only" value="1" <?php checked( $value, true ); ?> />
+			<?php esc_html_e( 'Require a valid invitation code to register new accounts.', 'tvs-virtual-sports' ); ?>
+		</label>
+		<?php
+	}
+
+	/** Render reCAPTCHA Site Key field */
+	public function render_recaptcha_site_key_field() {
+		$value = (string) get_option( 'tvs_recaptcha_site_key', '' );
+		?>
+		<input type="text"
+			id="tvs_recaptcha_site_key"
+			name="tvs_recaptcha_site_key"
+			value="<?php echo esc_attr( $value ); ?>"
+			class="regular-text"
+		/>
+		<p class="description">
+			<?php esc_html_e( 'Public site key from Google reCAPTCHA (v3). Used by the client when validating invites and registering.', 'tvs-virtual-sports' ); ?>
+		</p>
+		<?php
+	}
+
+	/** Render reCAPTCHA Secret field */
+	public function render_recaptcha_secret_field() {
+		$value = (string) get_option( 'tvs_recaptcha_secret', '' );
+		?>
+		<input type="password"
+			id="tvs_recaptcha_secret"
+			name="tvs_recaptcha_secret"
+			value="<?php echo esc_attr( $value ); ?>"
+			class="regular-text"
+		/>
+		<p class="description">
+			<?php esc_html_e( 'Server secret for Google reCAPTCHA (v3). If left empty, verification is skipped.', 'tvs-virtual-sports' ); ?>
+		</p>
+		<?php
+	}
+
+	/** Render invitation codes textarea */
+	public function render_invite_codes_field() {
+		$value = (string) get_option( 'tvs_invite_codes', '' );
+		$lines = preg_split( '/\r?\n/', $value );
+		$lines = array_filter( array_map( 'trim', (array) $lines ) );
+		$help  = sprintf( /* translators: %d: number of codes */ esc_html__( '%d code(s) available. One code per line; codes are case-insensitive and consumed on first use.', 'tvs-virtual-sports' ), count( $lines ) );
+		?>
+		<textarea id="tvs_invite_codes" name="tvs_invite_codes" rows="6" class="large-text" placeholder="ABC123&#10;BETA-INVITE-456&#10;..."><?php echo esc_textarea( $value ); ?></textarea>
+		<p class="description"><?php echo esc_html( $help ); ?></p>
 		<?php
 	}
 	/**

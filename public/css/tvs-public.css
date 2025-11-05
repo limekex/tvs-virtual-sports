@@ -351,6 +351,26 @@
   to { transform: rotate(360deg); }
 }
 
+/* ===== Inputs (scoped) ===== */
+.tvs-app .tvs-input {
+  display: inline-block;
+  padding: var(--tvs-input-padding-y, 10px) var(--tvs-input-padding-x, 12px);
+  border-radius: var(--tvs-input-radius, 8px);
+  border: 1px solid var(--tvs-color-border-subtle, #3a3b40);
+  background: var(--tvs-color-bg-tertiary, #16171a);
+  color: var(--tvs-color-text-primary, #fff);
+}
+.tvs-app .tvs-input:focus {
+  outline: 2px solid var(--tvs-color-border-accent, #4aa6e0);
+  outline-offset: 2px;
+}
+.tvs-app .tvs-input::placeholder {
+  color: var(--tvs-color-text-tertiary, #7a7b7e);
+}
+
+.tvs-table th {
+    text-align: left;
+}
 
 /* ---- Dev overlay ---- */
 .tvs-dev {
