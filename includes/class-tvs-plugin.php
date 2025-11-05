@@ -144,9 +144,9 @@ class TVS_Plugin {
         wp_enqueue_style( 'tvs-admin', TVS_PLUGIN_URL . 'admin/css/tvs-admin.css', array(), TVS_PLUGIN_VERSION );
         wp_enqueue_script( 'tvs-admin', TVS_PLUGIN_URL . 'admin/js/tvs-admin.js', array( 'jquery' ), TVS_PLUGIN_VERSION, true );
 
-        // Conditionally load TVS token + public styles on our Invitational admin page
+        // Conditionally load TVS token + public styles on our TVS admin pages that use TVS components
         $page = isset( $_GET['page'] ) ? sanitize_key( $_GET['page'] ) : '';
-        if ( $page === 'tvs-invitational' ) {
+        if ( in_array( $page, array( 'tvs-invitational', 'tvs-security' ), true ) ) {
             // Try to load theme tokens (CSS variables and base components) if available
             $tokens_path = trailingslashit( get_stylesheet_directory() ) . 'assets/css/tvs-tokens.css';
             if ( file_exists( $tokens_path ) ) {

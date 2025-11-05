@@ -129,6 +129,16 @@ class TVS_Admin {
 			'tvs-invitational',
 			array( $this, 'render_invitational_page' )
 		);
+
+		// Add Security submenu (administrators)
+		add_submenu_page(
+			'tvs-settings',
+			__( 'Security', 'tvs-virtual-sports' ),
+			__( 'Security', 'tvs-virtual-sports' ),
+			'manage_options',
+			'tvs-security',
+			array( $this, 'render_security_settings_page' )
+		);
 	}
 
 	/**
@@ -248,7 +258,7 @@ class TVS_Admin {
 			__( 'Invitational', 'tvs-virtual-sports' ),
 			function() {
 				echo '<p>' . esc_html__( 'Enable invite-only mode and manage default options. Use the tools below to generate and manage codes in the database.', 'tvs-virtual-sports' ) . '</p>';
-				echo '<p>' . esc_html__( 'Optional: Configure reCAPTCHA v3 for public endpoints (invite validation and registration). If the secret is not set, verification is skipped automatically.', 'tvs-virtual-sports' ) . '</p>';
+				echo '<p>' . esc_html__( 'Note: reCAPTCHA v3 configuration has moved to TVS → Security.', 'tvs-virtual-sports' ) . '</p>';
 			},
 			'tvs-invitational'
 		);
@@ -263,9 +273,20 @@ class TVS_Admin {
 			)
 		);
 
-		// reCAPTCHA v3 settings
+
+		// Security settings page (reCAPTCHA v3 and future security options)
+		add_settings_section(
+			'tvs_security_settings_section',
+			__( 'Security', 'tvs-virtual-sports' ),
+			function(){
+				echo '<p>' . esc_html__( 'Configure site-wide security options.', 'tvs-virtual-sports' ) . '</p>';
+				echo '<p>' . esc_html__( 'reCAPTCHA v3 protects invite validation and registration. If the secret is not set, verification is skipped.', 'tvs-virtual-sports' ) . '</p>';
+			},
+			'tvs-security'
+		);
+
 		register_setting(
-			'tvs_invites_settings',
+			'tvs_security_settings',
 			'tvs_recaptcha_site_key',
 			array(
 				'type'              => 'string',
@@ -274,7 +295,7 @@ class TVS_Admin {
 			)
 		);
 		register_setting(
-			'tvs_invites_settings',
+			'tvs_security_settings',
 			'tvs_recaptcha_secret',
 			array(
 				'type'              => 'string',
@@ -293,20 +314,20 @@ class TVS_Admin {
 			'tvs_invites_settings_section'
 		);
 
-		// reCAPTCHA fields
+		// reCAPTCHA fields on Security page
 		add_settings_field(
 			'tvs_recaptcha_site_key',
 			__( 'reCAPTCHA Site Key', 'tvs-virtual-sports' ),
 			array( $this, 'render_recaptcha_site_key_field' ),
-			'tvs-invitational',
-			'tvs_invites_settings_section'
+			'tvs-security',
+			'tvs_security_settings_section'
 		);
 		add_settings_field(
 			'tvs_recaptcha_secret',
 			__( 'reCAPTCHA Secret', 'tvs-virtual-sports' ),
 			array( $this, 'render_recaptcha_secret_field' ),
-			'tvs-invitational',
-			'tvs_invites_settings_section'
+			'tvs-security',
+			'tvs_security_settings_section'
 		);
 	}
 
@@ -848,6 +869,25 @@ class TVS_Admin {
 		<p class="description">
 			<?php esc_html_e( 'Server secret for Google reCAPTCHA (v3). If left empty, verification is skipped.', 'tvs-virtual-sports' ); ?>
 		</p>
+		<?php
+	}
+
+	/** Render Security settings page */
+	public function render_security_settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions.', 'tvs-virtual-sports' ) );
+		}
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( 'tvs_security_settings' );
+				do_settings_sections( 'tvs-security' );
+				submit_button();
+				?>
+			</form>
+		</div>
 		<?php
 	}
 
