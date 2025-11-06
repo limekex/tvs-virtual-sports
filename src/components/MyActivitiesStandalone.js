@@ -2,7 +2,7 @@ import { DEBUG, err } from '../utils/debug.js';
 import MyActivities from './MyActivities.js';
 import ActivityCard from './ActivityCard.js';
 
-export default function MyActivitiesStandalone({ React }) {
+export default function MyActivitiesStandalone({ React, routeId = 0, limit = 5, title = '' }) {
   const { useState, useEffect, createElement: h } = React;
   const [activities, setActivities] = useState([]);
   const [loadingActivities, setLoadingActivities] = useState(false);
@@ -10,7 +10,7 @@ export default function MyActivitiesStandalone({ React }) {
   const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
   useEffect(() => {
-    if (!isLoggedIn) return;
+    // Load on mount and whenever inputs change
     loadActivities();
     const handleActivityUpdate = () => {
       if (DEBUG) console.info('[TVS] MyActivitiesStandalone: Received activity update event, reloading...');
@@ -20,24 +20,35 @@ export default function MyActivitiesStandalone({ React }) {
     return () => {
       window.removeEventListener('tvs:activity-updated', handleActivityUpdate);
     };
-  }, []);
+  }, [routeId, limit, isLoggedIn]);
 
   async function loadActivities() {
     try {
       setLoadingActivities(true);
-      const url = "/wp-json/tvs/v1/activities/me";
-      const r = await fetch(url, {
+      if (!isLoggedIn) {
+        // Not logged in: skip fetch and show dummy UI below
+        setActivities([]);
+        return;
+      }
+
+      const qs = new URLSearchParams();
+      qs.set('per_page', String(limit));
+      const rid = parseInt(routeId, 10) || 0;
+      if (rid > 0) qs.set('route_id', String(rid));
+
+      const r = await fetch(`/wp-json/tvs/v1/activities/me?${qs.toString()}` , {
         credentials: "same-origin",
         headers: {
-          "X-TVS-Nonce": window.TVS_SETTINGS?.nonce || ""
+          "X-TVS-Nonce": window.TVS_SETTINGS?.nonce || "",
+          "X-WP-Nonce": window.TVS_SETTINGS?.nonce || ""
         }
       });
       if (!r.ok) {
         throw new Error("Failed to load activities");
       }
       const json = await r.json();
-      const activitiesData = Array.isArray(json) ? json : (json.activities || []);
-      setActivities(activitiesData);
+      const items = Array.isArray(json) ? json : (json.activities || []);
+      setActivities(items);
     } catch (e) {
       err("Load activities FAIL:", e);
       setActivities([]);
@@ -76,7 +87,7 @@ export default function MyActivitiesStandalone({ React }) {
     const dummyActivities = Array.from({ length: 3 }).map((_, i) => ({
       id: 'dummy-' + i,
       meta: {
-        _tvs_route_name: ["Sample Route " + (i + 1)],
+        _tvs_route_name: ["Mock Activity Preview " + (i + 1)],
         _tvs_activity_date: [new Date(Date.now() - i * 86400000).toISOString()],
         _tvs_distance_m: [Math.round(5000 + Math.random() * 5000)],
         _tvs_duration_s: [Math.round(1200 + Math.random() * 1800)],
@@ -85,7 +96,7 @@ export default function MyActivitiesStandalone({ React }) {
     return h(
       "div",
       { className: "tvs-activities-block tvs-panel" },
-      h("h3", { className: "tvs-activities-title" }, "My Activities"),
+  h("h3", { className: "tvs-activities-title" }, (title && title.trim()) ? title : 'My Activities'),
       h(
         "div",
         { className: "tvs-activities-list" },
@@ -113,5 +124,5 @@ export default function MyActivitiesStandalone({ React }) {
     );
   }
 
-  return h(MyActivities, { React, activities, loadingActivities, uploadToStrava, uploadingId });
+  return h(MyActivities, { React, activities, loadingActivities, uploadToStrava, uploadingId, title });
 }

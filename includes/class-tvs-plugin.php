@@ -79,7 +79,20 @@ class TVS_Plugin {
                 'icon'            => 'list-view',
                 'keywords'        => array( 'tvs', 'activities', 'virtual sports' ),
                 'render_callback' => array( $this, 'render_my_activities_block' ),
-                'attributes'      => array(),
+                'attributes'      => array(
+                    'routeId' => array(
+                        'type'    => 'integer',
+                        'default' => 0,
+                    ),
+                    'limit' => array(
+                        'type'    => 'integer',
+                        'default' => 5,
+                    ),
+                    'title' => array(
+                        'type'    => 'string',
+                        'default' => 'Recent Activities',
+                    ),
+                ),
             ) );
 
             register_block_type( 'tvs-virtual-sports/invite-friends', array(
@@ -101,11 +114,24 @@ class TVS_Plugin {
 
         // Create a unique mount point for this block instance
         $mount_id = 'tvs-my-activities-' . uniqid();
+    $route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+    $limit    = isset( $attributes['limit'] ) ? max( 1, min( 20, intval( $attributes['limit'] ) ) ) : 5;
+    $title    = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Recent Activities';
+
+        // Sensible defaults: on a route page, default to route mode
+        if ( is_singular( 'tvs_route' ) && $route_id <= 0 ) {
+            $route_id = get_the_ID();
+        }
         
         ob_start();
         ?>
         <div class="tvs-app tvs-app--activities">
-            <div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
+          <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-my-activities-block"
+                 data-route-id="<?php echo esc_attr( $route_id ); ?>"
+                 data-limit="<?php echo esc_attr( $limit ); ?>"
+              data-title="<?php echo esc_attr( $title ); ?>"
+            ></div>
         </div>
         <?php
         return ob_get_clean();
@@ -215,7 +241,7 @@ class TVS_Plugin {
         wp_register_script(
             'tvs-blocks-editor',
             TVS_PLUGIN_URL . 'admin/js/tvs-blocks-editor.js',
-            array( 'wp-blocks', 'wp-element', 'wp-i18n' ),
+            array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor', 'wp-compose', 'wp-hooks' ),
             TVS_PLUGIN_VERSION,
             true
         );

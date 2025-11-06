@@ -2,6 +2,7 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
   const { createElement: h, useState } = React;
   const meta = activity.meta || {};
   const activityId = activity.id;
+  const permalink = activity.permalink || '';
 
   const syncedStrava = meta._tvs_synced_strava?.[0] || meta.synced_strava?.[0];
   const stravaRemoteId = meta._tvs_strava_remote_id?.[0] || meta.strava_activity_id?.[0];
@@ -30,7 +31,10 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
       return h('div', { className: 'tvs-activity-card-compact is-dummy' },
         h('div', { className: 'tvs-activity-card__row' },
           h('div', { style: { flex: 1, minWidth: 0 } },
-            h('div', { className: 'tvs-activity-card__title' }, activityTitle),
+            h('div', { className: 'tvs-activity-card__title' },
+              'Mock activity (demo) · ',
+              h('span', { className: 'tvs-badge tvs-badge-info' }, 'Demo')
+            ),
             h('div', { className: 'tvs-activity-card__meta tvs-text-muted' },
               distance > 0 ? (distance / 1000).toFixed(2) + ' km' : '',
               distance > 0 && duration > 0 ? ' · ' : '',
@@ -45,7 +49,15 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
       );
     }
 
-    return h('div', { className: 'tvs-activity-card-compact' },
+    const clickableProps = permalink ? {
+      onClick: () => { window.location.href = permalink; },
+      role: 'link',
+      tabIndex: 0,
+      onKeyDown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); window.location.href = permalink; } },
+      style: { cursor: 'pointer' }
+    } : {};
+
+    return h('div', { className: 'tvs-activity-card-compact', ...clickableProps },
       h('div', { className: 'tvs-activity-card__row' },
         h('div', { style: { flex: 1, minWidth: 0 } },
           h('div', { className: 'tvs-activity-card__title' }, activityTitle),
@@ -55,7 +67,7 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
             duration > 0 ? Math.floor(duration / 60) + ' min' : ''
           )
         ),
-        h('div', { className: 'tvs-activity-card__actions', style: { flexShrink: 0 } },
+        h('div', { className: 'tvs-activity-card__actions', style: { flexShrink: 0 }, onClick: (e) => e.stopPropagation(), onKeyDown: (e) => e.stopPropagation() },
           isSynced
             ? h('span', { className: 'tvs-text-success', title: 'Synced to Strava', style: { fontSize: '1.25rem', lineHeight: 1, display: 'flex', alignItems: 'center' } }, '✓')
             : null,

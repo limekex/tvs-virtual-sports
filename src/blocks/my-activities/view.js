@@ -9,7 +9,11 @@ function mountAll() {
       const id = node.id || `tvs-my-activities-${idx}`;
       if (!node.id) node.id = id;
       if (DEBUG) log('Mounting MyActivities block (view.js) on:', id);
-      mountReact(MyActivitiesStandalone, { React }, node);
+  // Read server-provided attributes from data-*
+  const routeId = parseInt(node.getAttribute('data-route-id') || '0', 10) || 0;
+  const limit = parseInt(node.getAttribute('data-limit') || '5', 10) || 5;
+  const title = node.getAttribute('data-title') || '';
+  mountReact(MyActivitiesStandalone, { React, routeId, limit, title }, node);
       node.__tvsMounted = true;
     }
   });

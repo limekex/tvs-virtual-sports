@@ -556,9 +556,11 @@
   position: relative;
 }
 .tvs-app .tvs-activity-card-compact.is-dummy {
-  background: linear-gradient(90deg, #f3f4f6 60%, #e5e7eb 100%);
-  opacity: .6; filter: grayscale(.7);
-  pointer-events: none;
+  background: var(--tvs-color-bg-secondary, #f9fafb);
+  color: var(--tvs-color-text-secondary, #374151);
+  border: 1px dashed var(--tvs-color-border-subtle, #e5e7eb);
+  opacity: 1; filter: none;
+  pointer-events: none; /* keep non-interactive */
 }
 .tvs-app .tvs-activity-card-compact .tvs-activity-card__row { display:flex; align-items:center; justify-content:space-between; gap: var(--tvs-space-2, .5rem); }
 .tvs-app .tvs-activity-card-compact .tvs-activity-card__meta { font-size: .85rem; }

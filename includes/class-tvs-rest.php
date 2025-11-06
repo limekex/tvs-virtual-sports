@@ -464,13 +464,21 @@ class TVS_REST {
         register_rest_route( $ns, '/activities/me', array(
             'methods' => 'GET',
             'callback' => array( $this, 'get_activities_me' ),
+            // Allow cookie or nonce-based access (cross-domain workaround)
             'permission_callback' => array( $this, 'permissions_for_activities' ),
             'args' => array(
-                'scope' => array(
-                    'description' => 'me (default) or all (dev/admin only) to list activities',
-                    'type'        => 'string',
-                    'default'     => 'me',
-                    'enum'        => array( 'me', 'all' ),
+                'per_page' => array(
+                    'description' => 'Max items to return',
+                    'type'        => 'integer',
+                    'default'     => 50,
+                    'minimum'     => 1,
+                    'maximum'     => 50,
+                ),
+                'route_id' => array(
+                    'description' => 'Filter activities by meta route_id for the current user',
+                    'type'        => 'integer',
+                    'required'    => false,
+                    'minimum'     => 1,
                 ),
             ),
         ) );
@@ -940,70 +948,53 @@ class TVS_REST {
     }
 
     public function get_activities_me( $request ) {
-        $user_id = get_current_user_id();
-        $scope   = $request->get_param( 'scope' );
-        $scope   = $scope ? strtolower( $scope ) : 'me';
-        
-        // If no user ID from cookies (cross-domain scenario), 
-        // permission callback already validated the request
-           // Use admin user as fallback (permission callback already gated access via nonce)
-        if ( ! $user_id ) {
-               error_log( 'TVS: get_activities_me - no cookie auth, using admin fallback (nonce validated)' );
-               // Get the first admin user as a fallback
-               $users = get_users( array( 'role' => 'administrator', 'number' => 1, 'orderby' => 'ID' ) );
-               if ( ! empty( $users ) ) {
-                   $user_id = $users[0]->ID;
-                   error_log( 'TVS: get_activities_me - using fallback admin user_id: ' . $user_id );
-               }
-        }
-        
+        $user_id  = get_current_user_id();
+        $per_page = max( 1, min( 50, (int) $request->get_param( 'per_page' ) ?: 50 ) );
+        $route_id = (int) $request->get_param( 'route_id' );
+
+        // Security: Never fall back to another user. If no authenticated user, deny.
         if ( ! $user_id ) {
             return new WP_Error( 'forbidden', 'Authentication required', array( 'status' => 401 ) );
         }
-        
-           error_log( 'TVS: get_activities_me called for user_id: ' . $user_id );
 
-        // Only allow scope=all for administrators
-        $allow_all = user_can( $user_id, 'manage_options' );
-
-        // Default to author's activities; allow scope=all only for admin/dev
-        if ( $scope === 'all' && $allow_all ) {
-            $args = array(
-                'post_type'      => 'tvs_activity',
-                'posts_per_page' => 50,
-                'post_status'    => 'any',
-                'orderby'        => 'date',
-                'order'          => 'DESC',
-            );
-            error_log( 'TVS: activities_me scope=all enabled (allow_all=' . ( $allow_all ? 'yes' : 'no' ) . ')' );
-        } else {
-            $args = array(
-                'post_type'      => 'tvs_activity',
-                'author'         => $user_id,
-                'posts_per_page' => 50,
-                'post_status'    => 'any',
+        $meta_query = array();
+        if ( $route_id > 0 ) {
+            $meta_query[] = array(
+                'key'   => 'route_id',
+                'value' => (string) $route_id,
             );
         }
-    $q = new WP_Query( $args );
-    error_log( 'TVS: activities_me query args: ' . wp_json_encode( $args ) );
-        
-    error_log( 'TVS: WP_Query found ' . $q->found_posts . ' activities for user ' . $user_id );
-        
+
+        $args = array(
+            'post_type'      => 'tvs_activity',
+            'author'         => $user_id,
+            'posts_per_page' => $per_page,
+            'post_status'    => 'any',
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_query'     => ! empty( $meta_query ) ? $meta_query : null,
+        );
+
+        $q = new WP_Query( $args );
         $out = array();
         while ( $q->have_posts() ) {
             $q->the_post();
             $id = get_the_ID();
             $out[] = array(
-                'id' => $id,
+                'id'   => $id,
+                'slug' => get_post_field( 'post_name', $id ),
+                'permalink' => get_permalink( $id ),
+                'title' => get_the_title( $id ),
+                'date'  => get_the_date( 'c', $id ),
                 'meta' => get_post_meta( $id ),
             );
         }
         wp_reset_postdata();
-        
-        error_log( 'TVS: Returning ' . count($out) . ' activities' );
-        
+
         return rest_ensure_response( $out );
     }
+
+    
 
     public function strava_status( $request ) {
         $user_id = get_current_user_id();
