@@ -49,10 +49,27 @@ class TVS_Plugin {
 
         // Enqueue Gutenberg block editor assets (to make blocks appear in Inserter)
         add_action( 'enqueue_block_editor_assets', array( $this, 'editor_assets' ) );
+
+        // One-time rewrite flush when plugin version changes (ensures CPT permalinks like /activity/ work after updates)
+        add_action( 'init', array( $this, 'maybe_flush_rewrite' ), 20 );
     }
 
     public function load_textdomain() {
         load_plugin_textdomain( 'tvs-virtual-sports', false, dirname( plugin_basename( $this->file ) ) . '/languages' );
+    }
+
+    /**
+     * Flush rewrite rules once after updates when version changes.
+     * Ensures tvs_activity rewrite (/activity/slug) is recognized without manual Permalinks save.
+     */
+    public function maybe_flush_rewrite() {
+        $stored = get_option( 'tvs_virtual_sports_version' );
+        if ( $stored !== TVS_PLUGIN_VERSION ) {
+            // Ensure CPTs/taxonomies are registered before flushing
+            $this->register_components_for_activation();
+            flush_rewrite_rules();
+            update_option( 'tvs_virtual_sports_version', TVS_PLUGIN_VERSION );
+        }
     }
 
     public function register_components() {
@@ -103,6 +120,54 @@ class TVS_Plugin {
                 'keywords'        => array( 'tvs', 'invites', 'friends' ),
                 'render_callback' => array( $this, 'render_invite_friends_block' ),
                 'attributes'      => array(),
+            ) );
+
+            // Route Insights block
+            register_block_type( 'tvs-virtual-sports/route-insights', array(
+                'title'           => __( 'TVS Route Insights', 'tvs-virtual-sports' ),
+                'description'     => __( 'Route elevation, surface, ETA and real-life link.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'analytics',
+                'render_callback' => array( $this, 'render_route_insights_block' ),
+                'attributes'      => array(
+                    'title' => array( 'type' => 'string', 'default' => 'Route Insights' ),
+                    'routeId' => array( 'type' => 'integer', 'default' => 0 ),
+                    'showElevation' => array( 'type' => 'boolean', 'default' => true ),
+                    'showSurface'   => array( 'type' => 'boolean', 'default' => true ),
+                    'showEta'       => array( 'type' => 'boolean', 'default' => true ),
+                    'showMapsLink'  => array( 'type' => 'boolean', 'default' => true ),
+                ),
+            ) );
+
+            // Personal Records block
+            register_block_type( 'tvs-virtual-sports/personal-records', array(
+                'title'           => __( 'TVS Personal Records', 'tvs-virtual-sports' ),
+                'description'     => __( 'Best time, average pace/tempo, most recent.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'awards',
+                'render_callback' => array( $this, 'render_personal_records_block' ),
+                'attributes'      => array(
+                    'title'        => array( 'type' => 'string', 'default' => 'Personal Records' ),
+                    'routeId'      => array( 'type' => 'integer', 'default' => 0 ),
+                    'showBestTime' => array( 'type' => 'boolean', 'default' => true ),
+                    'showAvgPace'  => array( 'type' => 'boolean', 'default' => true ),
+                    'showAvgTempo' => array( 'type' => 'boolean', 'default' => false ),
+                    'showMostRecent' => array( 'type' => 'boolean', 'default' => true ),
+                ),
+            ) );
+
+            // Activity Heatmap block
+            register_block_type( 'tvs-virtual-sports/activity-heatmap', array(
+                'title'           => __( 'TVS Activity Heatmap', 'tvs-virtual-sports' ),
+                'description'     => __( 'Sparkline/heatmap of your attempts over time.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'chart-area',
+                'render_callback' => array( $this, 'render_activity_heatmap_block' ),
+                'attributes'      => array(
+                    'title'       => array( 'type' => 'string', 'default' => 'Activity Heatmap' ),
+                    'heatmapType' => array( 'type' => 'string', 'default' => 'sparkline' ),
+                    'routeId'     => array( 'type' => 'integer', 'default' => 0 ),
+                ),
             ) );
         }
     }
@@ -164,6 +229,96 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_route_insights_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-route-insights' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-route-insights-' . uniqid();
+        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Route Insights';
+    $attr_route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+    $show_distance   = array_key_exists( 'showDistance', $attributes ) ? (bool) $attributes['showDistance'] : true;
+    $show_pace       = array_key_exists( 'showPace', $attributes ) ? (bool) $attributes['showPace'] : true;
+    $show_cumulative = array_key_exists( 'showCumulative', $attributes ) ? (bool) $attributes['showCumulative'] : false;
+        $show_elev = ! empty( $attributes['showElevation'] );
+        $show_surface = ! empty( $attributes['showSurface'] );
+        $show_eta = ! empty( $attributes['showEta'] );
+        $show_maps = ! empty( $attributes['showMapsLink'] );
+        $route_id = $attr_route_id > 0 ? $attr_route_id : ( is_singular( 'tvs_route' ) ? get_the_ID() : 0 );
+
+        ob_start();
+        ?>
+        <div class="tvs-app">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-route-insights-block"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-show-elevation="<?php echo esc_attr( $show_elev ? '1' : '0' ); ?>"
+                 data-show-surface="<?php echo esc_attr( $show_surface ? '1' : '0' ); ?>"
+                 data-show-eta="<?php echo esc_attr( $show_eta ? '1' : '0' ); ?>"
+                 data-show-maps-link="<?php echo esc_attr( $show_maps ? '1' : '0' ); ?>"
+                 data-route-id="<?php echo esc_attr( $route_id ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function render_personal_records_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-personal-records' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-personal-records-' . uniqid();
+        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Personal Records';
+        $attr_route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+        $show_best = ! empty( $attributes['showBestTime'] );
+        $show_avg_pace = ! empty( $attributes['showAvgPace'] );
+        $show_avg_tempo = ! empty( $attributes['showAvgTempo'] );
+        $show_recent = ! empty( $attributes['showMostRecent'] );
+        $route_id = $attr_route_id > 0 ? $attr_route_id : ( is_singular( 'tvs_route' ) ? get_the_ID() : 0 );
+
+        ob_start();
+        ?>
+        <div class="tvs-app">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-personal-records-block"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-show-best="<?php echo esc_attr( $show_best ? '1' : '0' ); ?>"
+                 data-show-avg-pace="<?php echo esc_attr( $show_avg_pace ? '1' : '0' ); ?>"
+                 data-show-avg-tempo="<?php echo esc_attr( $show_avg_tempo ? '1' : '0' ); ?>"
+                 data-show-recent="<?php echo esc_attr( $show_recent ? '1' : '0' ); ?>"
+                 data-route-id="<?php echo esc_attr( $route_id ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function render_activity_heatmap_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-activity-heatmap' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-activity-heatmap-' . uniqid();
+        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Activity Heatmap';
+        $type  = isset( $attributes['heatmapType'] ) ? sanitize_text_field( $attributes['heatmapType'] ) : 'sparkline';
+        $attr_route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+        $route_id = $attr_route_id > 0 ? $attr_route_id : ( is_singular( 'tvs_route' ) ? get_the_ID() : 0 );
+
+        ob_start();
+        ?>
+        <div class="tvs-app">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-activity-heatmap-block"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-type="<?php echo esc_attr( $type ); ?>"
+                 data-route-id="<?php echo esc_attr( $route_id ); ?>"
+              data-show-distance="<?php echo esc_attr( $show_distance ? '1' : '0' ); ?>"
+              data-show-pace="<?php echo esc_attr( $show_pace ? '1' : '0' ); ?>"
+              data-show-cumulative="<?php echo esc_attr( $show_cumulative ? '1' : '0' ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -216,6 +371,9 @@ class TVS_Plugin {
     wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-my-activities', TVS_PLUGIN_URL . 'public/js/tvs-block-my-activities.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-invites', TVS_PLUGIN_URL . 'public/js/tvs-block-invites.js', array( 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-route-insights', TVS_PLUGIN_URL . 'public/js/tvs-block-route-insights.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-personal-records', TVS_PLUGIN_URL . 'public/js/tvs-block-personal-records.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-activity-heatmap', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-heatmap.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
@@ -225,9 +383,12 @@ class TVS_Plugin {
             'version'  => TVS_PLUGIN_VERSION,
             'user'     => is_user_logged_in() ? wp_get_current_user()->user_login : null,
         );
-        wp_localize_script( 'tvs-app', 'TVS_SETTINGS', $settings );
-        wp_localize_script( 'tvs-block-my-activities', 'TVS_SETTINGS', $settings );
-        wp_localize_script( 'tvs-block-invites', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-app', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-my-activities', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-invites', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-route-insights', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-personal-records', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-activity-heatmap', 'TVS_SETTINGS', $settings );
     }
 
     /**
@@ -308,6 +469,9 @@ class TVS_Plugin {
             UNIQUE KEY uq_code_hash (code_hash)
         ) {$charset_collate};";
         dbDelta( $sql );
+
+        // Ensure pretty permalinks for activities/routes are applied
+        flush_rewrite_rules();
     }
 
     /**

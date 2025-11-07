@@ -80,3 +80,36 @@ function tvs_get_strava_status( $user_id = null ) {
 function tvs_get_strava_athlete( $user_id = null ) {
     return TVS_User_Profile::get_strava_athlete( $user_id );
 }
+
+/**
+ * Decode a Google-encoded polyline string into an array of [lat, lng] pairs.
+ * @param string $encoded
+ * @return array<int, array{0: float, 1: float}>
+ */
+function tvs_decode_polyline( $encoded ) {
+    $encoded = (string) $encoded;
+    $len = strlen( $encoded );
+    $index = 0; $lat = 0; $lng = 0; $points = array();
+    while ( $index < $len ) {
+        $b = 0; $shift = 0; $result = 0;
+        do {
+            $b = ord( $encoded[ $index++ ] ) - 63;
+            $result |= ( $b & 0x1F ) << $shift;
+            $shift += 5;
+        } while ( $b >= 0x20 && $index < $len );
+        $dlat = ( ( $result & 1 ) ? ~( $result >> 1 ) : ( $result >> 1 ) );
+        $lat += $dlat;
+
+        $shift = 0; $result = 0;
+        do {
+            $b = ord( $encoded[ $index++ ] ) - 63;
+            $result |= ( $b & 0x1F ) << $shift;
+            $shift += 5;
+        } while ( $b >= 0x20 && $index < $len );
+        $dlng = ( ( $result & 1 ) ? ~( $result >> 1 ) : ( $result >> 1 ) );
+        $lng += $dlng;
+
+        $points[] = array( $lat / 1e5, $lng / 1e5 );
+    }
+    return $points;
+}

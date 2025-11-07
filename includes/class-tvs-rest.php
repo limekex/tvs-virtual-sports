@@ -454,6 +454,21 @@ class TVS_REST {
             ),
         ) );
 
+        // Route insights (public): summary/meta with helpful computed fields
+        register_rest_route( $ns, '/routes/(?P<id>\d+)/insights', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'get_route_insights' ),
+            'permission_callback' => '__return_true',
+            'args' => array(
+                'id' => array(
+                    'description' => 'Route ID',
+                    'type'        => 'integer',
+                    'required'    => true,
+                    'minimum'     => 1,
+                ),
+            ),
+        ) );
+
         register_rest_route( $ns, '/activities', array(
             'methods' => 'POST',
             'callback' => array( $this, 'create_activity' ),
@@ -480,6 +495,33 @@ class TVS_REST {
                     'required'    => false,
                     'minimum'     => 1,
                 ),
+            ),
+        ) );
+
+        // Personal stats for current user (optionally scoped to a route)
+        register_rest_route( $ns, '/activities/stats', array(
+            'methods'  => 'GET',
+            'callback' => array( $this, 'get_activity_stats' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'route_id' => array(
+                    'description' => 'Filter by route_id',
+                    'type'        => 'integer',
+                    'required'    => false,
+                    'minimum'     => 1,
+                ),
+            ),
+        ) );
+
+        // Calendar/heatmap aggregation for current user
+        register_rest_route( $ns, '/activities/aggregate', array(
+            'methods'  => 'GET',
+            'callback' => array( $this, 'get_activity_aggregate' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'route_id' => array( 'type' => 'integer', 'required' => false, 'minimum' => 1 ),
+                'days'     => array( 'type' => 'integer', 'required' => false, 'default' => 180, 'minimum' => 7, 'maximum' => 365 ),
+                'bucket'   => array( 'type' => 'string',  'required' => false, 'default' => 'day' ),
             ),
         ) );
 
@@ -828,6 +870,55 @@ class TVS_REST {
         return rest_ensure_response( $this->prepare_route_response( $id ) );
     }
 
+    /**
+     * GET /tvs/v1/routes/{id}/insights
+     * Returns key meta fields and a few computed helpers for UI display.
+     */
+    public function get_route_insights( $request ) {
+        $id = (int) $request['id'];
+        if ( get_post_type( $id ) !== 'tvs_route' ) {
+            return new WP_Error( 'not_found', 'Route not found', array( 'status' => 404 ) );
+        }
+        $meta = array();
+        $keys = function_exists( 'tvs_route_meta_keys' ) ? (array) tvs_route_meta_keys() : array( 'distance_m','elevation_m','duration_s','surface','location','season','start_lat','start_lng' );
+        foreach ( $keys as $k ) { $meta[$k] = get_post_meta( $id, $k, true ); }
+        $distance_m = isset( $meta['distance_m'] ) ? floatval( $meta['distance_m'] ) : 0.0;
+        $duration_s = isset( $meta['duration_s'] ) ? intval( $meta['duration_s'] ) : 0;
+        // Compute ETA fallback assuming 6:00 min/km pace if no duration
+        $eta_s = $duration_s;
+        if ( ! $eta_s && $distance_m > 0 ) {
+            $pace_s_per_km = 6 * 60; // 6:00 per km as a generic default
+            $eta_s = (int) round( ($distance_m/1000.0) * $pace_s_per_km );
+        }
+        // Build a privacy-aware maps URL using approx mid-point, only for longer routes
+        $maps_url = null;
+        $min_dist_for_map = 2000; // meters
+        if ( $distance_m >= $min_dist_for_map ) {
+            $poly = get_post_meta( $id, 'polyline', true );
+            if ( ! $poly ) { $poly = get_post_meta( $id, 'summary_polyline', true ); }
+            if ( $poly && function_exists( 'tvs_decode_polyline' ) ) {
+                $pts = tvs_decode_polyline( (string) $poly );
+                if ( is_array( $pts ) && count( $pts ) > 0 ) {
+                    $mid = $pts[ (int) floor( count( $pts ) / 2 ) ];
+                    $maps_url = sprintf( 'https://www.google.com/maps/search/?api=1&query=%s,%s', rawurlencode( (string) $mid[0] ), rawurlencode( (string) $mid[1] ) );
+                }
+            }
+        }
+        $resp = array(
+            'id'         => $id,
+            'title'      => get_the_title( $id ),
+            'link'       => get_permalink( $id ),
+            'meta'       => $meta,
+            'computed'   => array(
+                'eta_s'     => $eta_s ?: null,
+                'eta_text'  => $eta_s ? gmdate( 'H:i:s', $eta_s ) : null,
+                'distance_km' => $distance_m ? round( $distance_m/1000.0, 2 ) : null,
+            ),
+            'maps_url'   => $maps_url,
+        );
+        return rest_ensure_response( $resp );
+    }
+
  /*    protected function prepare_route_response( $post_id ) {
         $post = get_post( $post_id );
         $meta = array();
@@ -992,6 +1083,165 @@ class TVS_REST {
         wp_reset_postdata();
 
         return rest_ensure_response( $out );
+    }
+
+    /**
+     * GET /tvs/v1/activities/stats
+     * Returns best time, averages and most recent for the current user, optionally scoped to a route.
+     */
+    public function get_activity_stats( $request ) {
+        $user_id  = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        $route_id = (int) $request->get_param( 'route_id' );
+        $force = isset( $_GET['tvsforcefetch'] ) && $_GET['tvsforcefetch'];
+
+        // Transient cache (short TTL)
+        $cache_key = 'tvs_stats_' . md5( json_encode( array( 'u'=>$user_id, 'r'=>$route_id ) ) );
+        if ( ! $force ) {
+            $cached = get_transient( $cache_key );
+            if ( $cached !== false ) return rest_ensure_response( $cached );
+        }
+
+        $meta_query = array();
+        if ( $route_id > 0 ) {
+            $meta_query[] = array( 'key' => 'route_id', 'value' => (string) $route_id );
+        }
+        $args = array(
+            'post_type'      => 'tvs_activity',
+            'author'         => $user_id,
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_query'     => ! empty( $meta_query ) ? $meta_query : null,
+            'fields'         => 'ids',
+        );
+        $ids = get_posts( $args );
+        $count = 0; $sum_s = 0; $sum_m = 0.0; $best_s = null; $best_id = 0; $recent_id = 0;
+        foreach ( (array) $ids as $id ) {
+            $count++;
+            $dur = get_post_meta( $id, 'duration_s', true );
+            $dist = get_post_meta( $id, 'distance_m', true );
+            $dur = is_numeric( $dur ) ? (int) $dur : 0;
+            $dist = is_numeric( $dist ) ? (float) $dist : 0.0;
+            if ( $dur > 0 ) {
+                if ( $best_s === null || $dur < $best_s ) { $best_s = $dur; $best_id = (int) $id; }
+                $sum_s += $dur;
+            }
+            if ( $dist > 0 ) { $sum_m += $dist; }
+            if ( ! $recent_id ) { $recent_id = (int) $id; } // first in DESC order
+        }
+        $avg_pace_s_per_km = null; $avg_speed_kmh = null;
+        if ( $sum_m > 0 && $sum_s > 0 ) {
+            $avg_pace_s_per_km = ( $sum_s / ( $sum_m / 1000.0 ) );
+            $avg_speed_kmh = ( $sum_m / 1000.0 ) / ( $sum_s / 3600.0 );
+        }
+        $best = null; $recent = null;
+        if ( $best_id ) {
+            $best = array(
+                'id' => $best_id,
+                'permalink' => get_permalink( $best_id ),
+                'title' => get_the_title( $best_id ),
+                'date'  => get_the_date( 'c', $best_id ),
+                'duration_s' => $best_s,
+            );
+        }
+        if ( $recent_id ) {
+            $recent = array(
+                'id' => $recent_id,
+                'permalink' => get_permalink( $recent_id ),
+                'title' => get_the_title( $recent_id ),
+                'date'  => get_the_date( 'c', $recent_id ),
+                'duration_s' => (int) get_post_meta( $recent_id, 'duration_s', true ),
+            );
+        }
+        $resp = array(
+            'count' => (int) $count,
+            'best'  => $best,
+            'avg'   => array(
+                'pace_s_per_km' => $avg_pace_s_per_km ? (int) round( $avg_pace_s_per_km ) : null,
+                'pace_text'     => $avg_pace_s_per_km ? gmdate( 'i:s', (int) round( $avg_pace_s_per_km ) ) . ' /km' : null,
+                'speed_kmh'     => $avg_speed_kmh ? round( $avg_speed_kmh, 2 ) : null,
+            ),
+            'recent' => $recent,
+        );
+        set_transient( $cache_key, $resp, 90 );
+        return rest_ensure_response( $resp );
+    }
+
+    /**
+     * GET /tvs/v1/activities/aggregate
+     * Returns daily counts for the last N days for the current user, optionally filtered by route.
+     */
+    public function get_activity_aggregate( $request ) {
+        $user_id  = get_current_user_id();
+        if ( ! $user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        $route_id = (int) $request->get_param( 'route_id' );
+        $days     = max( 7, min( 365, (int) $request->get_param( 'days' ) ?: 180 ) );
+        $since_ts = strtotime( '-' . $days . ' days' );
+        $since    = gmdate( 'Y-m-d', $since_ts ?: time() );
+        $force    = isset( $_GET['tvsforcefetch'] ) && $_GET['tvsforcefetch'];
+
+        // Transient cache (short TTL)
+        $cache_key = 'tvs_aggr_' . md5( json_encode( array( 'u'=>$user_id, 'r'=>$route_id, 'd'=>$days ) ) );
+        if ( ! $force ) {
+            $cached = get_transient( $cache_key );
+            if ( $cached !== false ) return rest_ensure_response( $cached );
+        }
+
+        $meta_query = array();
+        if ( $route_id > 0 ) {
+            $meta_query[] = array( 'key' => 'route_id', 'value' => (string) $route_id );
+        }
+        $args = array(
+            'post_type'      => 'tvs_activity',
+            'author'         => $user_id,
+            'posts_per_page' => -1,
+            'post_status'    => 'any',
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'date_query'     => array( array( 'after' => $since, 'inclusive' => true ) ),
+            'meta_query'     => ! empty( $meta_query ) ? $meta_query : null,
+            'fields'         => 'ids',
+        );
+        $ids = get_posts( $args );
+        // Prepare all days map with zeros and accumulators
+        $map = array();
+        for ( $i = $days - 1; $i >= 0; $i-- ) {
+            $d = gmdate( 'Y-m-d', strtotime( '-' . $i . ' days' ) );
+            $map[ $d ] = array(
+                'count' => 0,
+                'distance_m' => 0,
+                'duration_s' => 0,
+            );
+        }
+        foreach ( (array) $ids as $id ) {
+            $d = get_post_meta( $id, 'activity_date', true );
+            if ( ! $d ) { $d = get_post_time( 'Y-m-d', true, $id ); }
+            if ( ! $d ) { $d = gmdate( 'Y-m-d', strtotime( (string) get_post_field( 'post_date_gmt', $id ) ) ); }
+            $d = substr( (string) $d, 0, 10 );
+            if ( isset( $map[ $d ] ) ) {
+                $map[ $d ]['count']++;
+                $dist = (float) get_post_meta( $id, 'distance_m', true );
+                $dur  = (float) get_post_meta( $id, 'duration_s', true );
+                if ( $dist > 0 ) { $map[ $d ]['distance_m'] += $dist; }
+                if ( $dur > 0 ) { $map[ $d ]['duration_s'] += $dur; }
+            }
+        }
+        $items = array();
+        foreach ( $map as $date => $agg ) {
+            $distance_km = $agg['distance_m'] > 0 ? round( $agg['distance_m'] / 1000, 2 ) : 0.0;
+            $avg_pace_s = ($agg['distance_m'] > 0) ? (int) round( $agg['duration_s'] / max(0.001, $agg['distance_m'] / 1000) ) : null;
+            $items[] = array(
+                'date' => $date,
+                'count' => (int) $agg['count'],
+                'distance_km' => $distance_km,
+                'avg_pace_s_per_km' => $avg_pace_s,
+            );
+        }
+        $resp = array( 'days' => $days, 'items' => $items );
+        set_transient( $cache_key, $resp, 90 );
+        return rest_ensure_response( $resp );
     }
 
     

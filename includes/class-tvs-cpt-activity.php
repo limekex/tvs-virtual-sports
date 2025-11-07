@@ -21,12 +21,15 @@ class TVS_CPT_Activity {
 
         register_post_type( 'tvs_activity', array(
             'labels' => $labels,
-            'public' => false,
+            'public' => false, // not publicly listed
+            'publicly_queryable' => true, // allow direct viewing by URL
+            'exclude_from_search' => true,
             'show_ui' => true,
             'show_in_rest' => true,
+            'query_var' => 'tvs_activity', // explicit query var to avoid rewrite ambiguity
             'supports' => array( 'title' ),
             'has_archive' => false,
-            'rewrite' => false,
+            'rewrite' => array( 'slug' => 'activity', 'with_front' => false ),
         ) );
 
         // Register activity meta keys and expose to REST
