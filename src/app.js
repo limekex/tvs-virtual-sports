@@ -290,18 +290,21 @@ export default function App({ initialData, routeId }) {
       } catch (e) {
         err('pause before save failed:', e);
       }
-      const seconds = await player.getCurrentTime();
-      const durationS = Math.max(0, Math.floor(seconds || 0));
-      const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1000).toISOString();
-      const distanceM = estimateDistance(durationS);
+  const seconds = await player.getCurrentTime();
+  const durationS = Math.max(0, Math.floor(seconds || 0));
+  const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1000).toISOString();
+  const endISO = new Date(new Date(startISO).getTime() + durationS * 1000).toISOString();
+  const distanceM = estimateDistance(durationS);
 
       const payload = {
         route_id: data.id,
         route_name: data.title || 'Unknown Route',
         activity_date: new Date().toISOString(),
         started_at: startISO,
+        ended_at: endISO,
         duration_s: durationS,
         distance_m: distanceM,
+        visibility: 'private',
       };
       const nonce = window.TVS_SETTINGS?.nonce || '';
 

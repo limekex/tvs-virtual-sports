@@ -81,6 +81,13 @@ class TVS_Admin {
 		// Add Strava connection info to user profile pages
 		add_action( 'show_user_profile', array( $this, 'show_strava_profile_fields' ) );
 		add_action( 'edit_user_profile', array( $this, 'show_strava_profile_fields' ) );
+
+        // Activity list table enhancements
+        add_filter( 'manage_tvs_activity_posts_columns', array( $this, 'activity_columns' ) );
+        add_action( 'manage_tvs_activity_posts_custom_column', array( $this, 'render_activity_column' ), 10, 2 );
+        add_action( 'restrict_manage_posts', array( $this, 'activity_filters' ) );
+        add_filter( 'parse_query', array( $this, 'filter_activity_query' ) );
+        add_action( 'admin_notices', array( $this, 'activity_stats_banner' ) );
 	}
 
 	/**
@@ -139,6 +146,165 @@ class TVS_Admin {
 			'tvs-security',
 			array( $this, 'render_security_settings_page' )
 		);
+	}
+
+	/**
+	 * Add custom columns to tvs_activity list table
+	 */
+	public function activity_columns( $cols ) {
+		// Preserve checkbox & title but replace date
+		$new = array();
+		foreach ( $cols as $k => $v ) {
+			if ( 'date' === $k ) continue; // we'll add our own at end
+			$new[ $k ] = $v;
+		}
+		$new['route']    = __( 'Route', 'tvs-virtual-sports' );
+		$new['distance'] = __( 'Distance', 'tvs-virtual-sports' );
+		$new['duration'] = __( 'Duration', 'tvs-virtual-sports' );
+		$new['pace']     = __( 'Pace', 'tvs-virtual-sports' );
+		$new['type']     = __( 'Type', 'tvs-virtual-sports' );
+		$new['synced']   = __( 'Synced', 'tvs-virtual-sports' );
+		$new['date']     = __( 'Date', 'tvs-virtual-sports' );
+		return $new;
+	}
+
+	/**
+	 * Render custom column values
+	 */
+	public function render_activity_column( $col, $post_id ) {
+		if ( get_post_type( $post_id ) !== 'tvs_activity' ) return;
+		switch ( $col ) {
+			case 'route':
+				$rid = get_post_meta( $post_id, 'route_id', true );
+				$rname = get_post_meta( $post_id, 'route_name', true );
+				if ( $rid ) {
+					echo '<a href="' . esc_url( get_permalink( (int) $rid ) ) . '">' . esc_html( $rname ?: ('#' . $rid) ) . '</a>';
+				} else {
+					echo '—';
+				}
+				break;
+			case 'distance':
+				$m = (float) get_post_meta( $post_id, 'distance_m', true );
+				echo $m > 0 ? esc_html( round( $m / 1000, 2 ) . ' km' ) : '—';
+				break;
+			case 'duration':
+				$s = (int) get_post_meta( $post_id, 'duration_s', true );
+				if ( $s > 0 ) {
+					$h = intdiv( $s, 3600 ); $rem = $s % 3600; $m = intdiv( $rem, 60 ); $sec = $rem % 60;
+					echo esc_html( $h > 0 ? sprintf( '%dh %02d:%02d', $h, $m, $sec ) : sprintf( '%02d:%02d', $m, $sec ) );
+				} else { echo '—'; }
+				break;
+			case 'pace':
+				$pace = (int) get_post_meta( $post_id, 'pace_s_per_km', true );
+				if ( $pace > 0 ) {
+					echo esc_html( gmdate( 'i:s', $pace ) . ' /km' );
+				} else {
+					// Derive on the fly if not stored
+					$m = (float) get_post_meta( $post_id, 'distance_m', true );
+					$s = (int) get_post_meta( $post_id, 'duration_s', true );
+					if ( $m > 0 && $s > 0 ) {
+						$p = (int) round( $s / max( 0.001, $m / 1000 ) );
+						echo esc_html( gmdate( 'i:s', $p ) . ' /km' );
+					} else { echo '—'; }
+				}
+				break;
+			case 'type':
+				$terms = wp_get_post_terms( $post_id, 'tvs_activity_type', array( 'fields' => 'names' ) );
+				echo $terms ? esc_html( implode( ', ', $terms ) ) : '—';
+				break;
+			case 'synced':
+				$synced = get_post_meta( $post_id, '_tvs_synced_strava', true );
+				if ( $synced ) {
+					$rid = get_post_meta( $post_id, '_tvs_strava_remote_id', true );
+					$url = $rid ? 'https://www.strava.com/activities/' . rawurlencode( $rid ) : '';
+					echo '<span style="color:#46b450;font-weight:600;">✓</span>' . ( $url ? ' <a href="' . esc_url( $url ) . '" target="_blank" rel="noopener">' . esc_html__( 'View', 'tvs-virtual-sports' ) . '</a>' : '' );
+				} else {
+					echo '<span style="color:#666;">' . esc_html__( 'No', 'tvs-virtual-sports' ) . '</span>';
+				}
+				break;
+		}
+	}
+
+	/** Filter dropdowns above list */
+	public function activity_filters() {
+		global $typenow;
+		if ( $typenow !== 'tvs_activity' ) return;
+		// Activity type filter
+		$selected_type = isset( $_GET['tvs_activity_type'] ) ? sanitize_text_field( $_GET['tvs_activity_type'] ) : '';
+		$types = get_terms( array( 'taxonomy' => 'tvs_activity_type', 'hide_empty' => false ) );
+		echo '<select name="tvs_activity_type" style="max-width:160px;">';
+		echo '<option value="">' . esc_html__( 'All types', 'tvs-virtual-sports' ) . '</option>';
+		foreach ( $types as $t ) {
+			printf( '<option value="%1$s" %2$s>%3$s</option>', esc_attr( $t->slug ), selected( $selected_type, $t->slug, false ), esc_html( $t->name ) );
+		}
+		echo '</select> ';
+		// Synced filter
+		$synced = isset( $_GET['tvs_synced'] ) ? sanitize_text_field( $_GET['tvs_synced'] ) : '';
+		echo '<select name="tvs_synced" style="max-width:120px;">';
+		echo '<option value="">' . esc_html__( 'Synced?', 'tvs-virtual-sports' ) . '</option>';
+		echo '<option value="yes" ' . selected( $synced, 'yes', false ) . '>' . esc_html__( 'Yes', 'tvs-virtual-sports' ) . '</option>';
+		echo '<option value="no" ' . selected( $synced, 'no', false ) . '>' . esc_html__( 'No', 'tvs-virtual-sports' ) . '</option>';
+		echo '</select> ';
+		// Route ID quick filter
+		$route_id = isset( $_GET['tvs_route_id'] ) ? (int) $_GET['tvs_route_id'] : 0;
+		echo '<input type="number" placeholder="' . esc_attr__( 'Route ID', 'tvs-virtual-sports' ) . '" name="tvs_route_id" value="' . esc_attr( $route_id ? $route_id : '' ) . '" style="width:120px;" />';
+	}
+
+	/** Apply filters to query */
+	public function filter_activity_query( $q ) {
+		if ( ! is_admin() || ! $q->is_main_query() ) return;
+		if ( $q->get( 'post_type' ) !== 'tvs_activity' ) return;
+		$meta_query = array();
+		if ( isset( $_GET['tvs_synced'] ) ) {
+			$synced = sanitize_text_field( $_GET['tvs_synced'] );
+			if ( $synced === 'yes' ) {
+				$meta_query[] = array( 'key' => '_tvs_synced_strava', 'compare' => 'EXISTS' );
+			} elseif ( $synced === 'no' ) {
+				$meta_query[] = array( 'key' => '_tvs_synced_strava', 'compare' => 'NOT EXISTS' );
+			}
+		}
+		if ( isset( $_GET['tvs_route_id'] ) && (int) $_GET['tvs_route_id'] > 0 ) {
+			$meta_query[] = array( 'key' => 'route_id', 'value' => (string) (int) $_GET['tvs_route_id'] );
+		}
+		if ( ! empty( $meta_query ) ) {
+			$q->set( 'meta_query', $meta_query );
+		}
+		// Tax filter for type
+		if ( isset( $_GET['tvs_activity_type'] ) && $_GET['tvs_activity_type'] !== '' ) {
+			$q->set( 'tax_query', array( array( 'taxonomy' => 'tvs_activity_type', 'field' => 'slug', 'terms' => sanitize_text_field( $_GET['tvs_activity_type'] ) ) ) );
+		}
+	}
+
+	/** Banner with summary stats above list */
+	public function activity_stats_banner() {
+		global $pagenow, $typenow;
+		if ( $pagenow !== 'edit.php' || $typenow !== 'tvs_activity' ) return;
+		// Compute stats quickly (limit scope)
+		$args = array( 'post_type' => 'tvs_activity', 'posts_per_page' => -1, 'fields' => 'ids', 'post_status' => 'publish' );
+		$ids = get_posts( $args );
+		if ( ! $ids ) return;
+		$route_count = array(); $user_count = array();
+		foreach ( $ids as $id ) {
+			$rid = get_post_meta( $id, 'route_id', true );
+			if ( $rid ) { $route_count[ $rid ] = isset( $route_count[ $rid ] ) ? $route_count[ $rid ] + 1 : 1; }
+			$author = get_post_field( 'post_author', $id );
+			if ( $author ) { $user_count[ $author ] = isset( $user_count[ $author ] ) ? $user_count[ $author ] + 1 : 1; }
+		}
+		arsort( $route_count ); arsort( $user_count );
+		$top_route_id = key( $route_count ); $top_route_hits = current( $route_count );
+		$top_user_id  = key( $user_count ); $top_user_hits  = current( $user_count );
+		$route_title = $top_route_id ? get_the_title( (int) $top_route_id ) : '';
+		$user_obj = $top_user_id ? get_user_by( 'id', (int) $top_user_id ) : null;
+		$user_name = $user_obj ? $user_obj->display_name : '';
+		echo '<div class="notice notice-info is-dismissible" style="padding:8px 12px;">';
+		echo '<strong>' . esc_html__( 'Activity stats', 'tvs-virtual-sports' ) . ':</strong> ';
+		if ( $top_route_id ) {
+			echo esc_html__( 'Most popular route', 'tvs-virtual-sports' ) . ': ' . esc_html( $route_title ?: ('#' . $top_route_id) ) . ' (' . intval( $top_route_hits ) . ') &nbsp; ';
+		}
+		if ( $top_user_id ) {
+			echo esc_html__( 'Highest performing user', 'tvs-virtual-sports' ) . ': ' . esc_html( $user_name ?: ('User #' . $top_user_id) ) . ' (' . intval( $top_user_hits ) . ')';
+		}
+		echo '</div>';
 	}
 
 	/**

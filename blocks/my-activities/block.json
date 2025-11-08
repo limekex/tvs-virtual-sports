@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/my-activities-legacy",
+  "title": "DEPRECATED: TVS My Activities (Legacy)",
+  "category": "widgets",
+  "icon": "warning",
+  "supports": { "inserter": false },
+  "editorScript": "file:./index.js",
+  "description": "Deprecated placeholder. Do not use. The active block is tvs-virtual-sports/my-activities registered via PHP."
+}

@@ -1015,9 +1015,27 @@ class TVS_REST {
             return new WP_Error( 'invalid', 'route_id required', array( 'status' => 400 ) );
         }
 
+        // Derive/normalize meta before creating post so we can set a good title
+        $route_id    = isset( $data['route_id'] ) ? (int) $data['route_id'] : 0;
+        $route_name  = isset( $data['route_name'] ) ? sanitize_text_field( $data['route_name'] ) : ( $route_id ? 'Aktivitet ' . $route_id : 'Aktivitet' );
+        $duration_s  = isset( $data['duration_s'] ) ? (int) $data['duration_s'] : 0;
+        $started_raw = ! empty( $data['started_at'] ) ? sanitize_text_field( $data['started_at'] ) : '';
+        $ended_raw   = ! empty( $data['ended_at'] ) ? sanitize_text_field( $data['ended_at'] ) : '';
+        if ( ! $ended_raw && $started_raw && $duration_s > 0 ) {
+            $maybe_ts = strtotime( $started_raw ) + $duration_s;
+            if ( $maybe_ts ) {
+                $ended_raw = gmdate( 'c', $maybe_ts );
+                $data['ended_at'] = $ended_raw; // make available for saving loop
+            }
+        }
+        $date_for_title = $ended_raw ?: ( $data['activity_date'] ?? $started_raw );
+        $ts = $date_for_title ? strtotime( $date_for_title ) : false;
+        $title_dt = $ts ? date_i18n( 'd.m.Y H:i', $ts ) : date_i18n( 'd.m.Y H:i', current_time( 'timestamp' ) );
+        $nice_title = trim( sprintf( '%s (%s)', $route_name, $title_dt ) );
+
         $postarr = array(
-            'post_title' => sprintf( 'Activity: %s by %d', intval( $data['route_id'] ), $user_id ),
-            'post_type' => 'tvs_activity',
+            'post_title'  => $nice_title,
+            'post_type'   => 'tvs_activity',
             'post_status' => 'publish',
             'post_author' => $user_id,
         );
@@ -1027,12 +1045,27 @@ class TVS_REST {
             return $post_id;
         }
 
+        // Enforce numeric slug == post ID for clean /activity/{id} URLs
+        wp_update_post( array( 'ID' => $post_id, 'post_name' => (string) $post_id ) );
+
         // Save meta
-        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id');
+        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility');
         foreach ( $keys as $k ) {
             if ( isset( $data[ $k ] ) ) {
                 update_post_meta( $post_id, $k, sanitize_text_field( $data[ $k ] ) );
             }
+        }
+
+        // Default visibility if not provided
+        if ( empty( $data['visibility'] ) ) {
+            update_post_meta( $post_id, 'visibility', 'private' );
+        }
+
+        // Derived pace (seconds per km) if distance + duration present and distance>0
+        $dist = isset( $data['distance_m'] ) ? (float) $data['distance_m'] : 0.0;
+        if ( $dist > 1 && $duration_s > 0 ) {
+            $pace = (int) round( $duration_s / max( 0.001, $dist / 1000.0 ) );
+            update_post_meta( $post_id, 'pace_s_per_km', (string) $pace );
         }
 
         return rest_ensure_response( array( 'id' => $post_id ) );

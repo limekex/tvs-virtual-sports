@@ -52,6 +52,9 @@ class TVS_Plugin {
 
         // One-time rewrite flush when plugin version changes (ensures CPT permalinks like /activity/ work after updates)
         add_action( 'init', array( $this, 'maybe_flush_rewrite' ), 20 );
+
+        // Enforce activity privacy on front-end views
+        add_action( 'template_redirect', array( $this, 'guard_activity_privacy' ) );
     }
 
     public function load_textdomain() {
@@ -536,6 +539,36 @@ class TVS_Plugin {
         }
         if ( method_exists( $tax, 'register_taxonomies' ) ) {
             $tax->register_taxonomies();
+        }
+    }
+
+    /**
+     * If viewing a single tvs_activity, check its visibility.
+     * Private: only the author can view (404 for others).
+     * Public: anyone with the link can view.
+     */
+    public function guard_activity_privacy() {
+        if ( ! is_singular( 'tvs_activity' ) ) {
+            return;
+        }
+        $post = get_queried_object();
+        if ( ! $post || empty( $post->ID ) ) { return; }
+        $visibility = get_post_meta( $post->ID, 'visibility', true );
+        if ( $visibility !== 'public' ) {
+            $visibility = 'private';
+        }
+        if ( 'private' === $visibility ) {
+            $author_id = isset( $post->post_author ) ? intval( $post->post_author ) : 0;
+            $current   = get_current_user_id();
+            if ( $current !== $author_id ) {
+                // Hide existence
+                global $wp_query; $wp_query->set_404();
+                status_header( 404 );
+                nocache_headers();
+                // Use theme 404 template
+                include get_query_template( '404' );
+                exit;
+            }
         }
     }
 }

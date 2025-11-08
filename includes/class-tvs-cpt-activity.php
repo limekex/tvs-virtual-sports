@@ -33,7 +33,7 @@ class TVS_CPT_Activity {
         ) );
 
         // Register activity meta keys and expose to REST
-        $keys = array('route_id','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id');
+        $keys = array('route_id','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility');
         foreach ( $keys as $meta_key ) {
             register_post_meta( 'tvs_activity', $meta_key, array(
                 'show_in_rest' => true,
@@ -42,6 +42,18 @@ class TVS_CPT_Activity {
                 'sanitize_callback' => 'sanitize_text_field',
             ) );
         }
+        // Stricter control for visibility (only authors/admins can update)
+        register_post_meta( 'tvs_activity', 'visibility', array(
+            'show_in_rest' => true,
+            'single' => true,
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'auth_callback' => function() {
+                if ( ! current_user_can( 'edit_post', get_the_ID() ) ) { return false; }
+                return true;
+            },
+            'default' => 'private',
+        ) );
     }
 
     public function save_meta( $post_id, $post ) {
@@ -62,7 +74,7 @@ class TVS_CPT_Activity {
         }
 
         $keys = array(
-            'route_id', 'started_at', 'ended_at', 'duration_s', 'distance_m', 'avg_hr', 'max_hr', 'perceived_exertion', 'synced_strava', 'strava_activity_id'
+            'route_id', 'started_at', 'ended_at', 'duration_s', 'distance_m', 'avg_hr', 'max_hr', 'perceived_exertion', 'synced_strava', 'strava_activity_id', 'visibility'
         );
 
         if ( isset( $_POST['tvs_activity_meta'] ) && is_array( $_POST['tvs_activity_meta'] ) ) {
@@ -70,6 +82,47 @@ class TVS_CPT_Activity {
                 if ( isset( $_POST['tvs_activity_meta'][ $k ] ) ) {
                     update_post_meta( $post_id, $k, sanitize_text_field( wp_unslash( $_POST['tvs_activity_meta'][ $k ] ) ) );
                 }
+            }
+        }
+
+        // Mirror underscore-prefixed Strava sync fields into human-readable ones if they exist (legacy compatibility)
+        $legacy_synced = get_post_meta( $post_id, '_tvs_synced_strava', true );
+        if ( $legacy_synced !== '' && get_post_meta( $post_id, 'synced_strava', true ) === '' ) {
+            update_post_meta( $post_id, 'synced_strava', $legacy_synced );
+        }
+        $legacy_remote = get_post_meta( $post_id, '_tvs_strava_remote_id', true );
+        if ( $legacy_remote !== '' && get_post_meta( $post_id, 'strava_activity_id', true ) === '' ) {
+            update_post_meta( $post_id, 'strava_activity_id', $legacy_remote );
+        }
+
+        // Automatically set a friendly title and numeric slug per requirements
+        // Title format: "Fullført {ended_at date - time}" (fallback to current time if missing)
+        $post = get_post( $post_id );
+        if ( $post && 'tvs_activity' === $post->post_type ) {
+            $ended_at = get_post_meta( $post_id, 'ended_at', true );
+            $timestamp = $ended_at ? strtotime( $ended_at ) : current_time( 'timestamp' );
+            if ( $timestamp ) {
+                $title = sprintf( __( 'Fullført %s', 'tvs-virtual-sports' ), date_i18n( 'j. F Y – H:i', $timestamp ) );
+            } else {
+                $title = sprintf( __( 'Fullført %s', 'tvs-virtual-sports' ), date_i18n( 'j. F Y – H:i', current_time( 'timestamp' ) ) );
+            }
+
+            // Update title if empty or set to an auto-draft/placeholder
+            $should_update_title = ( empty( $post->post_title ) || 'auto-draft' === $post->post_status );
+
+            // Always enforce numeric slug == post ID once (if not already)
+            $desired_slug = (string) $post_id;
+            $should_update_slug = ( $post->post_name !== $desired_slug );
+
+            if ( $should_update_title || $should_update_slug ) {
+                // Prevent infinite save loop
+                remove_action( 'save_post_tvs_activity', array( $this, 'save_meta' ), 10 );
+                wp_update_post( array(
+                    'ID'         => $post_id,
+                    'post_title' => $should_update_title ? $title : $post->post_title,
+                    'post_name'  => $desired_slug,
+                ) );
+                add_action( 'save_post_tvs_activity', array( $this, 'save_meta' ), 10, 2 );
             }
         }
     }
@@ -88,19 +141,63 @@ class TVS_CPT_Activity {
     public function render_meta_box( $post ) {
         wp_nonce_field( 'tvs_save_activity_meta', 'tvs_activity_meta_nonce' );
 
-        $keys = array('route_id','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id');
+        $keys = array('route_id','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility');
         echo '<div class="tvs-activity-meta">';
         foreach ( $keys as $k ) {
-            $val = get_post_meta( $post->ID, $k, true );
+            $val_raw = get_post_meta( $post->ID, $k, true );
+            // Fallback for legacy underscore-prefixed Strava meta if not yet mirrored
+            if ( $val_raw === '' ) {
+                if ( $k === 'synced_strava' ) {
+                    $val_raw = get_post_meta( $post->ID, '_tvs_synced_strava', true );
+                } elseif ( $k === 'strava_activity_id' ) {
+                    $val_raw = get_post_meta( $post->ID, '_tvs_strava_remote_id', true );
+                }
+            }
+
+            // Skip visibility here; custom select rendered separately to avoid duplicate IDs
+            if ( $k === 'visibility' ) {
+                continue;
+            }
+
             $label = esc_html( str_replace( '_', ' ', $k ) );
+
+            // Detect datetime fields and format for datetime-local input
+            $is_datetime = in_array( $k, array( 'started_at', 'ended_at', 'activity_date' ), true );
+            $input_type  = $is_datetime ? 'datetime-local' : 'text';
+            $display_val = $val_raw;
+            if ( $is_datetime && ! empty( $val_raw ) ) {
+                $ts = strtotime( $val_raw );
+                if ( $ts ) {
+                    // HTML datetime-local requires no timezone designator; use site local time
+                    $display_val = date( 'Y-m-d\TH:i', $ts );
+                }
+            }
+
             printf(
-                '<p><label for="tvs_activity_meta_%1$s">%2$s</label><br/><input type="text" id="tvs_activity_meta_%1$s" name="tvs_activity_meta[%1$s]" value="%3$s" class="widefat"/></p>',
+                '<p><label for="tvs_activity_meta_%1$s">%2$s</label><br/><input type="%5$s" id="tvs_activity_meta_%1$s" name="tvs_activity_meta[%1$s]" value="%3$s" class="widefat" %4$s /></p>',
                 esc_attr( $k ),
                 esc_html( ucfirst( $label ) ),
-                esc_attr( $val )
+                esc_attr( $display_val ),
+                $is_datetime ? 'step="60"' : '',
+                esc_attr( $input_type )
             );
         }
+
+        // Visibility selector (private/public)
+        $visibility = get_post_meta( $post->ID, 'visibility', true );
+        if ( $visibility !== 'public' ) { $visibility = 'private'; }
+        echo '<p><label for="tvs_activity_meta_visibility"><strong>' . esc_html__( 'Visibility', 'tvs-virtual-sports' ) . '</strong></label><br/>';
+        echo '<select id="tvs_activity_meta_visibility" name="tvs_activity_meta[visibility]" class="widefat">';
+        echo '<option value="private"' . selected( $visibility, 'private', false ) . '>' . esc_html__( 'Private (only you)', 'tvs-virtual-sports' ) . '</option>';
+        echo '<option value="public"' . selected( $visibility, 'public', false ) . '>' . esc_html__( 'Public (shareable link)', 'tvs-virtual-sports' ) . '</option>';
+        echo '</select></p>';
         echo '<p class="description">' . esc_html__( 'Activity meta: set started/ended timestamps, duration (s), distance (m), heart rate etc.', 'tvs-virtual-sports' ) . '</p>';
+        // Strava quick link if synced
+        $remote_id = get_post_meta( $post->ID, '_tvs_strava_remote_id', true );
+        if ( $remote_id ) {
+            $url = 'https://www.strava.com/activities/' . rawurlencode( $remote_id );
+            echo '<p><a href="' . esc_url( $url ) . '" target="_blank" rel="noopener" style="font-weight:600;">' . esc_html__( 'View on Strava →', 'tvs-virtual-sports' ) . '</a></p>';
+        }
         echo '</div>';
     }
 }
