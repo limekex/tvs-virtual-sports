@@ -1081,23 +1081,6 @@ class TVS_Admin {
 		<?php
 	}
 
-	/** Render Frost Client ID field */
-	public function render_frost_client_id_field() {
-		$value = (string) get_option( 'tvs_frost_client_id', '' );
-		?>
-		<input type="text"
-			id="tvs_frost_client_id"
-			name="tvs_frost_client_id"
-			value="<?php echo esc_attr( $value ); ?>"
-			class="regular-text"
-			placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-		/>
-		<p class="description">
-			<?php esc_html_e( 'Client ID for accessing Frost API (free historical weather data from MET Norway).', 'tvs-virtual-sports' ); ?>
-		</p>
-		<?php
-	}
-
 	/** Render Security settings page */
 	public function render_security_settings_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -1114,6 +1097,23 @@ class TVS_Admin {
 				?>
 			</form>
 		</div>
+		<?php
+	}
+
+	/** Render Frost Client ID field */
+	public function render_frost_client_id_field() {
+		$value = (string) get_option( 'tvs_frost_client_id', '' );
+		?>
+		<input type="text"
+			id="tvs_frost_client_id"
+			name="tvs_frost_client_id"
+			value="<?php echo esc_attr( $value ); ?>"
+			class="regular-text"
+			placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+		/>
+		<p class="description">
+			<?php esc_html_e( 'Client ID for accessing Frost API (free historical weather data from MET Norway).', 'tvs-virtual-sports' ); ?>
+		</p>
 		<?php
 	}
 
@@ -1145,7 +1145,7 @@ class TVS_Admin {
 			<p><?php esc_html_e( 'Clear all cached weather data. This will force fresh API requests for all routes.', 'tvs-virtual-sports' ); ?></p>
 			<form method="post" action="">
 				<?php wp_nonce_field( 'tvs_clear_weather_cache' ); ?>
-				<button type="submit" name="tvs_clear_weather_cache" class="button button-secondary" 
+				<button type="submit" name="tvs_clear_weather_cache" class="button button-secondary"
 					onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to clear all weather caches?', 'tvs-virtual-sports' ); ?>');">
 					<?php esc_html_e( 'Clear All Weather Caches', 'tvs-virtual-sports' ); ?>
 				</button>

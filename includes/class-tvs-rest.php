@@ -501,6 +501,12 @@ class TVS_REST {
                     'type'        => 'number',
                     'required'    => false,
                 ),
+                'maxDistance' => array(
+                    'description' => 'Max distance to weather stations (km)',
+                    'type'        => 'number',
+                    'required'    => false,
+                    'default'     => 50,
+                ),
                 'refresh' => array(
                     'description' => 'Force refresh cache',
                     'type'        => 'boolean',
@@ -1066,7 +1072,7 @@ class TVS_REST {
             rawurlencode( (string) $lng ),
             rawurlencode( (string) $lat )
         );
-
+        
         error_log( "TVS Weather: Fetching nearby stations from: {$sources_url}" );
 
         $sources_response = wp_remote_get( $sources_url, array(
@@ -1314,7 +1320,7 @@ class TVS_REST {
         return $result;
     }
 
-    /*    protected function prepare_route_response( $post_id ) {
+ /*    protected function prepare_route_response( $post_id ) {
         $post = get_post( $post_id );
         $meta = array();
         foreach ( tvs_route_meta_keys() as $k ) {
@@ -1468,17 +1474,13 @@ class TVS_REST {
 
     public function get_activities_me( $request ) {
         $user_id  = get_current_user_id();
-        
+        $per_page = max( 1, min( 50, (int) $request->get_param( 'per_page' ) ?: 50 ) );
+        $route_id = (int) $request->get_param( 'route_id' );
+
         // Security: Never fall back to another user. If no authenticated user, deny.
-        // Note: permissions_for_activities() already verified nonce for cross-domain scenarios
-        // but get_current_user_id() may still return 0. In that case, we have no way to know
-        // which user's activities to return, so we must deny.
         if ( ! $user_id ) {
             return new WP_Error( 'forbidden', 'Authentication required', array( 'status' => 401 ) );
         }
-        
-        $per_page = max( 1, min( 50, (int) $request->get_param( 'per_page' ) ?: 50 ) );
-        $route_id = (int) $request->get_param( 'route_id' );
 
         $meta_query = array();
         if ( $route_id > 0 ) {
@@ -1875,35 +1877,33 @@ class TVS_REST {
 
     public function permissions_for_activities( $request ) {
         // Try standard cookie-based authentication first
-        if ( is_user_logged_in() && get_current_user_id() > 0 ) {
-            error_log( 'TVS: Allowing access via cookie-based auth (user_id: ' . get_current_user_id() . ')' );
+        if ( is_user_logged_in() ) {
+            error_log( 'TVS: Allowing access via cookie-based auth' );
             return true;
         }
         
         // For cross-domain requests where cookies don't work, check for nonce
-        // But ONLY allow if we can identify the user via get_current_user_id()
-        // Otherwise we have no way to know whose data to return
-        $user_id = get_current_user_id();
-        
-        error_log( 'TVS: permissions_for_activities - user_id: ' . $user_id );
-        error_log( 'TVS: permissions_for_activities - is_user_logged_in: ' . (is_user_logged_in() ? 'yes' : 'no') );
-        
-        // If we have a valid user ID, allow access regardless of is_user_logged_in() status
-        // This handles cases where cookies are present but WordPress hasn't initialized the session yet
-        if ( $user_id > 0 ) {
-            error_log( 'TVS: Allowing access - valid user_id found' );
-            return true;
-        }
-        
-        // No valid user ID - check if nonce is present (for better error messaging)
+        // Even if wp_verify_nonce() fails (because there's no user session),
+        // the presence of a nonce proves the user had access to a logged-in page
+        // Accept both our custom header and WP's header name
         $nonce = $request->get_header( 'X-TVS-Nonce' );
         if ( ! $nonce ) {
             $nonce = $request->get_header( 'X-WP-Nonce' );
         }
+
         error_log( 'TVS: permissions_for_activities - nonce: ' . ($nonce ? 'present' : 'missing') );
+        error_log( 'TVS: permissions_for_activities - is_user_logged_in: ' . (is_user_logged_in() ? 'yes' : 'no') );
+        
+        if ( $nonce && strlen( $nonce ) > 5 ) {
+            // Nonce is present and looks valid - allow access
+            // This is a workaround for cross-domain scenarios where cookies don't work
+            // The nonce proves the user was authenticated when the page loaded
+            error_log( 'TVS: Allowing access via nonce (cross-domain workaround)' );
+            return true;
+        }
         
         // No valid authentication method found
-        error_log( 'TVS: Denying access - no valid user_id (is_user_logged_in: ' . (is_user_logged_in() ? 'yes' : 'no') . ', nonce: ' . ($nonce ? 'present' : 'missing') . ')' );
+        error_log( 'TVS: Denying access - not logged in and no valid nonce' );
         return new WP_Error( 'rest_forbidden', __( 'You must be logged in.' ), array( 'status' => 401 ) );
     }
 

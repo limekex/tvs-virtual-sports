@@ -31,7 +31,7 @@ registerBlockType('tvs-virtual-sports/route-weather', {
                         />
                         <ToggleControl
                             label={__('Debug Mode', 'tvs-virtual-sports')}
-                            help={__('Show debug information including API requests and station data', 'tvs-virtual-sports')}
+                            help={__('Show raw weather data and API responses.', 'tvs-virtual-sports')}
                             checked={debug}
                             onChange={(value) => setAttributes({ debug: value })}
                         />
@@ -46,4 +46,5 @@ registerBlockType('tvs-virtual-sports/route-weather', {
             </>
         );
     },
+    save: () => null // Server-side rendered
 });

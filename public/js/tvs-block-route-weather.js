@@ -1,10 +1,14 @@
 /**
  * TVS Route Weather Block - Frontend async loader
  */
-console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
-
 (function() {
     'use strict';
+    
+    // Ensure TVS_SETTINGS exists
+    if (typeof TVS_SETTINGS === 'undefined') {
+        console.error('[TVS Weather] ERROR: TVS_SETTINGS is not defined!');
+        return;
+    }
 
     // Helper function to escape HTML
     function escapeHtml(text) {
@@ -22,8 +26,11 @@ console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
         const lng = container.dataset.lng || '0';
         const maxDistance = container.dataset.maxDistance || '50';
         const debug = container.dataset.debug === '1';
+        const pluginUrl = container.dataset.pluginUrl || '';
 
-        console.log('[TVS Weather] Init:', { routeId, title, maxDistance });
+        if (debug) {
+            console.log('[TVS Weather] Init:', { routeId, title, maxDistance, pluginUrl });
+        }
 
         // Build API URL
         const params = new URLSearchParams();
@@ -55,12 +62,11 @@ console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
             if (debug) {
                 console.log('[TVS Weather] Response:', result);
             }
-
             if (!result.data) {
                 throw new Error('No weather data in response');
             }
 
-            renderWeather(container, result.data, debug, title);
+            renderWeather(container, result.data, debug, title, pluginUrl);
         })
         .catch(error => {
             console.error('[TVS Weather] Error:', error);
@@ -68,13 +74,15 @@ console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
         });
     }
 
-    function renderWeather(container, weather, debug, title) {
+    function renderWeather(container, weather, debug, title, pluginUrl) {
         // Use title from container if not passed (for backwards compatibility)
         if (!title) {
             title = container.dataset.title || 'Weather Conditions';
         }
         
-        console.log('[TVS Weather] Rendering with title:', title);
+        if (debug) {
+            console.log('[TVS Weather] Rendering with title:', title);
+        }
         
         const temp = weather.temperature !== null ? Math.round(weather.temperature * 10) / 10 : null;
         const windSpeed = weather.wind_speed !== null ? Math.round(weather.wind_speed * 10) / 10 : null;
@@ -104,14 +112,32 @@ console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
 
         // Weather condition
         if (weatherInfo) {
-            const iconUrl = `${TVS_SETTINGS.pluginUrl}/assets/weather-icons/${weatherInfo.icon}`;
+            const iconUrl = pluginUrl && pluginUrl.trim() !== '' ? 
+                `${pluginUrl}/assets/weather-icons/${weatherInfo.icon}` : 
+                '';
+            
+            if (debug) {
+                console.log('[TVS Weather] Icon URL:', iconUrl);
+                console.log('[TVS Weather] pluginUrl:', pluginUrl);
+            }
+            
             html += `
                 <div class="tvs-weather-condition">
-                    <img src="${escapeHtml(iconUrl)}" 
-                         alt="${escapeHtml(weatherInfo.text)}" 
-                         class="tvs-weather-icon-svg"
-                         width="56" 
-                         height="56">
+                    ${iconUrl ? `
+                        <img src="${escapeHtml(iconUrl)}" 
+                            alt="${escapeHtml(weatherInfo.text)}" 
+                            class="tvs-weather-icon-svg"
+                            width="56" 
+                            height="56"
+                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="tvs-weather-icon-placeholder" style="display: none; width: 56px; height: 56px; background: #e5e7eb; border-radius: 10px; align-items: center; justify-content: center; font-size: 32px;">
+                            ${weatherInfo.emoji || '🌤️'}
+                        </div>
+                    ` : `
+                        <div class="tvs-weather-icon-placeholder" style="width: 56px; height: 56px; background: #e5e7eb; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 32px;">
+                            ${weatherInfo.emoji || '🌤️'}
+                        </div>
+                    `}
                     <div class="tvs-weather-condition-text">
                         <span class="tvs-weather-text">${escapeHtml(weatherInfo.text)}</span>
                         ${weather.weather_code_station ? `
@@ -174,7 +200,9 @@ console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
             </p>
         `;
 
-        console.log('[TVS Weather] Final HTML length:', html.length, 'First 200 chars:', html.substring(0, 200));
+        if (debug) {
+            console.log('[TVS Weather] Final HTML length:', html.length, 'First 200 chars:', html.substring(0, 200));
+        }
         
         container.innerHTML = html;
         container.classList.remove('tvs-weather-loading');
@@ -203,47 +231,47 @@ console.log('[TVS Weather] Script loaded!', typeof TVS_SETTINGS);
     function getWeatherInfo(code) {
         // Simplified weather code mapping (matches PHP helper)
         const weatherMap = {
-            0: { text: 'Clear sky', icon: 'clearsky_day.svg' },
-            1: { text: 'Fair', icon: 'fair_day.svg' },
-            2: { text: 'Fair', icon: 'fair_day.svg' },
-            3: { text: 'Partly cloudy', icon: 'partlycloudy_day.svg' },
-            4: { text: 'Partly cloudy', icon: 'partlycloudy_day.svg' },
-            5: { text: 'Haze', icon: 'fog.svg' },
-            10: { text: 'Mist', icon: 'fog.svg' },
-            11: { text: 'Mist', icon: 'fog.svg' },
-            12: { text: 'Mist', icon: 'fog.svg' },
-            15: { text: 'Fog', icon: 'fog.svg' },
-            20: { text: 'Recent rain', icon: 'lightrain.svg' },
-            25: { text: 'Recent rain', icon: 'lightrain.svg' },
-            26: { text: 'Recent snow', icon: 'lightsnow.svg' },
-            40: { text: 'Fog', icon: 'fog.svg' },
-            50: { text: 'Light drizzle', icon: 'lightrain.svg' },
-            51: { text: 'Light drizzle', icon: 'lightrain.svg' },
-            53: { text: 'Drizzle', icon: 'rain.svg' },
-            55: { text: 'Drizzle', icon: 'rain.svg' },
-            56: { text: 'Freezing drizzle', icon: 'rain.svg' },
-            60: { text: 'Light rain', icon: 'lightrain.svg' },
-            61: { text: 'Light rain', icon: 'lightrain.svg' },
-            63: { text: 'Rain', icon: 'rain.svg' },
-            65: { text: 'Rain', icon: 'rain.svg' },
-            66: { text: 'Freezing rain', icon: 'rain.svg' },
-            70: { text: 'Light snow', icon: 'lightsnow.svg' },
-            71: { text: 'Light snow', icon: 'lightsnow.svg' },
-            73: { text: 'Snow', icon: 'snow.svg' },
-            75: { text: 'Snow', icon: 'snow.svg' },
-            77: { text: 'Snow grains', icon: 'heavysnow.svg' },
-            80: { text: 'Rain showers', icon: 'lightrain.svg' },
-            81: { text: 'Rain showers', icon: 'lightrain.svg' },
-            83: { text: 'Sleet showers', icon: 'lightsnow.svg' },
-            85: { text: 'Sleet showers', icon: 'lightsnow.svg' },
-            86: { text: 'Snow showers', icon: 'snow.svg' },
-            90: { text: 'Thunderstorm', icon: 'lightrainandthunder.svg' },
-            95: { text: 'Thunderstorm', icon: 'lightrainandthunder.svg' },
-            96: { text: 'Thunderstorm with hail', icon: 'rainandthunder.svg' },
-            99: { text: 'Heavy thunderstorm', icon: 'rainandthunder.svg' }
+            0: { text: 'Clear sky', icon: 'clearsky_day.svg', emoji: '☀️' },
+            1: { text: 'Fair', icon: 'fair_day.svg', emoji: '🌤️' },
+            2: { text: 'Fair', icon: 'fair_day.svg', emoji: '🌤️' },
+            3: { text: 'Partly cloudy', icon: 'partlycloudy_day.svg', emoji: '⛅' },
+            4: { text: 'Partly cloudy', icon: 'partlycloudy_day.svg', emoji: '⛅' },
+            5: { text: 'Haze', icon: 'fog.svg', emoji: '🌫️' },
+            10: { text: 'Mist', icon: 'fog.svg', emoji: '🌫️' },
+            11: { text: 'Mist', icon: 'fog.svg', emoji: '🌫️' },
+            12: { text: 'Mist', icon: 'fog.svg', emoji: '🌫️' },
+            15: { text: 'Fog', icon: 'fog.svg', emoji: '🌫️' },
+            20: { text: 'Recent rain', icon: 'lightrain.svg', emoji: '🌦️' },
+            25: { text: 'Recent rain', icon: 'lightrain.svg', emoji: '🌦️' },
+            26: { text: 'Recent snow', icon: 'lightsnow.svg', emoji: '🌨️' },
+            40: { text: 'Fog', icon: 'fog.svg', emoji: '🌫️' },
+            50: { text: 'Light drizzle', icon: 'lightrain.svg', emoji: '🌦️' },
+            51: { text: 'Light drizzle', icon: 'lightrain.svg', emoji: '🌦️' },
+            53: { text: 'Drizzle', icon: 'rain.svg', emoji: '🌧️' },
+            55: { text: 'Drizzle', icon: 'rain.svg', emoji: '🌧️' },
+            56: { text: 'Freezing drizzle', icon: 'rain.svg', emoji: '🌧️' },
+            60: { text: 'Light rain', icon: 'lightrain.svg', emoji: '🌦️' },
+            61: { text: 'Light rain', icon: 'lightrain.svg', emoji: '🌦️' },
+            63: { text: 'Rain', icon: 'rain.svg', emoji: '🌧️' },
+            65: { text: 'Rain', icon: 'rain.svg', emoji: '🌧️' },
+            66: { text: 'Freezing rain', icon: 'rain.svg', emoji: '🌧️' },
+            70: { text: 'Light snow', icon: 'lightsnow.svg', emoji: '🌨️' },
+            71: { text: 'Light snow', icon: 'lightsnow.svg', emoji: '🌨️' },
+            73: { text: 'Snow', icon: 'snow.svg', emoji: '❄️' },
+            75: { text: 'Snow', icon: 'snow.svg', emoji: '❄️' },
+            77: { text: 'Snow grains', icon: 'heavysnow.svg', emoji: '❄️' },
+            80: { text: 'Rain showers', icon: 'lightrain.svg', emoji: '🌦️' },
+            81: { text: 'Rain showers', icon: 'lightrain.svg', emoji: '🌦️' },
+            83: { text: 'Sleet showers', icon: 'lightsnow.svg', emoji: '🌨️' },
+            85: { text: 'Sleet showers', icon: 'lightsnow.svg', emoji: '🌨️' },
+            86: { text: 'Snow showers', icon: 'snow.svg', emoji: '❄️' },
+            90: { text: 'Thunderstorm', icon: 'lightrainandthunder.svg', emoji: '⛈️' },
+            95: { text: 'Thunderstorm', icon: 'lightrainandthunder.svg', emoji: '⛈️' },
+            96: { text: 'Thunderstorm with hail', icon: 'rainandthunder.svg', emoji: '⛈️' },
+            99: { text: 'Heavy thunderstorm', icon: 'rainandthunder.svg', emoji: '⛈️' }
         };
 
-        return weatherMap[code] || { text: 'Unknown', icon: 'cloudy.svg' };
+        return weatherMap[code] || { text: 'Unknown', icon: 'cloudy.svg', emoji: '☁️' };
     }
 
     // Initialize all weather blocks on page load

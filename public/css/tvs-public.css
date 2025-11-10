@@ -292,7 +292,19 @@
 
 /* Simple button group layout */
 /* Button group */
-.tvs-app .tvs-btns { display: flex; gap: var(--tvs-space-2); flex-wrap: wrap; }
+.tvs-app .tvs-btns { 
+  display: flex; 
+  gap: var(--tvs-space-2); 
+  flex-wrap: wrap; 
+  align-items: center;
+  width: 100%;
+}
+
+/* Fullscreen toggle in normal mode */
+.tvs-cinematic-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+}
 
 /* Semantic button variants */
 .tvs-app .tvs-btn--primary {
@@ -706,3 +718,447 @@
 .tvs-app .tvs-route-insights-block a[href*="google.com/maps"]:hover::after {
   opacity: .7;
 }
+
+/* ========== Cinematic Mode ========== */
+
+/* Fullscreen toggle button (top-right, normal mode only) */
+.tvs-cinematic-toggle {
+  position: fixed;
+/*   top: 20px;
+  right: 20px; */
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 10px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.tvs-cinematic-toggle:hover {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.tvs-cinematic-toggle svg {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+/* Cinematic mode layout */
+.tvs-app--cinematic {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Video container with overlays */
+.tvs-video-container {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  overflow: hidden;
+}
+
+.tvs-app--cinematic .tvs-video-container {
+  height: 100%;
+}
+
+/* Cinematic mode video styling */
+.tvs-video--cinematic {
+  padding-bottom: 0 !important;
+  height: 100% !important;
+  margin-bottom: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.tvs-video--cinematic iframe {
+  position: relative !important;
+  width: 100%;
+  height: 100%;
+}
+
+.tvs-app--cinematic .tvs-video {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+}
+
+/* Video overlays */
+.tvs-video-overlay {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.tvs-video-overlay--minimap {
+  bottom: 20px;
+  right: 20px;
+  width: 280px;
+  height: 200px;
+}
+
+.tvs-video-overlay--routeinfo {
+  top: 20px;
+  right: 20px;
+  width: 260px;
+}
+
+.tvs-overlay-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* Control panel (fixed at bottom in cinematic mode) */
+.tvs-control-panel {
+  position: relative;
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hidden state - only progress bar + tab visible */
+.tvs-control-panel--hidden {
+  transform: translateY(calc(100% - 4px));
+}
+
+/* Progress bar as top border in cinematic mode */
+.tvs-control-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+.tvs-control-panel::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 4px;
+  background: var(--tvs-color-primary, #2563eb);
+  z-index: 2;
+  width: var(--progress, 0%);
+  transition: width 0.1s ease;
+}
+
+/* Small tab that sticks up from progress bar */
+.tvs-control-panel-tab {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 4px 60px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tvs-control-panel-tab:hover {
+  background: rgba(15, 23, 42, 1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tvs-control-panel-tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Panel content - slides down when hidden */
+.tvs-control-panel-content {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+/* Hide default progress bar in cinematic mode */
+.tvs-app--cinematic .tvs-progress {
+  display: none;
+}
+
+/* Cinematic controls (overlay toggles + exit button) */
+.tvs-cinematic-controls {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.tvs-cinematic-controls .tvs-btn {
+  padding: 8px 12px;
+  min-width: auto;
+}
+
+.tvs-cinematic-controls .tvs-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Smooth transitions */
+.tvs-app {
+  transition: all 0.3s ease;
+}
+
+.tvs-video-container,
+.tvs-control-panel {
+  transition: all 0.3s ease;
+}
+
+.tvs-video-overlay {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+/* ===== Weather Block Styling ===== */
+.tvs-route-weather {
+  background: var(--tvs-color-bg-elevated, #fff);
+  border: 1px solid var(--tvs-color-border-subtle, #e5e7eb);
+  border-radius: var(--tvs-radius-lg, 12px);
+  padding: var(--tvs-space-5, 20px);
+  box-shadow: var(--tvs-shadow-sm, 0 1px 2px rgba(0,0,0,.06));
+}
+
+.tvs-weather-title {
+  margin: 0 0 var(--tvs-space-4, 16px) 0;
+  font-size: var(--tvs-text-xl, 1.25rem);
+  font-weight: var(--tvs-font-semibold, 600);
+  color: var(--tvs-color-text-primary, #111827);
+}
+
+/* Weather condition with icon */
+.tvs-weather-condition {
+  display: flex;
+  align-items: center;
+  gap: var(--tvs-space-4, 16px);
+  margin-bottom: var(--tvs-space-4, 16px);
+  padding: var(--tvs-space-3, 12px);
+  background: var(--tvs-color-bg-secondary, #f9fafb);
+  border-radius: var(--tvs-radius-md, 10px);
+}
+
+.tvs-weather-icon-svg {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.tvs-weather-condition-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tvs-weather-text {
+  font-size: var(--tvs-text-lg, 1.125rem);
+  font-weight: var(--tvs-font-medium, 500);
+  color: var(--tvs-color-text-primary, #111827);
+}
+
+.tvs-weather-source {
+  font-size: var(--tvs-text-sm, 0.875rem);
+  color: var(--tvs-color-text-tertiary, #6b7280);
+}
+
+/* Weather metrics card */
+.tvs-weather-card {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--tvs-space-3, 12px);
+  margin-bottom: var(--tvs-space-4, 16px);
+}
+
+.tvs-weather-item {
+  display: flex;
+  align-items: center;
+  gap: var(--tvs-space-2, 8px);
+  padding: var(--tvs-space-3, 12px);
+  background: var(--tvs-color-bg-secondary, #f9fafb);
+  border: 1px solid var(--tvs-color-border-subtle, #e5e7eb);
+  border-radius: var(--tvs-radius-md, 8px);
+}
+
+.tvs-weather-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: var(--tvs-color-primary, #2563eb);
+}
+
+.tvs-weather-temp .tvs-weather-icon {
+  color: #ef4444; /* red for temperature */
+}
+
+.tvs-weather-wind .tvs-weather-icon {
+  color: #0ea5e9; /* cyan for wind */
+}
+
+.tvs-weather-value {
+  font-size: var(--tvs-text-lg, 1.125rem);
+  font-weight: var(--tvs-font-semibold, 600);
+  color: var(--tvs-color-text-primary, #111827);
+}
+
+.tvs-weather-dir {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: var(--tvs-text-base, 1rem);
+  transition: transform 0.3s ease;
+}
+
+/* Station info */
+.tvs-weather-station {
+  margin: var(--tvs-space-3, 12px) 0 0 0;
+  padding-top: var(--tvs-space-3, 12px);
+  border-top: 1px solid var(--tvs-color-border-subtle, #e5e7eb);
+  font-size: var(--tvs-text-sm, 0.875rem);
+  color: var(--tvs-color-text-secondary, #374151);
+  line-height: 1.5;
+}
+
+.tvs-weather-station strong {
+  font-weight: var(--tvs-font-medium, 500);
+  color: var(--tvs-color-text-primary, #111827);
+}
+
+/* Loading state */
+.tvs-route-weather .tvs-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--tvs-space-3, 12px);
+  padding: var(--tvs-space-5, 20px);
+}
+
+.tvs-route-weather .tvs-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #eee 25%, #f6f6f6 37%, #eee 63%);
+  background-size: 400% 100%;
+  animation: tvs-shimmer 1.25s linear infinite;
+}
+
+.tvs-route-weather .tvs-skel.line {
+  height: 12px;
+  width: 100%;
+  max-width: 220px;
+  margin-bottom: 10px;
+}
+
+/* Error state */
+.tvs-route-weather .tvs-alert--error {
+  display: flex;
+  align-items: center;
+  gap: var(--tvs-space-2, 8px);
+  padding: var(--tvs-space-3, 12px) var(--tvs-space-4, 16px);
+  border: 1px solid var(--tvs-color-danger, #ef4444);
+  border-radius: var(--tvs-radius-md, 10px);
+  background: color-mix(in srgb, var(--tvs-color-danger, #ef4444) 12%, #fff);
+  color: var(--tvs-color-danger-strong, #7f1d1d);
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .tvs-weather-card {
+    grid-template-columns: 1fr;
+  }
+  
+  .tvs-weather-condition {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .tvs-route-weather {
+    padding: var(--tvs-space-4, 16px);
+  }
+}
+
+/* Weather loading shimmer */
+.tvs-weather-loading {
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--tvs-space-5, 24px) var(--tvs-space-4, 16px);
+}
+
+.tvs-weather-shimmer {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--tvs-space-3, 12px);
+}
+
+.tvs-shimmer-icon {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 37%, #e5e7eb 63%);
+  background-size: 400% 100%;
+  animation: tvs-shimmer 1.4s ease-in-out infinite;
+}
+
+.tvs-shimmer-text {
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 37%, #e5e7eb 63%);
+  background-size: 400% 100%;
+  animation: tvs-shimmer 1.4s ease-in-out infinite;
+  animation-delay: 0.2s;
+}
+
+.tvs-shimmer-text:nth-child(2) {
+  height: 14px;
+  width: 70%;
+  margin: 0 auto;
+  animation-delay: 0.4s;
+}
+
+@keyframes tvs-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+

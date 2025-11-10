@@ -13,7 +13,7 @@
       container.style.position = 'fixed';
       container.style.top = '24px';
       container.style.right = '24px';
-      container.style.zIndex = '99999';
+      container.style.zIndex = '999999';
       container.style.pointerEvents = 'none';
       document.body.appendChild(container);
     }
