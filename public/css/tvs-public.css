@@ -292,7 +292,19 @@
 
 /* Simple button group layout */
 /* Button group */
-.tvs-app .tvs-btns { display: flex; gap: var(--tvs-space-2); flex-wrap: wrap; }
+.tvs-app .tvs-btns { 
+  display: flex; 
+  gap: var(--tvs-space-2); 
+  flex-wrap: wrap; 
+  align-items: center;
+  width: 100%;
+}
+
+/* Fullscreen toggle in normal mode */
+.tvs-cinematic-toggle {
+  margin-left: auto;
+  flex-shrink: 0;
+}
 
 /* Semantic button variants */
 .tvs-app .tvs-btn--primary {
@@ -712,8 +724,8 @@
 /* Fullscreen toggle button (top-right, normal mode only) */
 .tvs-cinematic-toggle {
   position: fixed;
-  top: 20px;
-  right: 20px;
+/*   top: 20px;
+  right: 20px; */
   z-index: 1000;
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(8px);
@@ -826,12 +838,16 @@
   position: relative;
   background: rgba(15, 23, 42, 0.95);
   backdrop-filter: blur(12px);
-  padding: 20px;
+  padding: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
+  flex-direction: column;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hidden state - only progress bar + tab visible */
+.tvs-control-panel--hidden {
+  transform: translateY(calc(100% - 4px));
 }
 
 /* Progress bar as top border in cinematic mode */
@@ -856,6 +872,46 @@
   z-index: 2;
   width: var(--progress, 0%);
   transition: width 0.1s ease;
+}
+
+/* Small tab that sticks up from progress bar */
+.tvs-control-panel-tab {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: 4px 60px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tvs-control-panel-tab:hover {
+  background: rgba(15, 23, 42, 1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.tvs-control-panel-tab svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Panel content - slides down when hidden */
+.tvs-control-panel-content {
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
 }
 
 /* Hide default progress bar in cinematic mode */

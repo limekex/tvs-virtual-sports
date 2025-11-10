@@ -41,7 +41,7 @@ class TVS_Plugin {
         // Enqueue admin assets
         add_action( 'admin_enqueue_scripts', array( $this, 'admin_assets' ) );
 
-        // Enqueue public assets
+        // Enqueue public assets (theme no longer registers tvs-app, plugin handles it)
         add_action( 'wp_enqueue_scripts', array( $this, 'public_assets' ) );
 
         // Safety: Ensure DB tables exist even if plugin wasn't re-activated after updates

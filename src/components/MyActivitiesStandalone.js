@@ -10,6 +10,12 @@ export default function MyActivitiesStandalone({ React, routeId = 0, limit = 5, 
   const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
   useEffect(() => {
+    // Only load activities if user is logged in
+    if (!isLoggedIn) {
+      setActivities([]);
+      return;
+    }
+    
     // Load on mount and whenever inputs change
     loadActivities();
     const handleActivityUpdate = () => {
@@ -25,11 +31,6 @@ export default function MyActivitiesStandalone({ React, routeId = 0, limit = 5, 
   async function loadActivities() {
     try {
       setLoadingActivities(true);
-      if (!isLoggedIn) {
-        // Not logged in: skip fetch and show dummy UI below
-        setActivities([]);
-        return;
-      }
 
       const qs = new URLSearchParams();
       qs.set('per_page', String(limit));

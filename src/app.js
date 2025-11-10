@@ -2,7 +2,7 @@ import { DEBUG, log, err } from './utils/debug.js';
 import { delay, withTimeout } from './utils/async.js';
 import { React } from './utils/reactMount.js';
 import ProgressBar from './components/ProgressBar.js';
-import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine, RiFullscreenLine, RiFullscreenExitLine, RiMapPinLine, RiFileListLine, RiEyeLine, RiEyeOffLine } from 'react-icons/ri';
+import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine, RiFullscreenLine, RiFullscreenExitLine, RiMapPinLine, RiFileListLine, RiArrowUpSLine, RiArrowDownSLine } from 'react-icons/ri';
 import Loading from './components/Loading.js';
 import DevOverlay from './components/DevOverlay.js';
 
@@ -15,8 +15,6 @@ export default function App({ initialData, routeId }) {
   const [isPosting, setIsPosting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionStartAt, setSessionStartAt] = useState(null);
-  const [activities, setActivities] = useState([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
   const [lastStatus, setLastStatus] = useState(initialData ? 'inline' : 'loading');
   const [lastError, setLastError] = useState(null);
@@ -25,6 +23,7 @@ export default function App({ initialData, routeId }) {
   const [isCinematicMode, setIsCinematicMode] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [showRouteInfo, setShowRouteInfo] = useState(true);
+  const [showControlPanel, setShowControlPanel] = useState(true);
   const videoRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -67,35 +66,6 @@ export default function App({ initialData, routeId }) {
       }
     })();
   }, [routeId]);
-
-  // Load user's activities
-  useEffect(() => {
-    loadActivities();
-  }, []);
-
-  async function loadActivities() {
-    try {
-      setLoadingActivities(true);
-      const url = '/wp-json/tvs/v1/activities/me';
-      const r = await fetch(url, {
-        credentials: 'same-origin',
-        headers: {
-          'X-TVS-Nonce': window.TVS_SETTINGS?.nonce || '',
-        },
-      });
-      if (!r.ok) {
-        throw new Error('Failed to load activities');
-      }
-      const json = await r.json();
-      const activitiesData = Array.isArray(json) ? json : json.activities || [];
-      setActivities(activitiesData);
-    } catch (e) {
-      err('Load activities FAIL:', e);
-      setActivities([]);
-    } finally {
-      setLoadingActivities(false);
-    }
-  }
 
   // Bind to Vimeo player timeupdate via API
   useEffect(() => {
@@ -165,6 +135,77 @@ export default function App({ initialData, routeId }) {
       setIsPlayerReady(false);
     };
   }, [data]);
+
+  // Keyboard shortcut: F key toggles cinematic mode, Escape exits
+  useEffect(() => {
+    async function handleKeyPress(e) {
+      // F key toggles cinematic mode
+      if (e.key === 'f' || e.key === 'F') {
+        // Only toggle if not typing in an input field
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          
+          const newMode = !isCinematicMode;
+          
+          // Don't enter cinematic mode if player not ready
+          if (newMode && !isPlayerReady) {
+            showFlash('Please wait for video to load', 'warning');
+            return;
+          }
+          
+          setIsCinematicMode(newMode);
+          
+          // Handle native fullscreen
+          if (newMode) {
+            // Small delay to let React render the new DOM structure
+            await delay(100);
+            try {
+              const appElement = document.querySelector('.tvs-app');
+              if (appElement && appElement.requestFullscreen) {
+                await appElement.requestFullscreen();
+              }
+            } catch (err) {
+              console.warn('Fullscreen not supported or denied:', err);
+            }
+          } else {
+            if (document.fullscreenElement) {
+              try {
+                await document.exitFullscreen();
+              } catch (err) {
+                console.warn('Error exiting fullscreen:', err);
+              }
+            }
+          }
+        }
+      }
+      // Escape key exits cinematic mode
+      if (e.key === 'Escape' && isCinematicMode) {
+        setIsCinematicMode(false);
+        if (document.fullscreenElement) {
+          try {
+            await document.exitFullscreen();
+          } catch (err) {
+            console.warn('Error exiting fullscreen:', err);
+          }
+        }
+      }
+    }
+    
+    // Handle fullscreen change events (when user exits fullscreen via browser UI)
+    function handleFullscreenChange() {
+      // If user exits fullscreen via browser UI (F11, Esc), also exit cinematic mode
+      if (!document.fullscreenElement && isCinematicMode) {
+        setIsCinematicMode(false);
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyPress);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [isCinematicMode, isPlayerReady]);
 
   async function ensurePlayerReady(timeoutMs = 8000) {
     const start = Date.now();
@@ -328,7 +369,7 @@ export default function App({ initialData, routeId }) {
       setLastStatus('ok');
       setIsSessionActive(false);
       setSessionStartAt(null);
-      await loadActivities();
+      // Notify My Activities widget to refresh
       window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
     } catch (e) {
       err('[TVS] Save activity failed:', e);
@@ -358,7 +399,7 @@ export default function App({ initialData, routeId }) {
       }
       showFlash('Uploaded to Strava!');
       setLastStatus('ok');
-      await loadActivities();
+      // Notify My Activities widget to refresh
       window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
     } catch (e) {
       err('Strava upload FAIL:', e);
@@ -370,78 +411,6 @@ export default function App({ initialData, routeId }) {
     }
   }
 
-  // Keyboard shortcut: F key toggles cinematic mode, Escape exits
-  useEffect(() => {
-    async function handleKeyPress(e) {
-      // F key toggles cinematic mode
-      if (e.key === 'f' || e.key === 'F') {
-        // Only toggle if not typing in an input field
-        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
-          e.preventDefault();
-          
-          const newMode = !isCinematicMode;
-          
-          // Don't enter cinematic mode if player not ready
-          if (newMode && !isPlayerReady) {
-            showFlash('Please wait for video to load', 'warning');
-            return;
-          }
-          
-          setIsCinematicMode(newMode);
-          
-          // Handle native fullscreen - always toggle together with cinematic mode
-          if (newMode) {
-            // Entering cinematic mode - request fullscreen
-            try {
-              const appElement = document.querySelector('.tvs-app');
-              if (appElement && appElement.requestFullscreen) {
-                await appElement.requestFullscreen();
-              }
-            } catch (err) {
-              console.warn('Fullscreen not supported or denied:', err);
-            }
-          } else {
-            // Exiting cinematic mode - exit fullscreen
-            if (document.fullscreenElement) {
-              try {
-                await document.exitFullscreen();
-              } catch (err) {
-                console.warn('Error exiting fullscreen:', err);
-              }
-            }
-          }
-        }
-      }
-      // Escape key exits cinematic mode
-      if (e.key === 'Escape' && isCinematicMode) {
-        e.preventDefault();
-        setIsCinematicMode(false);
-        if (document.fullscreenElement) {
-          try {
-            await document.exitFullscreen();
-          } catch (err) {
-            console.warn('Error exiting fullscreen:', err);
-          }
-        }
-      }
-    }
-    
-    // Handle fullscreen change events (when user exits fullscreen via browser UI)
-    function handleFullscreenChange() {
-      // If user exits fullscreen via browser UI (F11, Esc), also exit cinematic mode
-      if (!document.fullscreenElement && isCinematicMode) {
-        setIsCinematicMode(false);
-      }
-    }
-    
-    window.addEventListener('keydown', handleKeyPress);
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => {
-      window.removeEventListener('keydown', handleKeyPress);
-      document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    };
-  }, [isCinematicMode, isPlayerReady]);
-
   if (error) return h('div', { className: 'tvs-route tvs-error' }, String(error));
   if (!data) return React.createElement(Loading, null);
 
@@ -451,7 +420,6 @@ export default function App({ initialData, routeId }) {
   const duration = Number(meta.duration_s || 0);
   const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
-  // Build control buttons (used in both modes)
   const controlButtons = !isLoggedIn
     ? h(
         'div',
@@ -598,12 +566,61 @@ export default function App({ initialData, routeId }) {
   return h(
     'div',
     { className: `tvs-app${isCinematicMode ? ' tvs-app--cinematic' : ''}` },
-    // Fullscreen toggle button (hidden in cinematic mode)
-    !isCinematicMode
-      ? h(
+    // Main content area
+    h(
+      'div',
+      { 
+        key: 'video-container',
+        className: isCinematicMode ? 'tvs-video-container' : 'tvs-panel tvs-app__container'
+      },
+      // Video iframe
+      vimeo
+        ? h('div', { 
+            className: isCinematicMode ? 'tvs-video tvs-video--cinematic' : 'tvs-video'
+          },
+            h('iframe', {
+              ref: videoRef,
+              width: 560,
+              height: 315,
+              src:
+                'https://player.vimeo.com/video/' +
+                encodeURIComponent(vimeo) +
+                '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
+              frameBorder: 0,
+              allow: 'autoplay; fullscreen; picture-in-picture',
+              allowFullScreen: true,
+            })
+          )
+        : null,
+      // Minimap overlay (cinematic mode only)
+      isCinematicMode && showMinimap &&
+        h(
+          'div',
+          { key: 'minimap', className: 'tvs-video-overlay tvs-video-overlay--minimap' },
+          h('div', { className: 'tvs-overlay-placeholder' }, 'Mini-map')
+        ),
+      // Route info overlay (cinematic mode only)
+      isCinematicMode && showRouteInfo &&
+        h(
+          'div',
+          { key: 'routeinfo', className: 'tvs-video-overlay tvs-video-overlay--routeinfo' },
+          h('div', { className: 'tvs-overlay-placeholder' }, 'Route Info')
+        ),
+      // Controls - only in normal mode
+      !isCinematicMode && h(ProgressBar, { React, currentTime, duration }),
+      !isCinematicMode && (new URLSearchParams(location.search).get('tvsdebug') === '1' ||
+        window.TVS_DEBUG === true ||
+        localStorage.getItem('tvsDev') === '1')
+        ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
+        : null,
+      !isCinematicMode && h(
+        'div', 
+        { className: 'tvs-btns' },
+        controlButtons,
+        h(
           'button',
           {
-            className: 'tvs-cinematic-toggle',
+            className: 'tvs-btn tvs-btn--outline tvs-cinematic-toggle',
             onClick: async () => {
               // Wait for player to be ready before entering cinematic mode
               if (!isPlayerReady) {
@@ -629,105 +646,74 @@ export default function App({ initialData, routeId }) {
           },
           h(RiFullscreenLine, { 'aria-hidden': true })
         )
-      : null,
-    // Main content area - single container that changes based on mode
-    h(
-      'div',
-      { 
-        key: 'video-container',
-        className: isCinematicMode ? 'tvs-video-container' : 'tvs-panel tvs-app__container'
-      },
-      // Video iframe - always wrapped in .tvs-video div, styling changes via parent class
-      vimeo
-        ? h('div', { 
-            className: isCinematicMode ? 'tvs-video tvs-video--cinematic' : 'tvs-video'
-          },
-            h('iframe', {
-              ref: videoRef,
-              width: 560,
-              height: 315,
-              src:
-                'https://player.vimeo.com/video/' +
-                encodeURIComponent(vimeo) +
-                '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
-              frameBorder: 0,
-              allow: 'autoplay; fullscreen; picture-in-picture',
-              allowFullScreen: true,
-            })
-          )
-        : null,
-      // Overlays - only in cinematic mode
-      isCinematicMode && showMinimap &&
-        h(
-          'div',
-          { key: 'minimap', className: 'tvs-video-overlay tvs-video-overlay--minimap' },
-          h('div', { className: 'tvs-overlay-placeholder' }, 'Mini-map')
-        ),
-      isCinematicMode && showRouteInfo &&
-        h(
-          'div',
-          { key: 'routeinfo', className: 'tvs-video-overlay tvs-video-overlay--routeinfo' },
-          h('div', { className: 'tvs-overlay-placeholder' }, 'Route Info')
-        ),
-      // Controls - only in normal mode
-      !isCinematicMode && h(ProgressBar, { React, currentTime, duration }),
-      !isCinematicMode && (new URLSearchParams(location.search).get('tvsdebug') === '1' ||
-        window.TVS_DEBUG === true ||
-        localStorage.getItem('tvsDev') === '1')
-        ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
-        : null,
-      !isCinematicMode && h('div', { className: 'tvs-btns' }, controlButtons)
+      )
     ),
     // Control panel (only in cinematic mode)
     isCinematicMode
       ? h(
           'div',
           { 
-            className: 'tvs-control-panel',
+            className: `tvs-control-panel${!showControlPanel ? ' tvs-control-panel--hidden' : ''}`,
             style: duration > 0 ? { '--progress': `${Math.min((currentTime / duration) * 100, 100)}%` } : undefined
           },
-          h('div', { className: 'tvs-btns' }, controlButtons),
+          // Toggle tab (small pill that sticks up from progress bar)
+          h(
+            'button',
+            {
+              className: 'tvs-control-panel-tab',
+              onClick: () => setShowControlPanel(prev => !prev),
+              'aria-label': showControlPanel ? 'Hide controls' : 'Show controls',
+              title: showControlPanel ? 'Hide controls' : 'Show controls',
+            },
+            h(showControlPanel ? RiArrowDownSLine : RiArrowUpSLine, { 'aria-hidden': true })
+          ),
+          // Panel content (slides down when hidden)
           h(
             'div',
-            { className: 'tvs-cinematic-controls' },
+            { className: 'tvs-control-panel-content' },
+            h('div', { className: 'tvs-btns' }, controlButtons),
             h(
-              'button',
-              {
-                className: 'tvs-btn tvs-btn--outline',
-                onClick: () => setShowMinimap(prev => !prev),
-                'aria-label': showMinimap ? 'Hide minimap' : 'Show minimap',
-                title: showMinimap ? 'Hide minimap' : 'Show minimap',
-              },
-              h(RiMapPinLine, { 'aria-hidden': true })
-            ),
-            h(
-              'button',
-              {
-                className: 'tvs-btn tvs-btn--outline',
-                onClick: () => setShowRouteInfo(prev => !prev),
-                'aria-label': showRouteInfo ? 'Hide route info' : 'Show route info',
-                title: showRouteInfo ? 'Hide route info' : 'Show route info',
-              },
-              h(RiFileListLine, { 'aria-hidden': true })
-            ),
-            h(
-              'button',
-              {
-                className: 'tvs-btn tvs-btn--outline tvs-exit-cinematic',
-                onClick: async () => {
-                  setIsCinematicMode(false);
-                  if (document.fullscreenElement) {
-                    try {
-                      await document.exitFullscreen();
-                    } catch (err) {
-                      console.warn('Error exiting fullscreen:', err);
-                    }
-                  }
+              'div',
+              { className: 'tvs-cinematic-controls' },
+              h(
+                'button',
+                {
+                  className: 'tvs-btn tvs-btn--outline',
+                  onClick: () => setShowMinimap(prev => !prev),
+                  'aria-label': showMinimap ? 'Hide minimap' : 'Show minimap',
+                  title: showMinimap ? 'Hide minimap' : 'Show minimap',
                 },
-                'aria-label': 'Exit cinematic mode (press F or Escape)',
-                title: 'Exit cinematic mode (press F or Escape)',
-              },
-              h(RiFullscreenExitLine, { 'aria-hidden': true })
+                h(RiMapPinLine, { 'aria-hidden': true })
+              ),
+              h(
+                'button',
+                {
+                  className: 'tvs-btn tvs-btn--outline',
+                  onClick: () => setShowRouteInfo(prev => !prev),
+                  'aria-label': showRouteInfo ? 'Hide route info' : 'Show route info',
+                  title: showRouteInfo ? 'Hide route info' : 'Show route info',
+                },
+                h(RiFileListLine, { 'aria-hidden': true })
+              ),
+              h(
+                'button',
+                {
+                  className: 'tvs-btn tvs-btn--outline tvs-exit-cinematic',
+                  onClick: async () => {
+                    setIsCinematicMode(false);
+                    if (document.fullscreenElement) {
+                      try {
+                        await document.exitFullscreen();
+                      } catch (err) {
+                        console.warn('Error exiting fullscreen:', err);
+                      }
+                    }
+                  },
+                  'aria-label': 'Exit cinematic mode (press F or Escape)',
+                  title: 'Exit cinematic mode (press F or Escape)',
+                },
+                h(RiFullscreenExitLine, { 'aria-hidden': true })
+              )
             )
           )
         )
