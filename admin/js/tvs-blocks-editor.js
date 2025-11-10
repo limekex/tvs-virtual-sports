@@ -67,6 +67,15 @@
     save: function(){ return null; }
   });
 
+  ensure('tvs-virtual-sports/route-weather', {
+    title: 'TVS Route Weather',
+    icon: 'cloud',
+    category: 'widgets',
+    keywords: ['tvs', 'weather', 'forecast', 'conditions'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'TVS Route Weather'); },
+    save: function(){ return null; }
+  });
+
   // ALWAYS show block attributes in the editor sidebar (InspectorControls)
   if (hooks && compose && blockEditor && components) {
     var InspectorControls = blockEditor.InspectorControls;
@@ -155,6 +164,40 @@
                 help: 'Leave 0 to include all of your activities.',
                 value: String((typeof attrs.routeId==='number'?attrs.routeId:0) || 0),
                 onChange: function(val){ var n = parseInt(val,10)||0; props.setAttributes({ routeId: n }); }
+              })
+            )
+          );
+        }
+        if (props.name === 'tvs-virtual-sports/route-weather') {
+          var maxDist = typeof attrs.maxDistance === 'number' ? attrs.maxDistance : 50;
+          var debug = !!attrs.debug;
+          panels.push(
+            el(PanelBody, { title: 'Weather Settings', initialOpen: true },
+              el(TextControl, { 
+                label: 'Title', 
+                value: attrs.title || 'Weather Conditions', 
+                onChange: function(val){ props.setAttributes({ title: val }); } 
+              }),
+              el(RangeControl, {
+                label: 'Max Distance (km)',
+                help: 'Maximum distance to search for weather stations with complete data.',
+                min: 10,
+                max: 200,
+                step: 10,
+                value: maxDist,
+                onChange: function(val){ props.setAttributes({ maxDistance: val }); }
+              }),
+              el(TextControl, {
+                label: 'Route ID (optional)',
+                help: 'Leave 0 to auto-detect on single route pages.',
+                value: String((typeof attrs.routeId==='number'?attrs.routeId:0) || 0),
+                onChange: function(val){ var n = parseInt(val,10)||0; props.setAttributes({ routeId: n }); }
+              }),
+              el(components.ToggleControl, { 
+                label: 'Debug Mode', 
+                help: 'Show raw weather data and API responses.',
+                checked: debug, 
+                onChange: function(v){ props.setAttributes({ debug: !!v }); } 
               })
             )
           );

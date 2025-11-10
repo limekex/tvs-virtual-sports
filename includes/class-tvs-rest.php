@@ -469,6 +469,53 @@ class TVS_REST {
             ),
         ) );
 
+        // Route weather (public): fetch or return cached Frost API weather data
+        register_rest_route( $ns, '/routes/(?P<id>\d+)/weather', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'get_route_weather' ),
+            'permission_callback' => '__return_true',
+            'args' => array(
+                'id' => array(
+                    'description' => 'Route ID',
+                    'type'        => 'integer',
+                    'required'    => true,
+                    'minimum'     => 1,
+                ),
+                'date' => array(
+                    'description' => 'ISO date override (YYYY-MM-DD)',
+                    'type'        => 'string',
+                    'required'    => false,
+                ),
+                'time' => array(
+                    'description' => 'Time override (HH:MM)',
+                    'type'        => 'string',
+                    'required'    => false,
+                ),
+                'lat' => array(
+                    'description' => 'Latitude override',
+                    'type'        => 'number',
+                    'required'    => false,
+                ),
+                'lng' => array(
+                    'description' => 'Longitude override',
+                    'type'        => 'number',
+                    'required'    => false,
+                ),
+                'maxDistance' => array(
+                    'description' => 'Max distance to weather stations (km)',
+                    'type'        => 'number',
+                    'required'    => false,
+                    'default'     => 50,
+                ),
+                'refresh' => array(
+                    'description' => 'Force refresh cache',
+                    'type'        => 'boolean',
+                    'required'    => false,
+                    'default'     => false,
+                ),
+            ),
+        ) );
+
         register_rest_route( $ns, '/activities', array(
             'methods' => 'POST',
             'callback' => array( $this, 'create_activity' ),
@@ -917,6 +964,360 @@ class TVS_REST {
             'maps_url'   => $maps_url,
         );
         return rest_ensure_response( $resp );
+    }
+
+    /**
+     * GET /tvs/v1/routes/{id}/weather
+     * Fetch historical weather data from Frost API for a route.
+     * Caches result in route meta to avoid repeated API calls.
+     */
+    public function get_route_weather( $request ) {
+        $id = (int) $request['id'];
+        if ( get_post_type( $id ) !== 'tvs_route' ) {
+            return new WP_Error( 'not_found', 'Route not found', array( 'status' => 404 ) );
+        }
+
+        $refresh = ! empty( $request['refresh'] );
+        
+        // Check cache unless refresh requested
+        if ( ! $refresh ) {
+            $cached_data = get_post_meta( $id, 'weather_data', true );
+            $cached_at   = get_post_meta( $id, 'weather_cached_at', true );
+            if ( $cached_data && $cached_at ) {
+                // Cache valid for 7 days
+                if ( time() - (int) $cached_at < 7 * DAY_IN_SECONDS ) {
+                    return rest_ensure_response( array(
+                        'cached' => true,
+                        'cached_at' => gmdate( 'c', (int) $cached_at ),
+                        'data' => json_decode( $cached_data, true ),
+                    ) );
+                }
+            }
+        }
+
+        // Get coordinates and date/time
+        $lat  = ! empty( $request['lat'] ) ? (float) $request['lat'] : (float) get_post_meta( $id, 'start_lat', true );
+        $lng  = ! empty( $request['lng'] ) ? (float) $request['lng'] : (float) get_post_meta( $id, 'start_lng', true );
+        $date = ! empty( $request['date'] ) ? sanitize_text_field( $request['date'] ) : get_post_meta( $id, 'activity_date', true );
+        $time = ! empty( $request['time'] ) ? sanitize_text_field( $request['time'] ) : '12:00';
+        $max_distance = ! empty( $request['maxDistance'] ) ? (float) $request['maxDistance'] : 50;
+
+        if ( ! $lat || ! $lng ) {
+            return new WP_Error( 'missing_location', 'No location data available. Please provide lat/lng or upload GPX file.', array( 'status' => 400 ) );
+        }
+
+        if ( ! $date ) {
+            return new WP_Error( 'missing_date', 'No date available. Please provide date parameter.', array( 'status' => 400 ) );
+        }
+
+        // Build reference time (ISO 8601 format required by Frost API)
+        // Extract just the date part if $date is already a full ISO timestamp
+        if ( strpos( $date, 'T' ) !== false ) {
+            // $date is already ISO timestamp like "2025-10-02T15:49:00Z"
+            // Extract just the date part and use provided time
+            $date_part = substr( $date, 0, 10 ); // "2025-10-02"
+            $reference_time = $date_part . 'T' . $time . ':00Z';
+        } else {
+            // $date is just a date like "2025-10-02"
+            $reference_time = $date . 'T' . $time . ':00Z';
+        }
+
+        // Call Frost API
+        $weather_data = $this->fetch_frost_weather( $lat, $lng, $reference_time, $max_distance );
+        
+        if ( is_wp_error( $weather_data ) ) {
+            return $weather_data;
+        }
+
+        // Cache the result (use JSON_UNESCAPED_UNICODE to preserve Norwegian characters)
+        update_post_meta( $id, 'weather_data', wp_json_encode( $weather_data, JSON_UNESCAPED_UNICODE ) );
+        update_post_meta( $id, 'weather_cached_at', time() );
+
+        return rest_ensure_response( array(
+            'cached' => false,
+            'data'   => $weather_data,
+        ) );
+    }
+
+    /**
+     * Fetch weather data from Frost API (MET Norway)
+     * Uses smart approach: gather data from nearest stations within threshold
+     */
+    private function fetch_frost_weather( $lat, $lng, $reference_time, $max_distance = 50 ) {
+        $client_id = get_option( 'tvs_frost_client_id', '' );
+        
+        error_log( "TVS Weather: fetch_frost_weather called with lat={$lat}, lng={$lng}, time={$reference_time}, maxDistance={$max_distance}km" );
+        
+        if ( empty( $client_id ) ) {
+            error_log( 'TVS Weather: ERROR - No client ID configured' );
+            return new WP_Error( 'no_credentials', 'Frost API client ID not configured. Please add it in TVS Settings → Weather.', array( 'status' => 500 ) );
+        }
+
+        // Helper: Calculate distance between two points
+        $haversine = function( $lat1, $lon1, $lat2, $lon2 ) {
+            $earth_radius = 6371; // km
+            $dlat = deg2rad( $lat2 - $lat1 );
+            $dlon = deg2rad( $lon2 - $lon1 );
+            $a = sin( $dlat / 2 ) * sin( $dlat / 2 ) +
+                 cos( deg2rad( $lat1 ) ) * cos( deg2rad( $lat2 ) ) *
+                 sin( $dlon / 2 ) * sin( $dlon / 2 );
+            $c = 2 * atan2( sqrt( $a ), sqrt( 1 - $a ) );
+            return $earth_radius * $c;
+        };
+
+        // STEP 1: Get multiple nearby stations within radius
+        $search_radius_km = min( $max_distance * 1.5, 150 ); // Search slightly wider, max 150km
+        $sources_url = sprintf(
+            'https://frost.met.no/sources/v0.jsonld?geometry=nearest(POINT(%s %s))&nearestmaxcount=20&types=SensorSystem',
+            rawurlencode( (string) $lng ),
+            rawurlencode( (string) $lat )
+        );
+        
+        error_log( "TVS Weather: Fetching nearby stations from: {$sources_url}" );
+
+        $sources_response = wp_remote_get( $sources_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode( $client_id . ':' ),
+            ),
+            'timeout' => 15,
+        ) );
+
+        if ( is_wp_error( $sources_response ) ) {
+            error_log( 'TVS Weather: Station search failed: ' . $sources_response->get_error_message() );
+            return new WP_Error( 'api_error', 'Failed to fetch weather stations: ' . $sources_response->get_error_message(), array( 'status' => 500 ) );
+        }
+
+        $sources_data = json_decode( wp_remote_retrieve_body( $sources_response ), true );
+
+        if ( empty( $sources_data['data'] ) ) {
+            error_log( 'TVS Weather: No stations found' );
+            return new WP_Error( 'no_stations', 'No weather stations found near this location.', array( 'status' => 404 ) );
+        }
+
+        // STEP 2: Calculate distances and filter stations within threshold
+        $stations = array();
+        foreach ( $sources_data['data'] as $station ) {
+            $coords = $station['geometry']['coordinates'] ?? null;
+            if ( ! $coords ) continue;
+            
+            $distance = $haversine( $lat, $lng, $coords[1], $coords[0] );
+            
+            if ( $distance <= $max_distance ) {
+                $stations[] = array(
+                    'id' => $station['id'],
+                    'name' => $station['name'] ?? 'Unknown',
+                    'distance' => $distance,
+                    'coords' => $coords,
+                );
+            }
+        }
+
+        // Sort by distance (nearest first)
+        usort( $stations, function( $a, $b ) {
+            return $a['distance'] <=> $b['distance'];
+        } );
+
+        if ( empty( $stations ) ) {
+            error_log( "TVS Weather: No stations within {$max_distance}km threshold" );
+            return new WP_Error( 'no_stations', "No weather stations within {$max_distance}km. Try increasing the distance threshold.", array( 'status' => 404 ) );
+        }
+
+        error_log( "TVS Weather: Found " . count( $stations ) . " stations within {$max_distance}km" );
+
+        // STEP 3: Collect data from nearby stations (prioritize nearest)
+        $weather = array(
+            'temperature'      => null,
+            'wind_speed'       => null,
+            'wind_direction'   => null,
+            'humidity'         => null,
+            'weather_code'     => null,
+        );
+        
+        $sources = array(
+            'temperature'    => null,
+            'wind'           => null,
+            'weather_code'   => null,
+        );
+
+        // Try each station until we have all data or run out of stations
+        foreach ( $stations as $station ) {
+            // Skip if we already have all data
+            if ( $weather['temperature'] !== null && 
+                 $weather['wind_speed'] !== null && 
+                 $weather['weather_code'] !== null ) {
+                break;
+            }
+
+            $station_id = $station['id'];
+            $station_name = $station['name'];
+            $distance = $station['distance'];
+
+            error_log( "TVS Weather: Trying station {$station_id} ({$station_name}) at " . round( $distance, 1 ) . " km" );
+
+            // Try to get temperature and basic metrics
+            if ( $weather['temperature'] === null || $weather['wind_speed'] === null || $weather['humidity'] === null ) {
+                $basic_data = $this->fetch_station_observations( 
+                    $client_id, 
+                    $station_id, 
+                    $reference_time, 
+                    'air_temperature,wind_speed,wind_from_direction,relative_humidity' 
+                );
+                
+                if ( ! is_wp_error( $basic_data ) ) {
+                    if ( $weather['temperature'] === null && isset( $basic_data['temperature'] ) ) {
+                        $weather['temperature'] = $basic_data['temperature'];
+                        $sources['temperature'] = array( 'station' => $station_name, 'distance' => $distance );
+                        error_log( "TVS Weather: Got temperature from {$station_name}: {$weather['temperature']}°C" );
+                    }
+                    if ( $weather['wind_speed'] === null && isset( $basic_data['wind_speed'] ) ) {
+                        $weather['wind_speed'] = $basic_data['wind_speed'];
+                        $weather['wind_direction'] = $basic_data['wind_direction'] ?? null;
+                        $sources['wind'] = array( 'station' => $station_name, 'distance' => $distance );
+                        error_log( "TVS Weather: Got wind from {$station_name}: {$weather['wind_speed']} m/s" );
+                    }
+                    if ( $weather['humidity'] === null && isset( $basic_data['humidity'] ) ) {
+                        $weather['humidity'] = $basic_data['humidity'];
+                        error_log( "TVS Weather: Got humidity from {$station_name}: {$weather['humidity']}%" );
+                    }
+                }
+            }
+
+            // Try to get weather code
+            if ( $weather['weather_code'] === null ) {
+                $code_data = $this->fetch_station_observations( 
+                    $client_id, 
+                    $station_id, 
+                    $reference_time, 
+                    'weather_type_automatic' 
+                );
+                
+                if ( ! is_wp_error( $code_data ) && isset( $code_data['weather_code'] ) && $code_data['weather_code'] !== null ) {
+                    $weather['weather_code'] = $code_data['weather_code'];
+                    $sources['weather_code'] = array( 'station' => $station_name, 'distance' => $distance );
+                    error_log( "TVS Weather: Got weather_code from {$station_name}: {$weather['weather_code']}" );
+                }
+            }
+        }
+
+        // STEP 4: If still missing weather code, try major stations (Oslo, Bergen, Trondheim)
+        if ( $weather['weather_code'] === null ) {
+            error_log( "TVS Weather: No weather code from nearby stations, trying major stations" );
+            
+            $major_stations = array(
+                array( 'SN18700', 'Oslo - Blindern', 59.94, 10.72 ),
+                array( 'SN50540', 'Bergen - Florida', 60.38, 5.33 ),
+                array( 'SN44560', 'Trondheim - Voll', 63.42, 10.45 ),
+            );
+
+            foreach ( $major_stations as $st ) {
+                $distance = $haversine( $lat, $lng, $st[2], $st[3] );
+                
+                if ( $distance <= $max_distance ) {
+                    error_log( "TVS Weather: Trying major station {$st[0]} ({$st[1]}) at " . round( $distance, 1 ) . " km" );
+                    
+                    $major_data = $this->fetch_station_observations( $client_id, $st[0], $reference_time, 'weather_type_automatic' );
+                    
+                    if ( ! is_wp_error( $major_data ) && isset( $major_data['weather_code'] ) && $major_data['weather_code'] !== null ) {
+                        $weather['weather_code'] = $major_data['weather_code'];
+                        $sources['weather_code'] = array( 'station' => $st[1], 'distance' => $distance );
+                        error_log( "TVS Weather: Got weather_code from major station {$st[1]}: {$weather['weather_code']}" );
+                        break;
+                    }
+                }
+            }
+        }
+
+        // STEP 5: Build response with source attribution
+        $result = array(
+            'nearest_station_id'       => $stations[0]['id'],
+            'nearest_station_name'     => $stations[0]['name'],
+            'nearest_distance_km'      => round( $stations[0]['distance'], 1 ),
+            'temperature_source'       => $sources['temperature'] ? $sources['temperature']['station'] : null,
+            'temperature_distance_km'  => $sources['temperature'] ? round( $sources['temperature']['distance'], 1 ) : null,
+            'wind_source'              => $sources['wind'] ? $sources['wind']['station'] : null,
+            'wind_distance_km'         => $sources['wind'] ? round( $sources['wind']['distance'], 1 ) : null,
+            'weather_code_station'     => $sources['weather_code'] ? $sources['weather_code']['station'] : null,
+            'weather_code_distance_km' => $sources['weather_code'] ? round( $sources['weather_code']['distance'], 1 ) : null,
+            'reference_time'           => $reference_time,
+            'temperature'              => $weather['temperature'],
+            'wind_speed'               => $weather['wind_speed'],
+            'wind_direction'           => $weather['wind_direction'],
+            'humidity'                 => $weather['humidity'],
+            'weather_code'             => $weather['weather_code'],
+        );
+
+        error_log( "TVS Weather: SUCCESS - Collected data from " . count( array_filter( $sources ) ) . " stations" );
+        error_log( "TVS Weather: Data: " . wp_json_encode( $result ) );
+        
+        return $result;
+    }
+
+    /**
+     * Helper: Fetch observations from a specific station
+     */
+    private function fetch_station_observations( $client_id, $station_id, $reference_time, $elements ) {
+        $obs_url = add_query_arg( array(
+            'sources'       => $station_id,
+            'referencetime' => $reference_time,
+            'elements'      => $elements,
+        ), 'https://frost.met.no/observations/v0.jsonld' );
+
+        $obs_response = wp_remote_get( $obs_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode( $client_id . ':' ),
+            ),
+            'timeout' => 15,
+        ) );
+
+        if ( is_wp_error( $obs_response ) ) {
+            return new WP_Error( 'api_error', 'Failed to fetch observations: ' . $obs_response->get_error_message(), array( 'status' => 500 ) );
+        }
+
+        $obs_data = json_decode( wp_remote_retrieve_body( $obs_response ), true );
+
+        if ( empty( $obs_data['data'] ) ) {
+            return new WP_Error( 'no_data', 'No weather data available for this time/location.', array( 'status' => 404 ) );
+        }
+
+        // Parse observations
+        $result = array(
+            'temperature'    => null,
+            'wind_speed'     => null,
+            'wind_direction' => null,
+            'weather_code'   => null,
+            'humidity'       => null,
+        );
+
+        foreach ( $obs_data['data'] as $obs ) {
+            if ( empty( $obs['observations'] ) ) continue;
+            
+            foreach ( $obs['observations'] as $observation ) {
+                $element = $observation['elementId'] ?? '';
+                $value   = $observation['value'] ?? null;
+                
+                if ( $value === null ) continue;
+                
+                switch ( $element ) {
+                    case 'air_temperature':
+                        $result['temperature'] = $value;
+                        break;
+                    case 'wind_speed':
+                        $result['wind_speed'] = $value;
+                        break;
+                    case 'wind_from_direction':
+                        $result['wind_direction'] = $value;
+                        break;
+                    case 'weather_type_automatic':
+                        $result['weather_code'] = (int) $value;
+                        break;
+                    case 'relative_humidity':
+                        $result['humidity'] = $value;
+                        break;
+                }
+            }
+        }
+
+        return $result;
     }
 
  /*    protected function prepare_route_response( $post_id ) {

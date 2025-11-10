@@ -172,6 +172,25 @@ class TVS_Plugin {
                     'routeId'     => array( 'type' => 'integer', 'default' => 0 ),
                 ),
             ) );
+
+            // Route Weather block
+            register_block_type( 'tvs-virtual-sports/route-weather', array(
+                'api_version'     => 2,
+                'title'           => __( 'TVS Route Weather', 'tvs-virtual-sports' ),
+                'description'     => __( 'Display historical weather data from MET Norway for a route.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'cloud',
+                'supports'        => array(
+                    'html' => false,
+                ),
+                'render_callback' => array( $this, 'render_route_weather_block' ),
+                'attributes'      => array(
+                    'title'       => array( 'type' => 'string', 'default' => 'Weather Conditions' ),
+                    'routeId'     => array( 'type' => 'integer', 'default' => 0 ),
+                    'maxDistance' => array( 'type' => 'integer', 'default' => 50 ),
+                    'debug'       => array( 'type' => 'boolean', 'default' => false ),
+                ),
+            ) );
         }
     }
 
@@ -322,6 +341,58 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_route_weather_block( $attributes ) {
+        // Enqueue block-specific frontend script and styles
+        wp_enqueue_script( 'tvs-block-route-weather' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-route-weather-' . uniqid();
+        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Weather Conditions';
+        $max_distance = isset( $attributes['maxDistance'] ) ? intval( $attributes['maxDistance'] ) : 50;
+        $debug = ! empty( $attributes['debug'] );
+        $attr_route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+        $route_id = $attr_route_id > 0 ? $attr_route_id : ( is_singular( 'tvs_route' ) ? get_the_ID() : 0 );
+
+        // Get route meta for location
+        $meta = get_post_meta( $route_id, 'meta', true );
+        $lat = '0';
+        $lng = '0';
+        if ( ! empty( $meta ) && is_string( $meta ) ) {
+            $meta_arr = json_decode( $meta, true );
+            if ( ! empty( $meta_arr['lat'] ) ) {
+                $lat = $meta_arr['lat'];
+            }
+            if ( ! empty( $meta_arr['lng'] ) ) {
+                $lng = $meta_arr['lng'];
+            }
+        }
+
+        ob_start();
+        ?>
+        <div class="tvs-app tvs-weather-widget">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-route-weather"
+                 data-route-id="<?php echo esc_attr( $route_id ); ?>"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-max-distance="<?php echo esc_attr( $max_distance ); ?>"
+                 data-lat="<?php echo esc_attr( $lat ); ?>"
+                 data-lng="<?php echo esc_attr( $lng ); ?>"
+                 data-debug="<?php echo esc_attr( $debug ? '1' : '0' ); ?>"
+                 data-plugin-url="<?php echo esc_attr( TVS_PLUGIN_URL ); ?>"
+            >
+                <div class="tvs-weather-loading">
+                    <div class="tvs-weather-shimmer">
+                        <div class="tvs-shimmer-icon"></div>
+                        <div class="tvs-shimmer-text"></div>
+                        <div class="tvs-shimmer-text"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -377,14 +448,16 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-route-insights', TVS_PLUGIN_URL . 'public/js/tvs-block-route-insights.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-personal-records', TVS_PLUGIN_URL . 'public/js/tvs-block-personal-records.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-heatmap', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-heatmap.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-route-weather', TVS_PLUGIN_URL . 'public/js/tvs-block-route-weather.js', array(), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
-            'env'      => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
-            'restRoot' => get_rest_url(),
-            'nonce'    => wp_create_nonce( 'wp_rest' ),
-            'version'  => TVS_PLUGIN_VERSION,
-            'user'     => is_user_logged_in() ? wp_get_current_user()->user_login : null,
+            'env'       => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
+            'restRoot'  => get_rest_url(),
+            'nonce'     => wp_create_nonce( 'wp_rest' ),
+            'version'   => TVS_PLUGIN_VERSION,
+            'user'      => is_user_logged_in() ? wp_get_current_user()->user_login : null,
+            'pluginUrl' => TVS_PLUGIN_URL,
         );
     wp_localize_script( 'tvs-app', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-my-activities', 'TVS_SETTINGS', $settings );
@@ -392,6 +465,7 @@ class TVS_Plugin {
     wp_localize_script( 'tvs-block-route-insights', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-personal-records', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-heatmap', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-route-weather', 'TVS_SETTINGS', $settings );
     }
 
     /**

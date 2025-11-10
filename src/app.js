@@ -2,7 +2,7 @@ import { DEBUG, log, err } from './utils/debug.js';
 import { delay, withTimeout } from './utils/async.js';
 import { React } from './utils/reactMount.js';
 import ProgressBar from './components/ProgressBar.js';
-import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine } from 'react-icons/ri';
+import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine, RiFullscreenLine, RiFullscreenExitLine, RiMapPinLine, RiFileListLine, RiEyeLine, RiEyeOffLine } from 'react-icons/ri';
 import Loading from './components/Loading.js';
 import DevOverlay from './components/DevOverlay.js';
 
@@ -22,6 +22,9 @@ export default function App({ initialData, routeId }) {
   const [lastError, setLastError] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const [isCinematicMode, setIsCinematicMode] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(true);
+  const [showRouteInfo, setShowRouteInfo] = useState(true);
   const videoRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -367,6 +370,76 @@ export default function App({ initialData, routeId }) {
     }
   }
 
+  // Keyboard shortcut: F key toggles cinematic mode, Escape exits
+  useEffect(() => {
+    async function handleKeyPress(e) {
+      // F key toggles cinematic mode
+      if (e.key === 'f' || e.key === 'F') {
+        // Only toggle if not typing in an input field
+        if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+          
+          const newMode = !isCinematicMode;
+          
+          // Don't enter cinematic mode if player not ready
+          if (newMode && !isPlayerReady) {
+            showFlash('Please wait for video to load', 'warning');
+            return;
+          }
+          
+          setIsCinematicMode(newMode);
+          
+          // Handle native fullscreen
+          if (newMode) {
+            // Small delay to let React render the new DOM structure
+            await delay(100);
+            try {
+              const appElement = document.querySelector('.tvs-app');
+              if (appElement && appElement.requestFullscreen) {
+                await appElement.requestFullscreen();
+              }
+            } catch (err) {
+              console.warn('Fullscreen not supported or denied:', err);
+            }
+          } else {
+            if (document.fullscreenElement) {
+              try {
+                await document.exitFullscreen();
+              } catch (err) {
+                console.warn('Error exiting fullscreen:', err);
+              }
+            }
+          }
+        }
+      }
+      // Escape key exits cinematic mode
+      if (e.key === 'Escape' && isCinematicMode) {
+        setIsCinematicMode(false);
+        if (document.fullscreenElement) {
+          try {
+            await document.exitFullscreen();
+          } catch (err) {
+            console.warn('Error exiting fullscreen:', err);
+          }
+        }
+      }
+    }
+    
+    // Handle fullscreen change events (when user exits fullscreen via browser UI)
+    function handleFullscreenChange() {
+      if (!document.fullscreenElement && isCinematicMode) {
+        setIsCinematicMode(false);
+      }
+    }
+    
+    window.addEventListener('keydown', handleKeyPress);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [isCinematicMode, isPlayerReady]);
+
   if (error) return h('div', { className: 'tvs-route tvs-error' }, String(error));
   if (!data) return React.createElement(Loading, null);
 
@@ -376,157 +449,52 @@ export default function App({ initialData, routeId }) {
   const duration = Number(meta.duration_s || 0);
   const isLoggedIn = !!(window.TVS_SETTINGS?.user);
 
-  return h(
-    'div',
-    { className: 'tvs-app' },
-    h(
-      'div',
-      { className: 'tvs-panel tvs-app__container' },
-      vimeo
-        ? h(
-            'div',
-            { className: 'tvs-video' },
-            h('iframe', {
-              ref: videoRef,
-              width: 560,
-              height: 315,
-              src:
-                'https://player.vimeo.com/video/' +
-                encodeURIComponent(vimeo) +
-                '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
-              frameBorder: 0,
-              allow: 'autoplay; fullscreen; picture-in-picture',
-              allowFullScreen: true,
-            })
-          )
-        : null,
-      (new URLSearchParams(location.search).get('tvsdebug') === '1' || window.TVS_DEBUG === true || localStorage.getItem('tvsDev') === '1')
-        ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
-        : null,
-      h(ProgressBar, { React, currentTime, duration }),
-      h(
+  // Build control buttons (used in both modes)
+  const controlButtons = !isLoggedIn
+    ? h(
         'div',
-        { className: 'tvs-btns' },
-        !isLoggedIn
-          ? h(
-              'div',
-              { className: 'tvs-alert tvs-alert--warning' },
-              h(
-                'div',
-                { className: 'tvs-row tvs-mb-2' },
-                h('span', { className: 'tvs-badge tvs-badge-warning' }, 'Warning'),
-                h('strong', null, ' You must be logged in')
-              ),
-              h(
-                'p',
-                null,
-                'Please ',
-                h('a', { href: '/login' }, 'log in'),
-                " to create activities and upload to Strava. Don't have an account? ",
-                h('a', { href: '/register' }, 'Register here'),
-                '.'
-              )
-            )
-          : !isSessionActive
-          ? (
-              currentTime > 0 &&
-              sessionStartAt &&
-              (duration === 0 || currentTime < duration - 0.5)
-                ? [
-                    h(
-                      'button',
-                      {
-                        key: 'resume',
-                        className: 'tvs-btn tvs-btn--primary',
-                        onClick: resumeActivitySession,
-                        disabled: isPosting || !isPlayerReady,
-                        'aria-label': 'Resume activity',
-                        title: 'Resume activity',
-                      },
-                      isPosting
-                        ? [
-                            h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                            h('span', { className: 'tvs-btn__label' }, 'RESUME'),
-                          ]
-                        : [
-                            h(RiRunLine, { 'aria-hidden': true }),
-                            h('span', { className: 'tvs-btn__label' }, 'RESUME'),
-                          ]
-                    ),
-                    h(
-                      'button',
-                      {
-                        key: 'finish',
-                        className: 'tvs-btn tvs-btn--success',
-                        onClick: finishAndSaveActivity,
-                        disabled: isPosting || !isPlayerReady,
-                        'aria-label': 'Finish and save activity',
-                        title: 'Finish and save activity',
-                      },
-                      isPosting
-                        ? [
-                            h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                            h('span', { className: 'tvs-btn__label' }, 'SAVE'),
-                          ]
-                        : [
-                            h(RiSaveLine, { 'aria-hidden': true }),
-                            h('span', { className: 'tvs-btn__label' }, 'SAVE'),
-                          ]
-                    ),
-                    h(
-                      'button',
-                      {
-                        key: 'restart',
-                        className: 'tvs-btn tvs-btn--outline',
-                        onClick: startActivitySession,
-                        disabled: isPosting || !isPlayerReady,
-                        'aria-label': 'Restart from beginning',
-                        title: 'Restart from beginning',
-                      },
-                      isPosting
-                        ? [
-                            h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                            h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
-                          ]
-                        : [
-                            h(RiRestartLine, { 'aria-hidden': true }),
-                            h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
-                          ]
-                    ),
-                  ]
-                : h(
-                    'button',
-                    {
-                      className: 'tvs-btn tvs-btn--primary',
-                      onClick: startActivitySession,
-                      disabled: isPosting || !isPlayerReady,
-                      'aria-label': 'Start activity',
-                      title: 'Start activity',
-                    },
-                    isPosting
-                      ? [
-                          h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                          h('span', { className: 'tvs-btn__label' }, 'START'),
-                        ]
-                      : [
-                          h(RiRunLine, { 'aria-hidden': true }),
-                          h('span', { className: 'tvs-btn__label' }, 'START'),
-                        ]
-                  )
-            )
-          : [
+        { className: 'tvs-alert tvs-alert--warning' },
+        h(
+          'div',
+          { className: 'tvs-row tvs-mb-2' },
+          h('span', { className: 'tvs-badge tvs-badge-warning' }, 'Warning'),
+          h('strong', null, ' You must be logged in')
+        ),
+        h(
+          'p',
+          null,
+          'Please ',
+          h('a', { href: '/login' }, 'log in'),
+          " to create activities and upload to Strava. Don't have an account? ",
+          h('a', { href: '/register' }, 'Register here'),
+          '.'
+        )
+      )
+    : !isSessionActive
+    ? (
+        currentTime > 0 &&
+        sessionStartAt &&
+        (duration === 0 || currentTime < duration - 0.5)
+          ? [
               h(
                 'button',
                 {
-                  key: 'pause',
-                  className: 'tvs-btn tvs-btn--warning',
-                  onClick: pauseActivitySession,
+                  key: 'resume',
+                  className: 'tvs-btn tvs-btn--primary',
+                  onClick: resumeActivitySession,
                   disabled: isPosting || !isPlayerReady,
-                  'aria-label': 'Pause activity',
-                  title: 'Pause activity',
+                  'aria-label': 'Resume activity',
+                  title: 'Resume activity',
                 },
-                h(RiUserLine, { 'aria-hidden': true }),
-                h('span', { className: 'tvs-btn__label' }, 'PAUSE')
+                isPosting
+                  ? [
+                      h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                      h('span', { className: 'tvs-btn__label' }, 'RESUME'),
+                    ]
+                  : [
+                      h(RiRunLine, { 'aria-hidden': true }),
+                      h('span', { className: 'tvs-btn__label' }, 'RESUME'),
+                    ]
               ),
               h(
                 'button',
@@ -548,9 +516,220 @@ export default function App({ initialData, routeId }) {
                       h('span', { className: 'tvs-btn__label' }, 'SAVE'),
                     ]
               ),
+              h(
+                'button',
+                {
+                  key: 'restart',
+                  className: 'tvs-btn tvs-btn--outline',
+                  onClick: startActivitySession,
+                  disabled: isPosting || !isPlayerReady,
+                  'aria-label': 'Restart from beginning',
+                  title: 'Restart from beginning',
+                },
+                isPosting
+                  ? [
+                      h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                      h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
+                    ]
+                  : [
+                      h(RiRestartLine, { 'aria-hidden': true }),
+                      h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
+                    ]
+              ),
             ]
+          : h(
+              'button',
+              {
+                className: 'tvs-btn tvs-btn--primary',
+                onClick: startActivitySession,
+                disabled: isPosting || !isPlayerReady,
+                'aria-label': 'Start activity',
+                title: 'Start activity',
+              },
+              isPosting
+                ? [
+                    h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                    h('span', { className: 'tvs-btn__label' }, 'START'),
+                  ]
+                : [
+                    h(RiRunLine, { 'aria-hidden': true }),
+                    h('span', { className: 'tvs-btn__label' }, 'START'),
+                  ]
+            )
       )
+    : [
+        h(
+          'button',
+          {
+            key: 'pause',
+            className: 'tvs-btn tvs-btn--warning',
+            onClick: pauseActivitySession,
+            disabled: isPosting || !isPlayerReady,
+            'aria-label': 'Pause activity',
+            title: 'Pause activity',
+          },
+          h(RiUserLine, { 'aria-hidden': true }),
+          h('span', { className: 'tvs-btn__label' }, 'PAUSE')
+        ),
+        h(
+          'button',
+          {
+            key: 'finish',
+            className: 'tvs-btn tvs-btn--success',
+            onClick: finishAndSaveActivity,
+            disabled: isPosting || !isPlayerReady,
+            'aria-label': 'Finish and save activity',
+            title: 'Finish and save activity',
+          },
+          isPosting
+            ? [
+                h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
+                h('span', { className: 'tvs-btn__label' }, 'SAVE'),
+              ]
+            : [
+                h(RiSaveLine, { 'aria-hidden': true }),
+                h('span', { className: 'tvs-btn__label' }, 'SAVE'),
+              ]
+        ),
+      ];
+
+  return h(
+    'div',
+    { className: `tvs-app${isCinematicMode ? ' tvs-app--cinematic' : ''}` },
+    // Fullscreen toggle button (hidden in cinematic mode)
+    !isCinematicMode
+      ? h(
+          'button',
+          {
+            className: 'tvs-cinematic-toggle',
+            onClick: async () => {
+              // Wait for player to be ready before entering cinematic mode
+              if (!isPlayerReady) {
+                showFlash('Please wait for video to load', 'warning');
+                return;
+              }
+              
+              setIsCinematicMode(true);
+              
+              // Small delay to let React render the new DOM structure
+              await delay(100);
+              
+              // Try to enter native fullscreen
+              try {
+                const appElement = document.querySelector('.tvs-app');
+                if (appElement && appElement.requestFullscreen) {
+                  await appElement.requestFullscreen();
+                }
+              } catch (err) {
+                console.warn('Fullscreen not supported or denied:', err);
+              }
+            },
+            'aria-label': 'Enter cinematic mode',
+            title: 'Enter cinematic mode (F)',
+            disabled: !isPlayerReady,
+          },
+          h(RiFullscreenLine, { 'aria-hidden': true })
+        )
+      : null,
+    // Main content area - single container that changes based on mode
+    h(
+      'div',
+      { 
+        key: 'video-container',
+        className: isCinematicMode ? 'tvs-video-container' : 'tvs-panel tvs-app__container'
+      },
+      // Video iframe - always present
+      vimeo
+        ? h('iframe', {
+            ref: videoRef,
+            className: 'tvs-video',
+            width: 560,
+            height: 315,
+            src:
+              'https://player.vimeo.com/video/' +
+              encodeURIComponent(vimeo) +
+              '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
+            frameBorder: 0,
+            allow: 'autoplay; fullscreen; picture-in-picture',
+            allowFullScreen: true,
+          })
+        : null,
+      // Overlays - only in cinematic mode
+      isCinematicMode && showMinimap &&
+        h(
+          'div',
+          { key: 'minimap', className: 'tvs-video-overlay tvs-video-overlay--minimap' },
+          h('div', { className: 'tvs-overlay-placeholder' }, 'Mini-map')
+        ),
+      isCinematicMode && showRouteInfo &&
+        h(
+          'div',
+          { key: 'routeinfo', className: 'tvs-video-overlay tvs-video-overlay--routeinfo' },
+          h('div', { className: 'tvs-overlay-placeholder' }, 'Route Info')
+        ),
+      // Controls - only in normal mode
+      !isCinematicMode && h(ProgressBar, { React, currentTime, duration }),
+      !isCinematicMode && (new URLSearchParams(location.search).get('tvsdebug') === '1' ||
+        window.TVS_DEBUG === true ||
+        localStorage.getItem('tvsDev') === '1')
+        ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
+        : null,
+      !isCinematicMode && h('div', { className: 'tvs-btns' }, controlButtons)
     ),
+    // Control panel (only in cinematic mode)
+    isCinematicMode
+      ? h(
+          'div',
+          { 
+            className: 'tvs-control-panel',
+            style: duration > 0 ? { '--progress': `${Math.min((currentTime / duration) * 100, 100)}%` } : undefined
+          },
+          h('div', { className: 'tvs-btns' }, controlButtons),
+          h(
+            'div',
+            { className: 'tvs-cinematic-controls' },
+            h(
+              'button',
+              {
+                className: 'tvs-btn tvs-btn--outline',
+                onClick: () => setShowMinimap(prev => !prev),
+                'aria-label': showMinimap ? 'Hide minimap' : 'Show minimap',
+                title: showMinimap ? 'Hide minimap' : 'Show minimap',
+              },
+              h(RiMapPinLine, { 'aria-hidden': true })
+            ),
+            h(
+              'button',
+              {
+                className: 'tvs-btn tvs-btn--outline',
+                onClick: () => setShowRouteInfo(prev => !prev),
+                'aria-label': showRouteInfo ? 'Hide route info' : 'Show route info',
+                title: showRouteInfo ? 'Hide route info' : 'Show route info',
+              },
+              h(RiFileListLine, { 'aria-hidden': true })
+            ),
+            h(
+              'button',
+              {
+                className: 'tvs-btn tvs-btn--outline tvs-exit-cinematic',
+                onClick: async () => {
+                  setIsCinematicMode(false);
+                  if (document.fullscreenElement) {
+                    try {
+                      await document.exitFullscreen();
+                    } catch (err) {
+                      console.warn('Error exiting fullscreen:', err);
+                    }
+                  }
+                },
+                'aria-label': 'Exit cinematic mode (press F or Escape)',
+                title: 'Exit cinematic mode (press F or Escape)',
+              },
+              h(RiFullscreenExitLine, { 'aria-hidden': true })
+            )
+          )
+        )
+      : null,
     DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
   );
 }
