@@ -77,6 +77,7 @@ class TVS_Admin {
 	public function init() {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_init', array( $this, 'handle_clear_weather_cache' ) );
 		
 		// Add Strava connection info to user profile pages
 		add_action( 'show_user_profile', array( $this, 'show_strava_profile_fields' ) );
@@ -145,6 +146,16 @@ class TVS_Admin {
 			'manage_options',
 			'tvs-security',
 			array( $this, 'render_security_settings_page' )
+		);
+
+		// Add Weather submenu (administrators)
+		add_submenu_page(
+			'tvs-settings',
+			__( 'Weather', 'tvs-virtual-sports' ),
+			__( 'Weather', 'tvs-virtual-sports' ),
+			'manage_options',
+			'tvs-weather',
+			array( $this, 'render_weather_settings_page' )
 		);
 	}
 
@@ -439,6 +450,38 @@ class TVS_Admin {
 			)
 		);
 
+
+		// Weather (Frost API) settings page
+		add_settings_section(
+			'tvs_weather_settings_section',
+			__( 'Weather / Frost API', 'tvs-virtual-sports' ),
+			function(){
+				echo '<p>' . esc_html__( 'Configure Frost API credentials for historical weather data.', 'tvs-virtual-sports' ) . '</p>';
+				echo '<p>' . sprintf(
+					esc_html__( 'Get your free client ID at %s', 'tvs-virtual-sports' ),
+					'<a href="https://frost.met.no/auth/requestCredentials.html" target="_blank" rel="noopener">frost.met.no</a>'
+				) . '</p>';
+			},
+			'tvs-weather'
+		);
+
+		register_setting(
+			'tvs_weather_settings',
+			'tvs_frost_client_id',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => '',
+			)
+		);
+
+		add_settings_field(
+			'tvs_frost_client_id',
+			__( 'Frost Client ID', 'tvs-virtual-sports' ),
+			array( $this, 'render_frost_client_id_field' ),
+			'tvs-weather',
+			'tvs_weather_settings_section'
+		);
 
 		// Security settings page (reCAPTCHA v3 and future security options)
 		add_settings_section(
@@ -1038,6 +1081,23 @@ class TVS_Admin {
 		<?php
 	}
 
+	/** Render Frost Client ID field */
+	public function render_frost_client_id_field() {
+		$value = (string) get_option( 'tvs_frost_client_id', '' );
+		?>
+		<input type="text"
+			id="tvs_frost_client_id"
+			name="tvs_frost_client_id"
+			value="<?php echo esc_attr( $value ); ?>"
+			class="regular-text"
+			placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+		/>
+		<p class="description">
+			<?php esc_html_e( 'Client ID for accessing Frost API (free historical weather data from MET Norway).', 'tvs-virtual-sports' ); ?>
+		</p>
+		<?php
+	}
+
 	/** Render Security settings page */
 	public function render_security_settings_page() {
 		if ( ! current_user_can( 'manage_options' ) ) {
@@ -1055,6 +1115,76 @@ class TVS_Admin {
 			</form>
 		</div>
 		<?php
+	}
+
+	/** Render Weather settings page */
+	public function render_weather_settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions.', 'tvs-virtual-sports' ) );
+		}
+
+		// Handle cache clear action
+		if ( isset( $_POST['tvs_clear_weather_cache'] ) && check_admin_referer( 'tvs_clear_weather_cache' ) ) {
+			$this->clear_all_weather_caches();
+		}
+
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<form method="post" action="options.php">
+				<?php
+				settings_fields( 'tvs_weather_settings' );
+				do_settings_sections( 'tvs-weather' );
+				submit_button();
+				?>
+			</form>
+
+			<hr style="margin: 30px 0;">
+			
+			<h2><?php esc_html_e( 'Weather Cache Management', 'tvs-virtual-sports' ); ?></h2>
+			<p><?php esc_html_e( 'Clear all cached weather data. This will force fresh API requests for all routes.', 'tvs-virtual-sports' ); ?></p>
+			<form method="post" action="">
+				<?php wp_nonce_field( 'tvs_clear_weather_cache' ); ?>
+				<button type="submit" name="tvs_clear_weather_cache" class="button button-secondary" 
+					onclick="return confirm('<?php esc_attr_e( 'Are you sure you want to clear all weather caches?', 'tvs-virtual-sports' ); ?>');">
+					<?php esc_html_e( 'Clear All Weather Caches', 'tvs-virtual-sports' ); ?>
+				</button>
+			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Clear all weather caches from route post meta
+	 */
+	public function clear_all_weather_caches() {
+		global $wpdb;
+		
+		// Delete all weather_data and weather_cached_at meta
+		$deleted = $wpdb->query( "
+			DELETE FROM {$wpdb->postmeta} 
+			WHERE meta_key IN ('weather_data', 'weather_cached_at')
+		" );
+
+		add_settings_error(
+			'tvs_weather_cache',
+			'cache_cleared',
+			sprintf(
+				/* translators: %d: number of cache entries deleted */
+				__( 'Successfully cleared %d weather cache entries.', 'tvs-virtual-sports' ),
+				$deleted
+			),
+			'success'
+		);
+
+		settings_errors( 'tvs_weather_cache' );
+	}
+
+	/**
+	 * Handle weather cache clearing from admin_init
+	 */
+	public function handle_clear_weather_cache() {
+		// This is handled in render_weather_settings_page now
 	}
 
 	/** Render invitation codes textarea */
