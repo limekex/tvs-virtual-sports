@@ -15,8 +15,6 @@ export default function App({ initialData, routeId }) {
   const [isPosting, setIsPosting] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionStartAt, setSessionStartAt] = useState(null);
-  const [activities, setActivities] = useState([]);
-  const [loadingActivities, setLoadingActivities] = useState(false);
   const [uploadingId, setUploadingId] = useState(null);
   const [lastStatus, setLastStatus] = useState(initialData ? 'inline' : 'loading');
   const [lastError, setLastError] = useState(null);
@@ -64,35 +62,6 @@ export default function App({ initialData, routeId }) {
       }
     })();
   }, [routeId]);
-
-  // Load user's activities
-  useEffect(() => {
-    loadActivities();
-  }, []);
-
-  async function loadActivities() {
-    try {
-      setLoadingActivities(true);
-      const url = '/wp-json/tvs/v1/activities/me';
-      const r = await fetch(url, {
-        credentials: 'same-origin',
-        headers: {
-          'X-TVS-Nonce': window.TVS_SETTINGS?.nonce || '',
-        },
-      });
-      if (!r.ok) {
-        throw new Error('Failed to load activities');
-      }
-      const json = await r.json();
-      const activitiesData = Array.isArray(json) ? json : json.activities || [];
-      setActivities(activitiesData);
-    } catch (e) {
-      err('Load activities FAIL:', e);
-      setActivities([]);
-    } finally {
-      setLoadingActivities(false);
-    }
-  }
 
   // Bind to Vimeo player timeupdate via API
   useEffect(() => {
@@ -325,7 +294,7 @@ export default function App({ initialData, routeId }) {
       setLastStatus('ok');
       setIsSessionActive(false);
       setSessionStartAt(null);
-      await loadActivities();
+      // Notify My Activities widget to refresh
       window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
     } catch (e) {
       err('[TVS] Save activity failed:', e);
@@ -355,7 +324,7 @@ export default function App({ initialData, routeId }) {
       }
       showFlash('Uploaded to Strava!');
       setLastStatus('ok');
-      await loadActivities();
+      // Notify My Activities widget to refresh
       window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
     } catch (e) {
       err('Strava upload FAIL:', e);

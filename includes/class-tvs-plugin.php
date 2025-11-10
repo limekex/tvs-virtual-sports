@@ -172,6 +172,31 @@ class TVS_Plugin {
                     'routeId'     => array( 'type' => 'integer', 'default' => 0 ),
                 ),
             ) );
+
+            // Route Weather block
+            register_block_type( 'tvs-virtual-sports/route-weather', array(
+                'api_version'     => 2,
+                'title'           => __( 'TVS Route Weather', 'tvs-virtual-sports' ),
+                'description'     => __( 'Display historical weather data from MET Norway for a route.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'cloud',
+                'supports'        => array(
+                    'html' => false,
+                ),
+                'editor_script'   => 'tvs-block-route-weather-editor',
+                'render_callback' => array( $this, 'render_route_weather_block' ),
+                'attributes'      => array(
+                    'title'       => array( 'type' => 'string', 'default' => 'Weather Conditions' ),
+                    'routeId'     => array( 'type' => 'integer', 'default' => 0 ),
+                    'date'        => array( 'type' => 'string', 'default' => '' ),
+                    'time'        => array( 'type' => 'string', 'default' => '12:00' ),
+                    'lat'         => array( 'type' => 'number', 'default' => 0 ),
+                    'lng'         => array( 'type' => 'number', 'default' => 0 ),
+                    'maxDistance' => array( 'type' => 'number', 'default' => 50 ),
+                    'clearCache'  => array( 'type' => 'boolean', 'default' => false ),
+                    'debug'       => array( 'type' => 'boolean', 'default' => false ),
+                ),
+            ) );
         }
     }
 
@@ -322,6 +347,258 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_route_weather_block( $attributes ) {
+        wp_enqueue_style( 'tvs-public' );
+        wp_enqueue_script( 'tvs-block-route-weather' );
+
+        $mount_id = 'tvs-route-weather-' . uniqid();
+        $attr_route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+        $route_id = $attr_route_id > 0 ? $attr_route_id : ( is_singular( 'tvs_route' ) ? get_the_ID() : 0 );
+        
+        // Manual overrides
+        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Weather Conditions';
+        $date = isset( $attributes['date'] ) ? sanitize_text_field( $attributes['date'] ) : '';
+        $time = isset( $attributes['time'] ) ? sanitize_text_field( $attributes['time'] ) : '12:00';
+        $lat  = isset( $attributes['lat'] ) ? floatval( $attributes['lat'] ) : 0;
+        $lng  = isset( $attributes['lng'] ) ? floatval( $attributes['lng'] ) : 0;
+        $max_distance = isset( $attributes['maxDistance'] ) ? floatval( $attributes['maxDistance'] ) : 50;
+        $clear_cache = isset( $attributes['clearCache'] ) && $attributes['clearCache'];
+        $debug = isset( $attributes['debug'] ) && $attributes['debug'];
+
+        if ( ! $route_id ) {
+            return '<p class="tvs-notice">' . esc_html__( 'Please select a route to display weather data.', 'tvs-virtual-sports' ) . '</p>';
+        }
+
+        // Clear cache if requested
+        if ( $clear_cache ) {
+            delete_post_meta( $route_id, 'weather_data' );
+            delete_post_meta( $route_id, 'weather_cached_at' );
+        }
+
+        ob_start();
+        ?>
+        <div class="tvs-route-weather tvs-glass tvs-weather-loading" 
+             id="<?php echo esc_attr( $mount_id ); ?>"
+             data-route-id="<?php echo esc_attr( $route_id ); ?>"
+             data-title="<?php echo esc_attr( $title ); ?>"
+             data-date="<?php echo esc_attr( $date ); ?>"
+             data-time="<?php echo esc_attr( $time ); ?>"
+             data-lat="<?php echo esc_attr( $lat ); ?>"
+             data-lng="<?php echo esc_attr( $lng ); ?>"
+             data-max-distance="<?php echo esc_attr( $max_distance ); ?>"
+             data-debug="<?php echo $debug ? '1' : '0'; ?>">
+            <!-- Shimmer loader (will be replaced by JS) -->
+            <div class="tvs-weather-shimmer">
+                <div class="tvs-shimmer-icon"></div>
+                <div class="tvs-shimmer-text">
+                    <div class="tvs-shimmer-line tvs-shimmer-line--lg"></div>
+                    <div class="tvs-shimmer-line tvs-shimmer-line--sm"></div>
+                </div>
+            </div>
+            <div class="tvs-weather-card">
+                <div class="tvs-shimmer-metric">
+                    <div class="tvs-shimmer-circle"></div>
+                    <div class="tvs-shimmer-line tvs-shimmer-line--md"></div>
+                </div>
+                <div class="tvs-shimmer-metric">
+                    <div class="tvs-shimmer-circle"></div>
+                    <div class="tvs-shimmer-line tvs-shimmer-line--md"></div>
+                </div>
+            </div>
+        </div>
+        <style>
+            .tvs-route-weather {
+                border-radius: var(--tvs-radius-2, 12px);
+                padding: var(--tvs-space-4, 24px);
+                border: 1px solid var(--tvs-color-border, rgba(255, 255, 255, 0.18));
+                position: relative;
+                min-height: 180px;
+            }
+            
+            .tvs-weather-title {
+                margin: 0 0 var(--tvs-space-4, 24px) 0;
+                font-size: var(--tvs-font-size-xl, 1.25rem);
+                font-weight: 600;
+                color: var(--tvs-color-text, #ffffff);
+                line-height: 1.3;
+            }
+            
+            /* Shimmer loader styles */
+            .tvs-weather-loading .tvs-weather-shimmer,
+            .tvs-weather-loading .tvs-weather-card {
+                animation: tvs-pulse 1.5s ease-in-out infinite;
+            }
+            
+            @keyframes tvs-pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.5; }
+            }
+            
+            .tvs-weather-shimmer {
+                display: flex;
+                align-items: center;
+                gap: var(--tvs-space-3, 16px);
+                margin-bottom: var(--tvs-space-4, 24px);
+                padding-bottom: var(--tvs-space-4, 24px);
+                border-bottom: 1px solid var(--tvs-color-border-light, rgba(255, 255, 255, 0.1));
+            }
+            
+            .tvs-shimmer-icon {
+                width: 56px;
+                height: 56px;
+                background: var(--tvs-color-border, rgba(255, 255, 255, 0.18));
+                border-radius: 8px;
+                flex-shrink: 0;
+            }
+            
+            .tvs-shimmer-text {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: var(--tvs-space-2, 8px);
+            }
+            
+            .tvs-shimmer-line {
+                height: 16px;
+                background: var(--tvs-color-border, rgba(255, 255, 255, 0.18));
+                border-radius: 4px;
+            }
+            
+            .tvs-shimmer-line--lg {
+                width: 60%;
+                height: 24px;
+            }
+            
+            .tvs-shimmer-line--md {
+                width: 80px;
+                height: 28px;
+            }
+            
+            .tvs-shimmer-line--sm {
+                width: 40%;
+                height: 14px;
+            }
+            
+            .tvs-weather-card { 
+                display: flex;
+                gap: var(--tvs-space-6, 40px);
+                align-items: center;
+                flex-wrap: wrap;
+            }
+            
+            .tvs-shimmer-metric {
+                display: flex;
+                align-items: center;
+                gap: var(--tvs-space-2, 10px);
+            }
+            
+            .tvs-shimmer-circle {
+                width: 28px;
+                height: 28px;
+                background: var(--tvs-color-border, rgba(255, 255, 255, 0.18));
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+            
+            /* Content styles (JS will inject these) */
+            .tvs-weather-condition {
+                display: flex;
+                align-items: flex-start;
+                gap: var(--tvs-space-3, 16px);
+                margin-bottom: var(--tvs-space-4, 24px);
+                padding-bottom: var(--tvs-space-4, 24px);
+                border-bottom: 1px solid var(--tvs-color-border-light, rgba(255, 255, 255, 0.1));
+            }
+            .tvs-weather-condition-text {
+                display: flex;
+                flex-direction: column;
+                gap: var(--tvs-space-1, 4px);
+            }
+            .tvs-weather-icon-svg {
+                width: 56px;
+                height: 56px;
+                display: block;
+                flex-shrink: 0;
+            }
+            .tvs-weather-text {
+                font-size: var(--tvs-font-size-xl, 1.25rem);
+                font-weight: 600;
+                color: var(--tvs-color-text, #ffffff);
+                line-height: 1.3;
+            }
+            .tvs-weather-source {
+                font-size: var(--tvs-font-size-xs, 0.75rem);
+                color: var(--tvs-color-text-tertiary, rgba(255, 255, 255, 0.6));
+                font-weight: 400;
+            }
+            .tvs-weather-item { 
+                display: flex;
+                align-items: center;
+                gap: var(--tvs-space-2, 10px);
+            }
+            .tvs-weather-icon { 
+                width: 28px;
+                height: 28px;
+                color: var(--tvs-color-primary, #3b82f6);
+                flex-shrink: 0;
+            }
+            .tvs-weather-value { 
+                font-size: var(--tvs-font-size-2xl, 1.75rem);
+                font-weight: 700;
+                color: var(--tvs-color-text, #ffffff);
+                line-height: 1;
+            }
+            .tvs-weather-dir { 
+                font-size: 1.5rem;
+                display: inline-block;
+                transform-origin: center;
+                margin-left: var(--tvs-space-1, 4px);
+                color: var(--tvs-color-text-secondary, rgba(255, 255, 255, 0.8));
+            }
+            .tvs-weather-station { 
+                margin: 0 0 var(--tvs-space-3, 12px) 0;
+                padding-top: var(--tvs-space-3, 12px);
+                font-size: var(--tvs-font-size-xs, 0.75rem);
+                color: var(--tvs-color-text-tertiary, rgba(255, 255, 255, 0.6));
+                line-height: 1.5;
+                border-top: 1px solid var(--tvs-color-border-light, rgba(255, 255, 255, 0.1));
+            }
+            .tvs-weather-station strong {
+                font-weight: 600;
+                color: var(--tvs-color-text-secondary, rgba(255, 255, 255, 0.8));
+            }
+            .tvs-weather-credit { 
+                margin: 0;
+                padding-top: var(--tvs-space-2, 8px);
+                color: var(--tvs-color-text-tertiary, rgba(255, 255, 255, 0.5));
+                font-size: var(--tvs-font-size-xs, 0.75rem);
+                border-top: 1px solid var(--tvs-color-border-light, rgba(255, 255, 255, 0.1));
+            }
+            .tvs-weather-credit a {
+                color: var(--tvs-color-primary, #3b82f6);
+                text-decoration: none;
+                font-weight: 500;
+            }
+            .tvs-weather-credit a:hover {
+                text-decoration: underline;
+            }
+            .tvs-notice { 
+                padding: var(--tvs-space-3, 12px);
+                background: rgba(0, 0, 0, 0.3);
+                border-left: 3px solid var(--tvs-color-primary, #3b82f6);
+                border-radius: var(--tvs-radius-1, 4px);
+                font-size: var(--tvs-font-size-sm, 0.875rem);
+                color: var(--tvs-color-text-secondary, rgba(255, 255, 255, 0.9));
+            }
+            .tvs-notice--error { 
+                border-color: var(--tvs-color-error, #ef4444);
+                background: rgba(239, 68, 68, 0.15);
+            }
+        </style>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -377,14 +654,16 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-route-insights', TVS_PLUGIN_URL . 'public/js/tvs-block-route-insights.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-personal-records', TVS_PLUGIN_URL . 'public/js/tvs-block-personal-records.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-heatmap', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-heatmap.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-route-weather', TVS_PLUGIN_URL . 'public/js/tvs-block-route-weather.js', array(), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
-            'env'      => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
-            'restRoot' => get_rest_url(),
-            'nonce'    => wp_create_nonce( 'wp_rest' ),
-            'version'  => TVS_PLUGIN_VERSION,
-            'user'     => is_user_logged_in() ? wp_get_current_user()->user_login : null,
+            'env'       => ( defined( 'WP_DEBUG' ) && WP_DEBUG ) ? 'development' : 'production',
+            'restRoot'  => get_rest_url(),
+            'nonce'     => wp_create_nonce( 'wp_rest' ),
+            'version'   => TVS_PLUGIN_VERSION,
+            'user'      => is_user_logged_in() ? wp_get_current_user()->user_login : null,
+            'pluginUrl' => TVS_PLUGIN_URL,
         );
     wp_localize_script( 'tvs-app', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-my-activities', 'TVS_SETTINGS', $settings );
@@ -392,6 +671,7 @@ class TVS_Plugin {
     wp_localize_script( 'tvs-block-route-insights', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-personal-records', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-heatmap', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-route-weather', 'TVS_SETTINGS', $settings );
     }
 
     /**
@@ -410,6 +690,96 @@ class TVS_Plugin {
             true
         );
         wp_enqueue_script( 'tvs-blocks-editor' );
+
+        // Route Weather block editor script (inline registration for simplicity)
+        wp_register_script( 'tvs-block-route-weather-editor', '', array( 'wp-blocks', 'wp-element', 'wp-components', 'wp-i18n', 'wp-block-editor', 'wp-server-side-render' ), TVS_PLUGIN_VERSION, true );
+        wp_add_inline_script( 'tvs-block-route-weather-editor', "
+            (function(blocks, element, components, i18n, blockEditor, serverSideRender) {
+                var el = element.createElement;
+                var TextControl = components.TextControl;
+                var RangeControl = components.RangeControl;
+                var ToggleControl = components.ToggleControl;
+                var PanelBody = components.PanelBody;
+                var InspectorControls = blockEditor.InspectorControls;
+                var ServerSideRender = serverSideRender;
+                var __ = i18n.__;
+                
+                blocks.registerBlockType('tvs-virtual-sports/route-weather', {
+                    title: __('TVS Route Weather', 'tvs-virtual-sports'),
+                    icon: 'cloud',
+                    category: 'widgets',
+                    attributes: {
+                        title: { type: 'string', default: 'Weather Conditions' },
+                        routeId: { type: 'integer', default: 0 },
+                        date: { type: 'string', default: '' },
+                        time: { type: 'string', default: '12:00' },
+                        lat: { type: 'number', default: 0 },
+                        lng: { type: 'number', default: 0 },
+                        maxDistance: { type: 'number', default: 50 },
+                        clearCache: { type: 'boolean', default: false },
+                        debug: { type: 'boolean', default: false }
+                    },
+                    edit: function(props) {
+                        var title = props.attributes.title;
+                        var maxDistance = props.attributes.maxDistance;
+                        var clearCache = props.attributes.clearCache;
+                        var debug = props.attributes.debug;
+                        
+                        return el(element.Fragment, {},
+                            el(InspectorControls, {},
+                                el(PanelBody, {
+                                    title: __('Block Settings', 'tvs-virtual-sports'),
+                                    initialOpen: true
+                                },
+                                    el(TextControl, {
+                                        label: __('Widget Title', 'tvs-virtual-sports'),
+                                        value: title,
+                                        onChange: function(value) {
+                                            props.setAttributes({ title: value });
+                                        }
+                                    }),
+                                    el(RangeControl, {
+                                        label: __('Max Distance (km)', 'tvs-virtual-sports'),
+                                        help: __('Maximum distance to search for weather stations with complete data. Closer stations are more accurate but may lack weather codes.', 'tvs-virtual-sports'),
+                                        value: maxDistance,
+                                        onChange: function(value) {
+                                            props.setAttributes({ maxDistance: value });
+                                        },
+                                        min: 10,
+                                        max: 200,
+                                        step: 10
+                                    }),
+                                    el(ToggleControl, {
+                                        label: __('Clear Cache on Save', 'tvs-virtual-sports'),
+                                        help: __('Force refresh weather data from API when saving this post', 'tvs-virtual-sports'),
+                                        checked: clearCache,
+                                        onChange: function(value) {
+                                            props.setAttributes({ clearCache: value });
+                                        }
+                                    }),
+                                    el(ToggleControl, {
+                                        label: __('Debug Mode', 'tvs-virtual-sports'),
+                                        help: __('Show debug information including API requests and station data', 'tvs-virtual-sports'),
+                                        checked: debug,
+                                        onChange: function(value) {
+                                            props.setAttributes({ debug: value });
+                                        }
+                                    })
+                                )
+                            ),
+                            el(ServerSideRender, {
+                                block: 'tvs-virtual-sports/route-weather',
+                                attributes: props.attributes
+                            })
+                        );
+                    },
+                    save: function() {
+                        return null; // Dynamic block
+                    }
+                });
+            })(window.wp.blocks, window.wp.element, window.wp.components, window.wp.i18n, window.wp.blockEditor, window.wp.serverSideRender);
+        " );
+        wp_enqueue_script( 'tvs-block-route-weather-editor' );
 
         // Also load the frontend invites block script so it can render inside the editor canvas
         // (it mounts onto .tvs-invite-friends-block and needs TVS_SETTINGS)
