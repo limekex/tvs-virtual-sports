@@ -763,6 +763,21 @@
   height: 100%;
 }
 
+/* Cinematic mode video styling */
+.tvs-video--cinematic {
+  padding-bottom: 0 !important;
+  height: 100% !important;
+  margin-bottom: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.tvs-video--cinematic iframe {
+  position: relative !important;
+  width: 100%;
+  height: 100%;
+}
+
 .tvs-app--cinematic .tvs-video {
   width: 100%;
   height: 100%;

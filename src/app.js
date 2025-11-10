@@ -389,10 +389,9 @@ export default function App({ initialData, routeId }) {
           
           setIsCinematicMode(newMode);
           
-          // Handle native fullscreen
+          // Handle native fullscreen - always toggle together with cinematic mode
           if (newMode) {
-            // Small delay to let React render the new DOM structure
-            await delay(100);
+            // Entering cinematic mode - request fullscreen
             try {
               const appElement = document.querySelector('.tvs-app');
               if (appElement && appElement.requestFullscreen) {
@@ -402,6 +401,7 @@ export default function App({ initialData, routeId }) {
               console.warn('Fullscreen not supported or denied:', err);
             }
           } else {
+            // Exiting cinematic mode - exit fullscreen
             if (document.fullscreenElement) {
               try {
                 await document.exitFullscreen();
@@ -414,6 +414,7 @@ export default function App({ initialData, routeId }) {
       }
       // Escape key exits cinematic mode
       if (e.key === 'Escape' && isCinematicMode) {
+        e.preventDefault();
         setIsCinematicMode(false);
         if (document.fullscreenElement) {
           try {
@@ -427,6 +428,7 @@ export default function App({ initialData, routeId }) {
     
     // Handle fullscreen change events (when user exits fullscreen via browser UI)
     function handleFullscreenChange() {
+      // If user exits fullscreen via browser UI (F11, Esc), also exit cinematic mode
       if (!document.fullscreenElement && isCinematicMode) {
         setIsCinematicMode(false);
       }
@@ -611,9 +613,6 @@ export default function App({ initialData, routeId }) {
               
               setIsCinematicMode(true);
               
-              // Small delay to let React render the new DOM structure
-              await delay(100);
-              
               // Try to enter native fullscreen
               try {
                 const appElement = document.querySelector('.tvs-app');
@@ -638,21 +637,24 @@ export default function App({ initialData, routeId }) {
         key: 'video-container',
         className: isCinematicMode ? 'tvs-video-container' : 'tvs-panel tvs-app__container'
       },
-      // Video iframe - always present
+      // Video iframe - always wrapped in .tvs-video div, styling changes via parent class
       vimeo
-        ? h('iframe', {
-            ref: videoRef,
-            className: 'tvs-video',
-            width: 560,
-            height: 315,
-            src:
-              'https://player.vimeo.com/video/' +
-              encodeURIComponent(vimeo) +
-              '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
-            frameBorder: 0,
-            allow: 'autoplay; fullscreen; picture-in-picture',
-            allowFullScreen: true,
-          })
+        ? h('div', { 
+            className: isCinematicMode ? 'tvs-video tvs-video--cinematic' : 'tvs-video'
+          },
+            h('iframe', {
+              ref: videoRef,
+              width: 560,
+              height: 315,
+              src:
+                'https://player.vimeo.com/video/' +
+                encodeURIComponent(vimeo) +
+                '?controls=0&title=0&byline=0&portrait=0&pip=0&playsinline=1&dnt=1&transparent=0&muted=0',
+              frameBorder: 0,
+              allow: 'autoplay; fullscreen; picture-in-picture',
+              allowFullScreen: true,
+            })
+          )
         : null,
       // Overlays - only in cinematic mode
       isCinematicMode && showMinimap &&
