@@ -469,6 +469,21 @@ class TVS_REST {
             ),
         ) );
 
+        // Route GPX data (public): parsed GPX with coordinates for virtual training
+        register_rest_route( $ns, '/routes/(?P<id>\d+)/gpx-data', array(
+            'methods'             => 'GET',
+            'callback'            => array( $this, 'get_route_gpx_data' ),
+            'permission_callback' => '__return_true',
+            'args' => array(
+                'id' => array(
+                    'description' => 'Route ID',
+                    'type'        => 'integer',
+                    'required'    => true,
+                    'minimum'     => 1,
+                ),
+            ),
+        ) );
+
         // Route weather (public): fetch or return cached Frost API weather data
         register_rest_route( $ns, '/routes/(?P<id>\d+)/weather', array(
             'methods'             => 'GET',
@@ -964,6 +979,45 @@ class TVS_REST {
             'maps_url'   => $maps_url,
         );
         return rest_ensure_response( $resp );
+    }
+
+    /**
+     * GET /tvs/v1/routes/{id}/gpx-data
+     * Parse GPX file and return coordinates, elevation, distance for virtual training.
+     */
+    public function get_route_gpx_data( $request ) {
+        $id = (int) $request['id'];
+        if ( get_post_type( $id ) !== 'tvs_route' ) {
+            return new WP_Error( 'not_found', 'Route not found', array( 'status' => 404 ) );
+        }
+
+        // Get GPX URL from meta
+        $gpx_url = get_post_meta( $id, 'gpx_url', true );
+        if ( empty( $gpx_url ) ) {
+            return new WP_Error( 'no_gpx', 'No GPX file available for this route', array( 'status' => 404 ) );
+        }
+
+        // Check cache first (GPX parsing can be slow for large files)
+        $cache_key = 'gpx_data_' . md5( $gpx_url );
+        $cached = get_transient( $cache_key );
+        if ( $cached !== false ) {
+            $cached['cached'] = true;
+            return rest_ensure_response( $cached );
+        }
+
+        // Parse GPX
+        $parser = new TVS_GPX();
+        $data = $parser->parse( $gpx_url );
+
+        if ( is_wp_error( $data ) ) {
+            return $data;
+        }
+
+        // Cache for 1 hour (GPX files rarely change)
+        set_transient( $cache_key, $data, HOUR_IN_SECONDS );
+
+        $data['cached'] = false;
+        return rest_ensure_response( $data );
     }
 
     /**
