@@ -656,7 +656,7 @@ class TVS_Strava {
         $time    = isset( $streams['time']['data'] ) ? $streams['time']['data'] : array();
         $alt     = isset( $streams['altitude']['data'] ) ? $streams['altitude']['data'] : array();
         $nowIso  = gmdate( 'c' );
-        $xml  = '<?xml version="1.0" encoding="UTF-8"?>\n';
+        $xml  = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n";
         $xml .= '<gpx version="1.1" creator="TVS" xmlns="http://www.topografix.com/GPX/1/1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd">';
         $xml .= '<metadata><time>' . esc_html( $nowIso ) . '</time><name>' . esc_html( $name ) . '</name></metadata>';
         $xml .= '<trk><name>' . esc_html( $name ) . '</name><trkseg>';
