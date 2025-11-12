@@ -75,6 +75,9 @@ if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
 }
 wp_enqueue_script( 'tvs-app' );
 
+// Enqueue Mapbox CSS for virtual training (conditionally loaded with mapbox-gl script)
+wp_enqueue_style( 'mapbox-gl' );
+
 // 1) Legg data på en trygg måte før app-skriptet
 $json = wp_json_encode( $payload );
 // Beskytt mot </script> sekvens i innhold

@@ -442,8 +442,16 @@ class TVS_Plugin {
         wp_register_script( 'tvs-flash', TVS_PLUGIN_URL . 'public/js/tvs-flash.js', array(), TVS_PLUGIN_VERSION, true );
         wp_enqueue_script( 'tvs-flash' );
 
+        // Register Mapbox GL JS for virtual training
+        wp_register_style( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css', array(), '3.0.1' );
+        wp_register_script( 'mapbox-gl', 'https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js', array(), '3.0.1', true );
+
+        // Register GSAP for virtual training animation
+        wp_register_script( 'gsap', 'https://unpkg.com/gsap@3/dist/gsap.min.js', array(), '3.12.5', true );
+
     // Register app script (kept separate) and block script (frontend)
-    wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    // Include Mapbox and GSAP for virtual training mode
+    wp_register_script( 'tvs-app', TVS_PLUGIN_URL . 'public/js/tvs-app.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash', 'mapbox-gl', 'gsap' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-my-activities', TVS_PLUGIN_URL . 'public/js/tvs-block-my-activities.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-invites', TVS_PLUGIN_URL . 'public/js/tvs-block-invites.js', array( 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-route-insights', TVS_PLUGIN_URL . 'public/js/tvs-block-route-insights.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );

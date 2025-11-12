@@ -5,6 +5,7 @@ import ProgressBar from './components/ProgressBar.js';
 import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine, RiFullscreenLine, RiFullscreenExitLine, RiMapPinLine, RiFileListLine, RiArrowUpSLine, RiArrowDownSLine } from 'react-icons/ri';
 import Loading from './components/Loading.js';
 import DevOverlay from './components/DevOverlay.js';
+import VirtualTraining from './components/VirtualTraining.js';
 
 const slowParam = Number(new URLSearchParams(location.search).get('tvsslow') || 0);
 
@@ -417,8 +418,21 @@ export default function App({ initialData, routeId }) {
   const title = data.title || 'Route';
   const meta = data.meta || {};
   const vimeo = meta.vimeo_id ? String(meta.vimeo_id) : '';
+  const gpxUrl = meta.gpx_url || '';
   const duration = Number(meta.duration_s || 0);
   const isLoggedIn = !!(window.TVS_SETTINGS?.user);
+
+  // Check if this is a virtual training route (GPX but no video)
+  if (!vimeo && gpxUrl) {
+    return h(VirtualTraining, { routeData: data, routeId });
+  }
+
+  // Fallback if no video or GPX
+  if (!vimeo && !gpxUrl) {
+    return h('div', { className: 'tvs-route tvs-fallback' },
+      h('p', null, 'This route has no video or GPX data available.')
+    );
+  }
 
   const controlButtons = !isLoggedIn
     ? h(
