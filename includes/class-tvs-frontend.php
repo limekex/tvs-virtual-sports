@@ -73,19 +73,24 @@ if ( ! wp_script_is( 'tvs-app', 'registered' ) ) {
         wp_register_script( 'tvs-app', $fallback, array( 'wp-element' ), null, true );
     }
 }
-wp_enqueue_script( 'tvs-app' );
-
-// Enqueue Mapbox CSS for virtual training (conditionally loaded with mapbox-gl script)
+// Enqueue Mapbox CSS for virtual training
 wp_enqueue_style( 'mapbox-gl' );
 
-// 1) Legg data på en trygg måte før app-skriptet
-$json = wp_json_encode( $payload );
-// Beskytt mot </script> sekvens i innhold
-$json = str_replace( '</script>', '<\/script>', $json );
-wp_add_inline_script( 'tvs-app', "window.tvs_route_payload = {$json};", 'before' );
+// Add Mapbox token to payload
+$payload['mapbox_token'] = get_option( 'tvs_mapbox_token', '' );
 
-// 2) Kun mountpunkt i markup (unngå ekstra inline <script> i innholdet)
-$out = sprintf( '<div id="tvs-app-root" data-route-id="%d"></div>', $id );
+// Enqueue script
+wp_enqueue_script( 'tvs-app' );
+
+// Embed data directly in HTML (inline script in output)
+$json = wp_json_encode( $payload );
+$json = str_replace( '</script>', '<\/script>', $json ); // Protect against script injection
+
+$out = sprintf( 
+    '<script>window.tvs_route_payload = %s;</script><div id="tvs-app-root" data-route-id="%d"></div>',
+    $json,
+    $id
+);
 
 return $out;
 }

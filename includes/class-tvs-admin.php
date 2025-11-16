@@ -388,6 +388,17 @@ class TVS_Admin {
 			)
 		);
 
+		// Register Mapbox Access Token
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_mapbox_token',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => '',
+			)
+		);
+
 		// Add settings fields.
 		add_settings_field(
 			'tvs_strava_client_id',
@@ -425,6 +436,14 @@ class TVS_Admin {
 			'tvs_strava_private',
 			__( 'Publish as Private', 'tvs-virtual-sports' ),
 			array( $this, 'render_private_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		add_settings_field(
+			'tvs_mapbox_token',
+			__( 'Mapbox Access Token', 'tvs-virtual-sports' ),
+			array( $this, 'render_mapbox_token_field' ),
 			'tvs-strava-settings',
 			'tvs_strava_settings_section'
 		);
@@ -1034,6 +1053,24 @@ class TVS_Admin {
 		</label>
 		<p class="description">
 			<?php esc_html_e( 'Note: Strava does not allow setting activities as "Only You" via API. To make an activity fully private, you must change it manually on Strava after upload.', 'tvs-virtual-sports' ); ?>
+		</p>
+		<?php
+	}
+
+	/** Render Mapbox Access Token field */
+	public function render_mapbox_token_field() {
+		$value = (string) get_option( 'tvs_mapbox_token', '' );
+		?>
+		<input type="text"
+			id="tvs_mapbox_token"
+			name="tvs_mapbox_token"
+			value="<?php echo esc_attr( $value ); ?>"
+			class="regular-text"
+			placeholder="pk.eyJ1..."
+		/>
+		<p class="description">
+			<?php esc_html_e( 'Enter your Mapbox access token for virtual training map features. Get your token at', 'tvs-virtual-sports' ); ?>
+			<a href="https://account.mapbox.com/access-tokens/" target="_blank" rel="noopener">account.mapbox.com</a>
 		</p>
 		<?php
 	}

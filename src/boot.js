@@ -20,6 +20,11 @@ function boot() {
   if (mount) {
     const inline = window.tvs_route_payload || null;
     const routeId = mount.getAttribute('data-route-id') || (inline && inline.id);
+    log('🚀 Boot Debug:');
+    log('  - Mount element:', !!mount);
+    log('  - Route ID:', routeId);
+    log('  - window.tvs_route_payload:', window.tvs_route_payload);
+    log('  - Inline payload:', inline);
     log('Boot → routeId:', routeId, 'inline payload:', !!inline);
     mountReact(App, { initialData: inline, routeId }, mount);
   }

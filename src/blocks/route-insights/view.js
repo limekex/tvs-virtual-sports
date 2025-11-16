@@ -9,65 +9,34 @@ function fmtDuration(seconds){
   return `${m}:${String(r).padStart(2,'0')}`;
 }
 
-function ElevationSparkline({ React, gpxUrl }){
+function ElevationSparkline({ React, routeId }){
   const { createElement: h, useEffect, useRef, useState } = React;
   const canvasRef = useRef(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
-    if(!gpxUrl) return;
+    if(!routeId) return;
     let cancelled = false;
     async function run(){
       try{
-        const res = await fetch(gpxUrl, { credentials: 'same-origin' });
+        // Use REST API to get GPX data (avoids SSL issues with direct file URLs)
+        const root = (window.TVS_SETTINGS && TVS_SETTINGS.restRoot) || '/wp-json/';
+        const url = `${root.replace(/\/$/,'')}/tvs/v1/routes/${encodeURIComponent(routeId)}/gpx-data`;
+        const res = await fetch(url);
         if(!res.ok) throw new Error('HTTP '+res.status);
-        let text = await res.text();
+        const gpxData = await res.json();
         if(cancelled) return;
-        // Sanitize common GPX header/path issues
-        try{
-          // Replace accidental "<xml" (missing ?) with proper XML declaration
-          text = text.replace(/^\s*<xml\b/i, m => m.replace('<xml', '<?xml'));
-          // Unescape accidental literal \n and \t sequences
-          text = text.replace(/\\n/g, '\n').replace(/\\t/g, '\t');
-        }catch(_e){ /* noop */ }
 
-        const parser = new window.DOMParser();
-        const doc = parser.parseFromString(text, 'application/xml');
-        const hasParserError = doc.getElementsByTagName('parsererror').length > 0;
-        // Try namespace-agnostic query first, then namespace-aware
-        let eles = Array.from(doc.getElementsByTagName('ele'));
-        if(eles.length < 2){
-          try{
-            eles = Array.from(doc.getElementsByTagNameNS('*', 'ele'));
-          }catch(_e){ /* noop */ }
-        }
-
-        let vals = eles.map(node => parseFloat((node.textContent||'').trim()))
+        // Extract elevation values from parsed GPX data
+        const vals = (gpxData.points || [])
+          .map(p => p.ele)
           .filter(v => Number.isFinite(v));
-
-        // Fallback: regex extraction if XML parser failed or found too few samples
-        if(vals.length < 2){
-          const regex = /<ele>\s*([+-]?\d+(?:\.\d+)?)\s*<\/ele>/gi;
-          const out = [];
-          let m;
-          while((m = regex.exec(text))){
-            const v = parseFloat(m[1]);
-            if(Number.isFinite(v)) out.push(v);
-          }
-          if(out.length >= 2) vals = out;
-        }
 
         const c = canvasRef.current; if(!c) return;
         const ctx = c.getContext('2d');
         const w = c.width = 260, hgt = c.height = 50;
         ctx.clearRect(0,0,w,hgt);
         if(vals.length < 2){
-          // Distinguish malformed vs genuinely missing samples
-          if(hasParserError){
-            setErr('Malformed GPX file');
-          }else{
-            // If file looks like GPX but has no <ele> values
-            setErr(/<gpx[\s>]/i.test(text) ? 'No elevation samples in GPX' : 'No elevation data');
-          }
+          setErr('No elevation data');
           return;
         }
         const min = Math.min(...vals), max = Math.max(...vals);
@@ -83,7 +52,7 @@ function ElevationSparkline({ React, gpxUrl }){
     }
     run();
     return () => { cancelled = true; };
-  }, [gpxUrl]);
+  }, [routeId]);
   return h('div', null,
     h('canvas', { ref: canvasRef, width: 260, height: 50, style: { maxWidth:'100%', display:'block' }}),
     err ? h('div', { className: 'tvs-text-muted', style:{fontSize:'.85em'} }, String(err)) : null
@@ -116,7 +85,7 @@ function RouteInsights({ React, title, showElevation, showSurface, showEta, show
   if(showElevation){
     const dist = meta.distance_m ? `${(meta.distance_m/1000).toFixed(2)} km` : null;
     const head = `Distance: ${dist || '—'} • Elevation: ${meta.elevation_m?Math.round(meta.elevation_m)+' m':'—'}`;
-    items.push(h('div', null, head, meta.gpx_url ? h(ElevationSparkline, { React, gpxUrl: meta.gpx_url }) : null));
+    items.push(h('div', null, head, routeId ? h(ElevationSparkline, { React, routeId }) : null));
   }
   if(showSurface){ items.push(`Surface: ${meta.surface || '—'}`); }
   if(showEta){

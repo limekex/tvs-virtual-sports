@@ -9,6 +9,16 @@ if ( ! defined( 'ABSPATH' ) ) {
 class TVS_REST {
     public function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+        add_action( 'rest_api_init', array( $this, 'register_pois_routes' ) );
+    }
+
+    /**
+     * Register PoI routes
+     */
+    public function register_pois_routes() {
+        require_once TVS_PLUGIN_DIR . 'includes/api/class-route-pois-controller.php';
+        $controller = new TVS_Route_POIs_Controller();
+        $controller->register_routes();
     }
 
     /** Parse invitation codes option into a normalized uppercase array */
@@ -997,6 +1007,20 @@ class TVS_REST {
             return new WP_Error( 'no_gpx', 'No GPX file available for this route', array( 'status' => 404 ) );
         }
 
+        // Convert URL to file path to avoid SSL issues in dev
+        $gpx_source = $gpx_url;
+        if ( filter_var( $gpx_url, FILTER_VALIDATE_URL ) ) {
+            // Try to convert to local file path
+            $upload_dir = wp_upload_dir();
+            $upload_url = $upload_dir['baseurl'];
+            $upload_path = $upload_dir['basedir'];
+            
+            // If URL is in uploads directory, convert to file path
+            if ( strpos( $gpx_url, $upload_url ) === 0 ) {
+                $gpx_source = str_replace( $upload_url, $upload_path, $gpx_url );
+            }
+        }
+
         // Check cache first (GPX parsing can be slow for large files)
         $cache_key = 'gpx_data_' . md5( $gpx_url );
         $cached = get_transient( $cache_key );
@@ -1007,7 +1031,7 @@ class TVS_REST {
 
         // Parse GPX
         $parser = new TVS_GPX();
-        $data = $parser->parse( $gpx_url );
+        $data = $parser->parse( $gpx_source );
 
         if ( is_wp_error( $data ) ) {
             return $data;

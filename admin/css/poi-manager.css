@@ -1,0 +1,454 @@
+/**
+ * PoI Manager Styles
+ * Admin styles for Points of Interest management
+ */
+
+/* Meta Box Container */
+.tvs-poi-meta-box {
+    background: #fff;
+}
+
+.tvs-poi-warning {
+    background: #fff8e1;
+    border-left: 4px solid #ffa000;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+}
+
+.tvs-poi-warning p {
+    margin: 0;
+    color: #e65100;
+}
+
+/* PoI List */
+#tvs-poi-list {
+    margin-top: 20px;
+}
+
+.tvs-no-pois {
+    padding: 40px 20px;
+    text-align: center;
+    color: #666;
+    background: #f9f9f9;
+    border: 2px dashed #ddd;
+    border-radius: 4px;
+}
+
+.tvs-poi-item {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.tvs-poi-item:hover {
+    background: #f0f0f0;
+}
+
+.poi-thumbnail {
+    flex-shrink: 0;
+    width: 60px;
+    height: 60px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #e0e0e0;
+}
+
+.poi-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.poi-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.poi-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.poi-icon {
+    font-size: 18px;
+}
+
+.poi-name strong {
+    font-size: 14px;
+    color: #1e1e1e;
+}
+
+.poi-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    font-size: 12px;
+    color: #666;
+}
+
+.poi-coords {
+    font-family: monospace;
+}
+
+.poi-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Modal */
+.tvs-poi-modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 100000;
+    overflow-y: auto;
+}
+
+.tvs-poi-modal-content {
+    position: relative;
+    max-width: 900px;
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+}
+
+.tvs-poi-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px;
+    border-bottom: 1px solid #ddd;
+}
+
+.tvs-poi-modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.tvs-poi-modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.tvs-poi-modal-close:hover {
+    background: #f0f0f0;
+}
+
+.tvs-poi-modal-body {
+    padding: 24px;
+}
+
+.tvs-poi-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 24px;
+    border-top: 1px solid #ddd;
+    background: #f9f9f9;
+}
+
+/* Map */
+.tvs-poi-map-container {
+    margin-bottom: 24px;
+}
+
+#tvs-poi-map {
+    width: 100%;
+    height: 400px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.tvs-poi-map-help {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #666;
+}
+
+/* Form Fields */
+.tvs-poi-form-row {
+    margin-bottom: 20px;
+}
+
+.tvs-poi-form-row label {
+    display: block;
+    margin-bottom: 6px;
+    font-weight: 600;
+    color: #1e1e1e;
+}
+
+.tvs-poi-form-row input[type="text"],
+.tvs-poi-form-row input[type="number"],
+.tvs-poi-form-row textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.tvs-poi-form-row textarea {
+    min-height: 80px;
+    resize: vertical;
+}
+
+.tvs-poi-form-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* Icon Selector */
+.tvs-icon-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 16px;
+    border-bottom: 2px solid #ddd;
+}
+
+.tvs-icon-tab {
+    padding: 10px 20px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    font-weight: 500;
+    color: #666;
+    transition: all 0.2s;
+}
+
+.tvs-icon-tab:hover {
+    color: #1e1e1e;
+}
+
+.tvs-icon-tab.active {
+    color: #2271b1;
+    border-bottom-color: #2271b1;
+}
+
+.tvs-icon-tab-content {
+    display: none;
+}
+
+.tvs-icon-tab-content.active {
+    display: block;
+}
+
+/* Icon Grid */
+.tvs-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    padding: 16px 0;
+}
+
+.tvs-icon-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px 8px;
+    background: #f9f9f9;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    min-height: 90px;
+    text-align: center;
+}
+
+.tvs-icon-option:hover {
+    background: #f0f0f0;
+    border-color: #999;
+}
+
+.tvs-icon-option.selected {
+    background: #e3f2fd;
+    border-color: #2271b1;
+}
+
+.tvs-icon-option .icon,
+.tvs-icon-option .icon-emoji {
+    font-size: 24px;
+    margin-bottom: 4px;
+}
+
+.tvs-icon-option .label,
+.tvs-icon-option .icon-name {
+    font-size: 10px;
+    color: #666;
+    text-align: center;
+    word-break: break-word;
+}
+
+/* Color Picker */
+.tvs-color-picker {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 8px 0;
+}
+
+.tvs-color-option {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: 3px solid #ddd;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.tvs-color-option:hover {
+    transform: scale(1.1);
+    border-color: #999;
+}
+
+.tvs-color-option.selected {
+    border-color: #2271b1;
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px #2271b1;
+}
+
+/* Custom Icon Upload */
+.tvs-custom-icon-section {
+    text-align: center;
+}
+
+#tvs-custom-icon-preview {
+    margin-top: 16px;
+    padding: 16px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+#tvs-custom-icon-preview img {
+    max-width: 60px;
+    height: 60px;
+    object-fit: contain;
+}
+
+/* Image Upload */
+.tvs-image-upload-section {
+    margin-bottom: 20px;
+}
+
+#tvs-image-preview {
+    margin-top: 16px;
+    padding: 16px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    text-align: center;
+}
+
+#tvs-image-preview img {
+    max-width: 200px;
+    border-radius: 4px;
+}
+
+/* Coordinate Display */
+.tvs-coordinates-display {
+    display: flex;
+    gap: 24px;
+    padding: 12px 16px;
+    background: #f9f9f9;
+    border-radius: 4px;
+    font-family: monospace;
+}
+
+.coordinate-item {
+    display: flex;
+    gap: 8px;
+}
+
+.coordinate-label {
+    font-weight: 600;
+    color: #666;
+}
+
+.coordinate-value {
+    color: #1e1e1e;
+}
+
+/* Distance Fields */
+.tvs-distance-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.tvs-distance-help {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: #666;
+    margin-top: -12px;
+}
+
+/* Buttons */
+.button.tvs-add-poi-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.button.tvs-add-poi-btn::before {
+    content: '+';
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* Responsive */
+@media (max-width: 782px) {
+    .tvs-poi-modal-content {
+        margin: 20px;
+    }
+
+    .tvs-poi-form-cols,
+    .tvs-distance-fields {
+        grid-template-columns: 1fr;
+    }
+
+    .tvs-icon-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .poi-meta {
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .poi-actions {
+        flex-direction: column;
+        gap: 4px;
+    }
+}

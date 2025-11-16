@@ -1,18 +1,65 @@
 import { React } from '../utils/reactMount.js';
-import { RiPlayCircleLine, RiPauseCircleLine, RiRestartLine, RiZoomInLine, RiZoomOutLine, RiEyeLine, RiEyeOffLine, RiFullscreenLine } from 'react-icons/ri';
+import { RiPlayCircleLine, RiPauseCircleLine, RiRestartLine, RiZoomInLine, RiZoomOutLine, RiVideoOnLine, RiVideoOffLine, RiFullscreenLine, RiFullscreenExitLine, RiAddLine, RiSubtractLine, RiCompassLine, RiCompass3Fill } from 'react-icons/ri';
+import { FaRoute } from 'react-icons/fa';
+import { AiOutlineSave } from 'react-icons/ai';
+
+// Icon library mapping (same as backend)
+const ICON_LIBRARY = {
+  'FaLandmark': '🏛️',
+  'FaTheaterMasks': '🎭',
+  'FaFortAwesome': '🏰',
+  'FaChurch': '⛪',
+  'FaTrain': '🚉',
+  'FaTree': '🌳',
+  'FaMountain': '🏔️',
+  'FaWater': '💧',
+  'FaBridge': '🌉',
+  'FaMonument': '🗿',
+  'FaUniversity': '🎓',
+  'FaHospital': '🏥',
+  'FaStore': '🏪',
+  'FaCoffee': '☕',
+  'FaCamera': '📷',
+};
 
 export default function VirtualTraining({ routeData, routeId }) {
   const { useEffect, useState, useRef, createElement: h } = React;
+  
+  // Debug mode check (URL parameter)
+  const isDebugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+  
+  // Debug logger - only logs if debug=1 in URL
+  function debugLog(...args) {
+    if (isDebugMode) {
+      console.log(...args);
+    }
+  }
+  
+  // Flash message helper
+  function showFlash(message, type = 'success') {
+    if (typeof window.tvsFlash === 'function') {
+      window.tvsFlash(message, type);
+    }
+  }
   
   // State
   const [isWelcome, setIsWelcome] = useState(true);
   const [speed, setSpeed] = useState(12);
   const [isPlaying, setIsPlaying] = useState(false);
   const [followMode, setFollowMode] = useState(true);
+  const [rotateWithDirection, setRotateWithDirection] = useState(true);
   const [showRouteLine, setShowRouteLine] = useState(true);
   const [activePoI, setActivePoI] = useState(null);
   const [currentDistanceKm, setCurrentDistanceKm] = useState(0);
+  const [currentElevation, setCurrentElevation] = useState(0);
+  const [currentGradient, setCurrentGradient] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
+  const [estimatedTotalTime, setEstimatedTotalTime] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [actualDistance, setActualDistance] = useState('');
+  const [actualTime, setActualTime] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   
   // Refs
   const mapRef = useRef(null);
@@ -22,50 +69,73 @@ export default function VirtualTraining({ routeData, routeId }) {
   const completedLineRef = useRef(null);
   const fullLineRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const followModeRef = useRef(followMode); // Track follow mode without triggering re-render
+  const rotateWithDirectionRef = useRef(rotateWithDirection); // Track rotation mode
+  const currentSpeedRef = useRef(speed); // Track current speed for calculations
+  const initialSpeedRef = useRef(null); // Track initial speed for timeScale calculations
+  const realStartTimeRef = useRef(null); // Real clock start time (Date.now())
+  const pauseStartTimeRef = useRef(null); // When pause started
+  const totalPausedTimeRef = useRef(0); // Total accumulated pause time in ms
+  const cachedGpxDataRef = useRef(null); // Cache GPX data to avoid re-fetching
+  const activePoIRef = useRef(null); // Track active PoI for proper closure
+  const poiHideTimeoutRef = useRef(null); // Track hide animation timeout
+  const lastBearingRef = useRef(null); // Track last bearing for smooth rotation
+  const elevationCanvasRef = useRef(null); // Canvas for elevation chart
+  const elevationMarkerRef = useRef(null); // Marker for current position on chart
   
-  // Points of Interest (demo data - later from WordPress)
-  const poisData = [
-    {
-      id: 'poi-1',
-      name: 'Oslo Sentralstasjon',
-      description: 'Norges største jernbanestasjon, åpnet i 1980.',
-      triggerDistanceMeters: 150,
-      hideDistanceMeters: 100,
-      lng: 10.7522,
-      lat: 59.9111,
-      icon: '🚂'
-    },
-    {
-      id: 'poi-2',
-      name: 'Operaen',
-      description: 'Den Norske Opera & Ballett, ikonisk marmorbygg ved fjorden.',
-      triggerDistanceMeters: 150,
-      hideDistanceMeters: 100,
-      lng: 10.7531,
-      lat: 59.9075,
-      icon: '🎭'
-    },
-    {
-      id: 'poi-3',
-      name: 'Akershus Festning',
-      description: 'Middelalderborg fra 1299, med fantastisk utsikt over Oslofjorden.',
-      triggerDistanceMeters: 150,
-      hideDistanceMeters: 100,
-      lng: 10.7364,
-      lat: 59.9078,
-      icon: '🏰'
+  // Points of Interest state
+  const [poisData, setPoisData] = useState([]);
+  const [isPoIHiding, setIsPoIHiding] = useState(false);
+  
+  // Helper to update activePoI (both state and ref)
+  const updateActivePoI = (poi) => {
+    // Clear any pending hide timeout
+    if (poiHideTimeoutRef.current) {
+      clearTimeout(poiHideTimeoutRef.current);
+      poiHideTimeoutRef.current = null;
     }
-  ];
+    
+    if (poi === null && activePoIRef.current !== null) {
+      // Trigger hide animation
+      setIsPoIHiding(true);
+      // Wait for animation to complete before actually hiding
+      poiHideTimeoutRef.current = setTimeout(() => {
+        activePoIRef.current = null;
+        setActivePoI(null);
+        setIsPoIHiding(false);
+      }, 300); // Match animation duration
+    } else {
+      // Show immediately
+      setIsPoIHiding(false);
+      activePoIRef.current = poi;
+      setActivePoI(poi);
+    }
+  };
 
   // Get GPX data from route meta
   const gpxUrl = routeData?.meta?.gpx_url || '';
   const routeTitle = routeData?.title || 'Route';
+  const mapboxToken = routeData?.mapbox_token || '';
   
-  // Calculate route info
-  const routeDistanceKm = routeData?.meta?.distance_km || 0;
+  // Calculate route info (use GPX if available)
+  const [gpxDistanceKm, setGpxDistanceKm] = useState(0);
+  const routeDistanceKm = gpxDistanceKm > 0 ? gpxDistanceKm : (routeData?.meta?.distance_km || 0);
   const durationMinutes = routeDistanceKm > 0 && speed > 0 
     ? Math.round((routeDistanceKm / speed) * 60) 
     : 0;
+  
+  // Update refs when values change
+  useEffect(() => {
+    followModeRef.current = followMode;
+  }, [followMode]);
+  
+  useEffect(() => {
+    rotateWithDirectionRef.current = rotateWithDirection;
+  }, [rotateWithDirection]);
+  
+  useEffect(() => {
+    currentSpeedRef.current = speed;
+  }, [speed]);
   
   // Haversine distance calculation
   function haversineDistance(lat1, lng1, lat2, lng2) {
@@ -77,6 +147,16 @@ export default function VirtualTraining({ routeData, routeId }) {
               Math.sin(dLng / 2) * Math.sin(dLng / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  }
+  
+  // Calculate bearing (direction) between two points
+  function calculateBearing(lat1, lng1, lat2, lng2) {
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const y = Math.sin(dLng) * Math.cos(lat2 * Math.PI / 180);
+    const x = Math.cos(lat1 * Math.PI / 180) * Math.sin(lat2 * Math.PI / 180) -
+              Math.sin(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.cos(dLng);
+    const bearing = Math.atan2(y, x) * 180 / Math.PI;
+    return (bearing + 360) % 360; // Normalize to 0-360
   }
   
   // Calculate distance to a specific point
@@ -107,23 +187,263 @@ export default function VirtualTraining({ routeData, routeId }) {
     return cumulativeDistance;
   }
   
-  // Load GPX data and initialize map
+  // Load GPX distance early (before map initialization)
   useEffect(() => {
-    if (!gpxUrl || !window.mapboxgl) return;
+    if (!routeId || cachedGpxDataRef.current) return; // Skip if already loaded
     
     (async () => {
       try {
-        // Fetch GPX data from REST endpoint
+        debugLog('📊 Pre-loading route distance for routeId:', routeId);
         const response = await fetch(`/wp-json/tvs/v1/routes/${routeId}/gpx-data`);
-        const gpxData = await response.json();
         
-        if (!gpxData.points || gpxData.points.length === 0) {
-          console.error('No GPS points in GPX data');
+        if (!response.ok) {
+          console.error('❌ Failed to pre-fetch GPX data:', response.status, response.statusText);
           return;
         }
         
-        // Initialize Mapbox
-        window.mapboxgl.accessToken = 'pk.eyJ1IjoibGltZWtleCIsImEiOiJjbTN4emN4NDUwY2o2MmtzOXRrb2w5YmNxIn0.rJ0YZqV7mDmx5I3rpglXvg';
+        const gpxData = await response.json();
+        
+        if (!gpxData.points || gpxData.points.length === 0) {
+          console.error('❌ No GPS points in GPX data');
+          return;
+        }
+        
+        // Cache the data
+        cachedGpxDataRef.current = gpxData;
+        
+        // Calculate total distance
+        let totalDist = 0;
+        for (let i = 0; i < gpxData.points.length - 1; i++) {
+          totalDist += haversineDistance(
+            gpxData.points[i].lat, gpxData.points[i].lng,
+            gpxData.points[i + 1].lat, gpxData.points[i + 1].lng
+          );
+        }
+        debugLog('✅ Pre-calculated distance:', totalDist.toFixed(2), 'km');
+        setGpxDistanceKm(totalDist);
+      } catch (error) {
+        console.error('❌ Failed to pre-load distance:', error);
+      }
+    })();
+  }, [routeId]);
+  
+  // Load Points of Interest from API
+  useEffect(() => {
+    if (!routeId) return;
+    
+    debugLog('📍 Fetching PoI data...');
+    
+    (async () => {
+      try {
+        const response = await fetch(`/wp-json/tvs/v1/routes/${routeId}/pois`);
+        
+        if (!response.ok) {
+          debugLog('⚠️ No PoI data available:', response.status);
+          return;
+        }
+        
+        const pois = await response.json();
+        debugLog('✅ Loaded PoIs:', pois.length, 'items');
+        
+        // Transform API data to match expected format
+        const transformedPois = pois.map(poi => ({
+          id: poi.id,
+          name: poi.name,
+          description: poi.description || '',
+          triggerDistanceMeters: poi.trigger_distance_m || 150,
+          hideDistanceMeters: poi.hide_distance_m || 100,
+          lng: poi.lng,
+          lat: poi.lat,
+          icon: poi.icon || '📍',
+          color: poi.color || '#8b5cf6',
+          imageUrl: poi.image_url || null,
+          imageThumbnail: poi.image_thumbnail || null,
+          customIconUrl: poi.custom_icon_url || null,
+          iconType: poi.icon_type || 'library'
+        }));
+        
+        setPoisData(transformedPois);
+      } catch (error) {
+        console.error('❌ Failed to load PoI data:', error);
+      }
+    })();
+  }, [routeId]);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (poiHideTimeoutRef.current) {
+        clearTimeout(poiHideTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Draw elevation chart
+  useEffect(() => {
+    if (!elevationCanvasRef.current || !cachedGpxDataRef.current?.points) {
+      if (isDebugMode) {
+        console.log('Elevation chart: missing canvas or GPX data', {
+          hasCanvas: !!elevationCanvasRef.current,
+          hasGpxData: !!cachedGpxDataRef.current,
+          hasPoints: !!cachedGpxDataRef.current?.points
+        });
+      }
+      return;
+    }
+    
+    const canvas = elevationCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    const points = cachedGpxDataRef.current.points;
+    
+    if (isDebugMode) {
+      console.log('Drawing elevation chart with', points.length, 'points');
+    }
+    
+    // Set canvas size
+    const width = canvas.width;
+    const height = canvas.height;
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, width, height);
+    
+    // Extract elevations
+    const elevations = points.map(p => p.ele || 0).filter(e => e > 0);
+    if (elevations.length === 0) {
+      if (isDebugMode) {
+        console.log('No elevation data found in GPX points');
+      }
+      return;
+    }
+    
+    if (isDebugMode) {
+      console.log('Elevation range:', Math.min(...elevations), '-', Math.max(...elevations));
+    }
+    
+    const minEle = Math.min(...elevations);
+    const maxEle = Math.max(...elevations);
+    const eleRange = maxEle - minEle;
+    
+    if (eleRange === 0) {
+      if (isDebugMode) {
+        console.log('Elevation range is 0, cannot draw chart');
+      }
+      return;
+    }
+    
+    // Draw elevation profile
+    ctx.beginPath();
+    ctx.strokeStyle = '#667eea';
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(102, 126, 234, 0.2)';
+    
+    points.forEach((point, index) => {
+      if (!point.ele) return;
+      
+      const x = (index / (points.length - 1)) * width;
+      const y = height - ((point.ele - minEle) / eleRange) * height;
+      
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    
+    // Fill area under curve
+    ctx.lineTo(width, height);
+    ctx.lineTo(0, height);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Draw line
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      if (!point.ele) return;
+      
+      const x = (index / (points.length - 1)) * width;
+      const y = height - ((point.ele - minEle) / eleRange) * height;
+      
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+    
+    if (isDebugMode) {
+      console.log('Elevation chart drawn successfully');
+    }
+    
+  }, [isWelcome]);
+  
+  // Load GPX data and initialize map
+  useEffect(() => {
+    // Only initialize when welcome screen is hidden
+    if (isWelcome) return;
+    
+    if (!gpxUrl || !window.mapboxgl || !mapRef.current || !mapboxToken) {
+      debugLog('⏳ Waiting for map initialization:', {
+        gpxUrl: !!gpxUrl,
+        mapboxgl: !!window.mapboxgl,
+        mapRef: !!mapRef.current,
+        mapboxToken: !!mapboxToken,
+        isWelcome
+      });
+      return;
+    }
+    
+    debugLog('🗺️ Initializing map...');
+    
+    (async () => {
+      try {
+        // Use cached GPX data if available, otherwise fetch
+        let gpxData = cachedGpxDataRef.current;
+        
+        if (!gpxData) {
+          debugLog('📥 Fetching GPX data from REST endpoint...');
+          const response = await fetch(`/wp-json/tvs/v1/routes/${routeId}/gpx-data`);
+          
+          if (!response.ok) {
+            console.error('❌ Failed to fetch GPX data:', response.status, response.statusText);
+            showFlash('Failed to load route data. Please refresh the page.', 'error');
+            return;
+          }
+          
+          gpxData = await response.json();
+          cachedGpxDataRef.current = gpxData;
+        } else {
+          debugLog('♻️ Using cached GPX data');
+        }
+        
+        debugLog('📦 GPX data ready:', {
+          points: gpxData.points?.length,
+          first: gpxData.points?.[0],
+          last: gpxData.points?.[gpxData.points?.length - 1],
+          gpxUrl
+        });
+        
+        if (!gpxData.points || gpxData.points.length === 0) {
+          console.error('❌ No GPS points in GPX data');
+          showFlash('No GPS data found for this route.', 'error');
+          return;
+        }
+
+        // Ensure distance is calculated (should already be done in pre-load)
+        if (gpxDistanceKm === 0) {
+          let totalDist = 0;
+          for (let i = 0; i < gpxData.points.length - 1; i++) {
+            totalDist += haversineDistance(
+              gpxData.points[i].lat, gpxData.points[i].lng,
+              gpxData.points[i + 1].lat, gpxData.points[i + 1].lng
+            );
+          }
+          debugLog('✅ Calculated distance during map init:', totalDist.toFixed(2), 'km');
+          setGpxDistanceKm(totalDist);
+        }
+        
+        // Initialize Mapbox with token from WordPress settings
+        window.mapboxgl.accessToken = mapboxToken;
         
         const map = new window.mapboxgl.Map({
           container: mapRef.current,
@@ -137,6 +457,7 @@ export default function VirtualTraining({ routeData, routeId }) {
         mapInstanceRef.current = map;
         
         map.on('load', () => {
+          debugLog('🛠️ Map loaded, attempting to create GSAP timeline...');
           // Add full route line (gray)
           const routeCoordinates = gpxData.points.map(p => [p.lng, p.lat]);
           
@@ -161,9 +482,9 @@ export default function VirtualTraining({ routeData, routeId }) {
               'line-cap': 'round'
             },
             paint: {
-              'line-color': '#888',
+              'line-color': '#ec4899', // --tvs-color-neon-magenta
               'line-width': 6,
-              'line-opacity': 0.7
+              'line-opacity': 1.0
             }
           });
           
@@ -191,9 +512,9 @@ export default function VirtualTraining({ routeData, routeId }) {
               'line-cap': 'round'
             },
             paint: {
-              'line-color': '#00ff00',
+              'line-color': '#84cc16', // --tvs-color-neon-lime
               'line-width': 6,
-              'line-opacity': 0.95
+              'line-opacity': 1.0
             }
           });
           
@@ -222,14 +543,33 @@ export default function VirtualTraining({ routeData, routeId }) {
             poiEl.style.width = '40px';
             poiEl.style.height = '40px';
             poiEl.style.borderRadius = '50%';
-            poiEl.style.backgroundColor = '#8b5cf6';
+            poiEl.style.backgroundColor = poi.color || '#8b5cf6';
             poiEl.style.border = '3px solid white';
+            poiEl.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)';
             poiEl.style.display = 'flex';
             poiEl.style.alignItems = 'center';
             poiEl.style.justifyContent = 'center';
-            poiEl.style.fontSize = '20px';
             poiEl.style.cursor = 'pointer';
-            poiEl.innerHTML = poi.icon;
+            
+            // Handle custom SVG icons
+            if (poi.iconType === 'custom' && poi.customIconUrl) {
+              poiEl.style.fontSize = '0';
+              poiEl.style.padding = '6px';
+              
+              const img = document.createElement('img');
+              img.src = poi.customIconUrl;
+              img.style.width = '100%';
+              img.style.height = '100%';
+              img.style.objectFit = 'contain';
+              img.style.filter = 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))';
+              poiEl.appendChild(img);
+            } else {
+              // Use library icon (convert name to emoji)
+              const emoji = ICON_LIBRARY[poi.icon] || poi.icon || '📍';
+              poiEl.style.fontSize = '20px';
+              poiEl.style.textShadow = '0 1px 2px rgba(0,0,0,0.3)';
+              poiEl.innerHTML = emoji;
+            }
             
             new window.mapboxgl.Marker(poiEl)
               .setLngLat([poi.lng, poi.lat])
@@ -238,87 +578,262 @@ export default function VirtualTraining({ routeData, routeId }) {
           
           // Setup GSAP timeline
           if (window.gsap) {
+            if (!gpxData.points || gpxData.points.length < 2) {
+              console.warn('❌ Not enough route points for animation!');
+            } else {
+              debugLog('✅ Enough route points, initializing smooth timeline...', gpxData.points.length);
+            }
             const durationSeconds = (gpxData.distance_km / speed) * 3600;
-            const pointDuration = durationSeconds / gpxData.points.length;
+            debugLog('🕒 Timeline duration (s):', durationSeconds);
             
+            // Build cumulative distance array for distance-based animation
+            const cumulativeDistances = [0];
+            for (let i = 1; i < gpxData.points.length; i++) {
+              const segmentDist = haversineDistance(
+                gpxData.points[i-1].lat, gpxData.points[i-1].lng,
+                gpxData.points[i].lat, gpxData.points[i].lng
+              );
+              cumulativeDistances.push(cumulativeDistances[i-1] + segmentDist);
+            }
+            const totalDistance = cumulativeDistances[cumulativeDistances.length - 1];
+            debugLog('📏 Total distance from points:', totalDistance.toFixed(3), 'km');
+            
+            // Interpoler smooth animasjon mellom punkter basert på AVSTAND
+            const markerPos = { lng: gpxData.points[0].lng, lat: gpxData.points[0].lat };
+            const cameraRotation = { bearing: 0 }; // Separate object for smooth bearing animation
             const timeline = window.gsap.timeline({
               paused: true,
               onUpdate: () => {
-                const progress = timeline.progress();
-                const currentIndex = Math.floor(progress * (gpxData.points.length - 1));
-                const currentPoint = gpxData.points[currentIndex];
+                // Calculate current distance based on timeline progress
+                const currentDist = timeline.progress() * totalDistance;
                 
-                if (currentPoint && markerRef.current) {
-                  // Update marker position
-                  markerRef.current.setLngLat([currentPoint.lng, currentPoint.lat]);
+                // Find which segment we're in based on cumulative distance
+                let idx = 0;
+                for (let i = 0; i < cumulativeDistances.length - 1; i++) {
+                  if (currentDist >= cumulativeDistances[i] && currentDist <= cumulativeDistances[i + 1]) {
+                    idx = i;
+                    break;
+                  }
+                }
+                
+                // Calculate fraction within this segment based on distance
+                let frac = 0;
+                if (idx < cumulativeDistances.length - 1) {
+                  const segmentStartDist = cumulativeDistances[idx];
+                  const segmentEndDist = cumulativeDistances[idx + 1];
+                  const segmentLength = segmentEndDist - segmentStartDist;
+                  if (segmentLength > 0) {
+                    frac = (currentDist - segmentStartDist) / segmentLength;
+                  }
+                }
+                let lng, lat;
+                if (idx < gpxData.points.length - 1) {
+                  // Lineær interpolasjon mellom idx og idx+1
+                  lng = gpxData.points[idx].lng + (gpxData.points[idx+1].lng - gpxData.points[idx].lng) * frac;
+                  lat = gpxData.points[idx].lat + (gpxData.points[idx+1].lat - gpxData.points[idx].lat) * frac;
+                } else {
+                  lng = gpxData.points[gpxData.points.length-1].lng;
+                  lat = gpxData.points[gpxData.points.length-1].lat;
+                }
+                if (markerRef.current) {
+                  markerRef.current.setLngLat([lng, lat]);
+                }
+                
+                // Calculate dynamic bearing from current position to look-ahead position
+                if (rotateWithDirectionRef.current && idx < gpxData.points.length - 1) {
+                  // Look ahead in distance (20 meters)
+                  const lookAheadDistanceKm = 0.02; // 20 meters
+                  const targetDist = Math.min(currentDist + lookAheadDistanceKm, totalDistance);
                   
-                  // Update camera if following
-                  if (followMode && mapInstanceRef.current) {
-                    mapInstanceRef.current.jumpTo({
-                      center: [currentPoint.lng, currentPoint.lat]
-                    });
+                  // Find look-ahead position
+                  let lookAheadIdx = idx;
+                  for (let i = idx; i < cumulativeDistances.length - 1; i++) {
+                    if (targetDist >= cumulativeDistances[i] && targetDist <= cumulativeDistances[i + 1]) {
+                      lookAheadIdx = i;
+                      break;
+                    }
                   }
                   
-                  // Update completed route line
-                  const completedCoords = gpxData.points
-                    .slice(0, currentIndex + 1)
-                    .map(p => [p.lng, p.lat]);
-                  
-                  if (completedCoords.length > 0 && mapInstanceRef.current) {
-                    mapInstanceRef.current.getSource('completed-route')?.setData({
-                      type: 'Feature',
-                      properties: {},
-                      geometry: {
-                        type: 'LineString',
-                        coordinates: completedCoords
-                      }
-                    });
+                  let lookAheadFrac = 0;
+                  if (lookAheadIdx < cumulativeDistances.length - 1) {
+                    const segmentStartDist = cumulativeDistances[lookAheadIdx];
+                    const segmentEndDist = cumulativeDistances[lookAheadIdx + 1];
+                    const segmentLength = segmentEndDist - segmentStartDist;
+                    if (segmentLength > 0) {
+                      lookAheadFrac = (targetDist - segmentStartDist) / segmentLength;
+                    }
                   }
                   
-                  // Calculate current distance
-                  let distanceSum = 0;
-                  for (let i = 0; i < currentIndex && i < gpxData.points.length - 1; i++) {
-                    distanceSum += haversineDistance(
-                      gpxData.points[i].lat, gpxData.points[i].lng,
-                      gpxData.points[i + 1].lat, gpxData.points[i + 1].lng
-                    );
+                  let lookAheadLng, lookAheadLat;
+                  if (lookAheadIdx < gpxData.points.length - 1) {
+                    lookAheadLng = gpxData.points[lookAheadIdx].lng + 
+                      (gpxData.points[lookAheadIdx+1].lng - gpxData.points[lookAheadIdx].lng) * lookAheadFrac;
+                    lookAheadLat = gpxData.points[lookAheadIdx].lat + 
+                      (gpxData.points[lookAheadIdx+1].lat - gpxData.points[lookAheadIdx].lat) * lookAheadFrac;
+                  } else {
+                    lookAheadLng = gpxData.points[gpxData.points.length-1].lng;
+                    lookAheadLat = gpxData.points[gpxData.points.length-1].lat;
                   }
-                  setCurrentDistanceKm(distanceSum);
-                  setElapsedTime(timeline.time());
                   
-                  // Check PoI proximity
-                  poisData.forEach(poi => {
-                    const poiDistanceKm = calculateDistanceToPoint(poi.lng, poi.lat, gpxData.points, currentIndex);
-                    const triggerDistanceKm = (poi.triggerDistanceMeters || 150) / 1000;
-                    const hideDistanceKm = (poi.hideDistanceMeters || 100) / 1000;
-                    
-                    if (distanceSum >= (poiDistanceKm - triggerDistanceKm) && 
-                        distanceSum <= (poiDistanceKm + hideDistanceKm)) {
-                      if (activePoI?.id !== poi.id) {
-                        setActivePoI(poi);
-                      }
-                    } else if (activePoI?.id === poi.id && distanceSum > (poiDistanceKm + hideDistanceKm)) {
-                      setActivePoI(null);
+                  // Calculate bearing from current to look-ahead
+                  let newBearing = calculateBearing(lat, lng, lookAheadLat, lookAheadLng);
+                  
+                  // Smooth bearing with wrapping prevention
+                  if (lastBearingRef.current !== null) {
+                    let diff = newBearing - lastBearingRef.current;
+                    if (diff > 180) diff -= 360;
+                    if (diff < -180) diff += 360;
+                    newBearing = lastBearingRef.current + diff * 0.15; // Smooth interpolation
+                  }
+                  
+                  cameraRotation.bearing = newBearing;
+                  lastBearingRef.current = newBearing;
+                }
+                
+                // Update camera if following
+                if (followModeRef.current && mapInstanceRef.current) {
+                  mapInstanceRef.current.jumpTo({ 
+                    center: [lng, lat],
+                    bearing: rotateWithDirectionRef.current ? cameraRotation.bearing : 0
+                  });
+                }
+                // Update completed route line
+                const completedCoords = gpxData.points.slice(0, idx + 1).map(p => [p.lng, p.lat]);
+                completedCoords.push([lng, lat]);
+                if (completedCoords.length > 0 && mapInstanceRef.current) {
+                  mapInstanceRef.current.getSource('completed-route')?.setData({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                      type: 'LineString',
+                      coordinates: completedCoords
                     }
                   });
                 }
+                // Use the distance we already calculated
+                setCurrentDistanceKm(currentDist);
+                
+                // Update elevation marker position directly (smooth animation)
+                if (elevationMarkerRef.current && totalDistance > 0) {
+                  const progress = (currentDist / totalDistance) * 100;
+                  elevationMarkerRef.current.style.left = `${progress}%`;
+                  if (isDebugMode && Math.random() < 0.01) { // Log occasionally in debug mode
+                    console.log('Marker position:', progress.toFixed(2) + '%');
+                  }
+                }
+                
+                // Calculate elevation and gradient
+                if (gpxData.points[idx]?.ele !== undefined) {
+                  let ele = gpxData.points[idx].ele;
+                  if (idx < gpxData.points.length - 1 && gpxData.points[idx+1]?.ele !== undefined) {
+                    // Interpolate elevation
+                    ele = gpxData.points[idx].ele + (gpxData.points[idx+1].ele - gpxData.points[idx].ele) * frac;
+                  }
+                  setCurrentElevation(Math.round(ele));
+                  
+                  // Calculate average gradient over next 200m (smoother for treadmill adjustment)
+                  const gradientDistanceKm = 0.2; // 200 meters
+                  const targetGradientDist = Math.min(currentDist + gradientDistanceKm, totalDistance);
+                  
+                  // Collect all elevation changes over the distance
+                  let totalElevationChange = 0;
+                  let samplesCount = 0;
+                  
+                  for (let i = idx; i < gpxData.points.length - 1; i++) {
+                    const segmentStart = cumulativeDistances[i];
+                    const segmentEnd = cumulativeDistances[i + 1];
+                    
+                    // Stop if we've passed target distance
+                    if (segmentStart > targetGradientDist) break;
+                    
+                    // Include this segment if it's within our range
+                    if (segmentEnd <= targetGradientDist && gpxData.points[i]?.ele !== undefined && gpxData.points[i+1]?.ele !== undefined) {
+                      totalElevationChange += gpxData.points[i + 1].ele - gpxData.points[i].ele;
+                      samplesCount++;
+                    }
+                  }
+                  
+                  if (samplesCount > 0) {
+                    const horizontalDistance = (targetGradientDist - currentDist) * 1000; // Convert to meters
+                    if (horizontalDistance > 0) {
+                      const gradient = (totalElevationChange / horizontalDistance) * 100;
+                      setCurrentGradient(Math.round(gradient)); // Round to whole number
+                    }
+                  }
+                }
+                
+                // Calculate real elapsed time (wall clock time, not animation time)
+                let realElapsedSeconds = 0;
+                if (realStartTimeRef.current) {
+                  const realElapsedMs = Date.now() - realStartTimeRef.current - totalPausedTimeRef.current;
+                  realElapsedSeconds = realElapsedMs / 1000;
+                  setElapsedTime(realElapsedSeconds);
+                }
+                
+                // Calculate estimated total time based on remaining distance and current speed
+                const remainingDistanceKm = totalDistance - currentDist;
+                const currentSpeed = currentSpeedRef.current;
+                if (currentSpeed > 0) {
+                  const remainingTimeSeconds = (remainingDistanceKm / currentSpeed) * 3600;
+                  const estimatedTotal = realElapsedSeconds + remainingTimeSeconds;
+                  setEstimatedTotalTime(estimatedTotal);
+                }
+                
+                // Check PoI proximity
+                poisData.forEach(poi => {
+                  const poiDistanceKm = calculateDistanceToPoint(poi.lng, poi.lat, gpxData.points, idx);
+                  const triggerDistanceKm = (poi.triggerDistanceMeters || 150) / 1000;
+                  const hideDistanceKm = (poi.hideDistanceMeters || 100) / 1000;
+                  
+                  const isInTriggerRange = currentDist >= (poiDistanceKm - triggerDistanceKm) && currentDist <= poiDistanceKm;
+                  const isInHideRange = currentDist > poiDistanceKm && currentDist <= (poiDistanceKm + hideDistanceKm);
+                  const isPastHideDistance = currentDist > (poiDistanceKm + hideDistanceKm);
+                  
+                  // Show when in range (approaching or passed but within hide distance)
+                  if (isInTriggerRange || isInHideRange) {
+                    if (activePoIRef.current?.id !== poi.id) {
+                      debugLog('✅ Showing PoI:', poi.name, {
+                        currentDist: currentDist.toFixed(2),
+                        poiDist: poiDistanceKm.toFixed(2),
+                        phase: isInTriggerRange ? 'approaching' : 'passed',
+                        triggerRange: `${(poiDistanceKm - triggerDistanceKm).toFixed(2)} - ${poiDistanceKm.toFixed(2)}`,
+                        hideRange: `${poiDistanceKm.toFixed(2)} - ${(poiDistanceKm + hideDistanceKm).toFixed(2)}`
+                      });
+                      updateActivePoI(poi);
+                    }
+                  }
+                  // Hide when past hide distance
+                  else if (activePoIRef.current?.id === poi.id && isPastHideDistance) {
+                    debugLog('❌ Hiding PoI:', poi.name, {
+                      currentDist: currentDist.toFixed(2),
+                      poiDist: poiDistanceKm.toFixed(2),
+                      hideThreshold: (poiDistanceKm + hideDistanceKm).toFixed(2)
+                    });
+                    updateActivePoI(null);
+                  }
+                });
               }
             });
             
-            // Add keyframes for each point
-            gpxData.points.forEach((point, index) => {
-              timeline.to({}, {
-                duration: pointDuration,
-                ease: 'none'
-              });
-            });
+            // Animate marker position
+            timeline.to(markerPos, {
+              lng: gpxData.points[gpxData.points.length-1].lng,
+              lat: gpxData.points[gpxData.points.length-1].lat,
+              duration: durationSeconds,
+              ease: 'none'
+            }, 0); // Start at time 0
             
             timelineRef.current = timeline;
+            initialSpeedRef.current = speed; // Store initial speed for timeScale calculations
+            debugLog('🎬 GSAP smooth timeline created:', { keyframes: 1 });
+            debugLog('📍 timelineRef.current set:', !!timelineRef.current);
+            debugLog('⚡ Initial speed stored:', speed);
           }
         });
         
       } catch (error) {
-        console.error('Failed to load GPX data:', error);
+        console.error('❌ Failed to load GPX data:', error);
+        showFlash('Error loading route data: ' + error.message, 'error');
       }
     })();
     
@@ -330,24 +845,96 @@ export default function VirtualTraining({ routeData, routeId }) {
         timelineRef.current.kill();
       }
     };
-  }, [gpxUrl, routeId]);
+  }, [gpxUrl, routeId, mapboxToken, isWelcome]); // Removed speed and followMode from dependencies
   
   // Control functions
   function startTraining() {
+    debugLog('▶️ Start Training clicked');
+    debugLog('  - Timeline exists:', !!timelineRef.current);
+    debugLog('  - Map exists:', !!mapInstanceRef.current);
+    debugLog('  - Marker exists:', !!markerRef.current);
+    debugLog('  - GSAP available:', !!window.gsap);
     setIsWelcome(false);
-    setIsPlaying(true);
-    if (timelineRef.current) {
-      timelineRef.current.play();
-    }
+    // Initialize estimated total time based on initial speed
+    const initialEstimate = (routeDistanceKm / speed) * 3600;
+    setEstimatedTotalTime(initialEstimate);
+    
+    // Trigger first play with flyTo animation
+    setTimeout(() => {
+      if (timelineRef.current) {
+        togglePlay();
+      }
+    }, 100); // Small delay to ensure state is updated
   }
   
   function togglePlay() {
     if (!timelineRef.current) return;
     
     if (isPlaying) {
+      // Pausing
       timelineRef.current.pause();
+      pauseStartTimeRef.current = Date.now(); // Record when we paused
+      showFlash('Activity paused');
     } else {
-      timelineRef.current.play();
+      // Playing/Resuming
+      if (!realStartTimeRef.current) {
+        // First play - start the clock and zoom animation
+        realStartTimeRef.current = Date.now();
+        totalPausedTimeRef.current = 0;
+        showFlash('Activity started');
+        
+        // Smooth zoom in animation on first play
+        debugLog('🎬 First play detected, preparing flyTo...');
+        debugLog('  - Map instance:', !!mapInstanceRef.current);
+        debugLog('  - Marker:', !!markerRef.current);
+        debugLog('  - Timeline:', !!timelineRef.current);
+        
+        if (mapInstanceRef.current && markerRef.current && timelineRef.current) {
+          const startCoords = markerRef.current.getLngLat();
+          debugLog('✈️ Starting flyTo animation (2s):', { 
+            lng: startCoords.lng, 
+            lat: startCoords.lat, 
+            zoom: 16,
+            currentZoom: mapInstanceRef.current.getZoom()
+          });
+          
+          // Pause timeline during flyTo to avoid conflict
+          timelineRef.current.pause();
+          
+          mapInstanceRef.current.flyTo({
+            center: [startCoords.lng, startCoords.lat],
+            zoom: 16,
+            pitch: 60,
+            duration: 2000,
+            essential: true
+          });
+          
+          // Start timeline after flyTo completes (2000ms + small buffer)
+          setTimeout(() => {
+            if (timelineRef.current) {
+              debugLog('▶️ Starting timeline after flyTo complete');
+              timelineRef.current.play();
+            }
+          }, 2100);
+        } else {
+          console.warn('⚠️ Cannot execute flyTo - waiting for map/marker/timeline...');
+          // Fallback: start timeline immediately if flyTo can't run
+          if (timelineRef.current) {
+            timelineRef.current.play();
+          }
+        }
+      } else {
+        // Resuming from pause or regular play (not first time)
+        if (pauseStartTimeRef.current) {
+          // Accumulate pause time
+          const pauseDuration = Date.now() - pauseStartTimeRef.current;
+          totalPausedTimeRef.current += pauseDuration;
+          pauseStartTimeRef.current = null;
+          showFlash('Activity resumed');
+        }
+        // Start timeline immediately (no flyTo for resume/subsequent plays)
+        timelineRef.current.play();
+      }
     }
     setIsPlaying(!isPlaying);
   }
@@ -358,18 +945,66 @@ export default function VirtualTraining({ routeData, routeId }) {
     setIsPlaying(true);
     setCurrentDistanceKm(0);
     setElapsedTime(0);
-    setActivePoI(null);
+    updateActivePoI(null);
+    // Reset real time tracking
+    realStartTimeRef.current = Date.now();
+    pauseStartTimeRef.current = null;
+    totalPausedTimeRef.current = 0;
+    // Reset estimated time based on current speed
+    const initialEstimate = (routeDistanceKm / currentSpeedRef.current) * 3600;
+    setEstimatedTotalTime(initialEstimate);
+    showFlash('Activity restarted');
   }
   
   function zoomIn() {
     if (mapInstanceRef.current) {
+      // Temporarily disable follow mode for zoom
+      const wasFollowing = followModeRef.current;
+      followModeRef.current = false;
       mapInstanceRef.current.zoomIn();
+      // Re-enable after a short delay
+      setTimeout(() => {
+        followModeRef.current = wasFollowing;
+      }, 100);
     }
   }
   
   function zoomOut() {
     if (mapInstanceRef.current) {
+      // Temporarily disable follow mode for zoom
+      const wasFollowing = followModeRef.current;
+      followModeRef.current = false;
       mapInstanceRef.current.zoomOut();
+      // Re-enable after a short delay
+      setTimeout(() => {
+        followModeRef.current = wasFollowing;
+      }, 100);
+    }
+  }
+  
+  function increaseSpeed() {
+    const newSpeed = Math.min(speed + 1, 50);
+    setSpeed(newSpeed);
+    // Update timeline timeScale if timeline exists and is created
+    if (timelineRef.current && initialSpeedRef.current) {
+      // Calculate timeScale relative to initial speed, not previous speed
+      const timeScale = newSpeed / initialSpeedRef.current;
+      timelineRef.current.timeScale(timeScale);
+      debugLog(`⚡ Speed increased to ${newSpeed} km/h (timeScale: ${timeScale.toFixed(2)})`);
+      showFlash(`Speed increased to ${newSpeed} km/h`, 'success');
+    }
+  }
+  
+  function decreaseSpeed() {
+    const newSpeed = Math.max(speed - 1, 1);
+    setSpeed(newSpeed);
+    // Update timeline timeScale if timeline exists and is created
+    if (timelineRef.current && initialSpeedRef.current) {
+      // Calculate timeScale relative to initial speed, not previous speed
+      const timeScale = newSpeed / initialSpeedRef.current;
+      timelineRef.current.timeScale(timeScale);
+      debugLog(`⚡ Speed decreased to ${newSpeed} km/h (timeScale: ${timeScale.toFixed(2)})`);
+      showFlash(`Speed decreased to ${newSpeed} km/h`, 'warning');
     }
   }
   
@@ -381,12 +1016,167 @@ export default function VirtualTraining({ routeData, routeId }) {
     setShowRouteLine(!showRouteLine);
   }
   
-  function enterFullscreen() {
-    const container = document.querySelector('.tvs-virtual-training');
-    if (container && container.requestFullscreen) {
-      container.requestFullscreen();
+  function openSaveModal() {
+    // Pre-fill with app values as defaults
+    setActualDistance(currentDistanceKm.toFixed(3)); // 3 decimals for precision
+    // Format time as MM:SS or H:MM:SS
+    const totalSeconds = Math.round(elapsedTime);
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    
+    // Use H:MM:SS if over 1 hour, otherwise MM:SS
+    if (hours > 0) {
+      setActualTime(`${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+    } else {
+      setActualTime(`${mins}:${secs.toString().padStart(2, '0')}`);
+    }
+    
+    setShowSaveModal(true);
+    // Pause if playing
+    if (isPlaying && timelineRef.current) {
+      timelineRef.current.pause();
+      pauseStartTimeRef.current = Date.now();
+      setIsPlaying(false);
     }
   }
+  
+  async function saveActivity() {
+    if (!actualDistance || !actualTime) {
+      showFlash('Please enter both distance and time', 'error');
+      return;
+    }
+    
+    setIsSaving(true);
+    
+    try {
+      // Parse distance (supports decimals like 8.234 km)
+      const distanceM = parseFloat(actualDistance) * 1000; // Convert km to meters
+      
+      // Parse time (supports H:MM:SS, MM:SS format or just seconds)
+      let durationS;
+      if (actualTime.includes(':')) {
+        const parts = actualTime.split(':').map(s => parseInt(s.trim()) || 0);
+        if (parts.length === 3) {
+          // H:MM:SS format
+          const [hours, mins, secs] = parts;
+          durationS = hours * 3600 + mins * 60 + secs;
+        } else if (parts.length === 2) {
+          // MM:SS format
+          const [mins, secs] = parts;
+          durationS = mins * 60 + secs;
+        } else {
+          // Invalid format
+          durationS = 0;
+        }
+      } else {
+        // If just a number, treat as total seconds
+        durationS = parseInt(actualTime) || 0;
+      }
+      
+      if (distanceM <= 0 || durationS <= 0) {
+        showFlash('Distance and time must be greater than zero', 'error');
+        setIsSaving(false);
+        return;
+      }
+      
+      const now = new Date().toISOString();
+      
+      const response = await fetch('/wp-json/tvs/v1/activities', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-WP-Nonce': window.TVS_SETTINGS?.nonce || ''
+        },
+        body: JSON.stringify({
+          route_id: routeId,
+          route_name: routeTitle,
+          activity_date: now,
+          started_at: now,
+          ended_at: now,
+          duration_s: durationS,
+          distance_m: distanceM,
+          visibility: 'private'
+        })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to save activity');
+      }
+      
+      const result = await response.json();
+      debugLog('✅ Activity saved:', result);
+      
+      // Close modal and reset training
+      setShowSaveModal(false);
+      setIsSaving(false);
+      
+      // Reset everything
+      if (timelineRef.current) {
+        timelineRef.current.pause();
+        timelineRef.current.progress(0);
+      }
+      setIsWelcome(true);
+      setIsPlaying(false);
+      setCurrentDistanceKm(0);
+      setElapsedTime(0);
+      setEstimatedTotalTime(0);
+      updateActivePoI(null);
+      realStartTimeRef.current = null;
+      pauseStartTimeRef.current = null;
+      totalPausedTimeRef.current = 0;
+      
+      showFlash('Activity saved successfully! 🎉', 'success');
+      
+      // Notify My Activities widget to refresh
+      window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
+      
+    } catch (error) {
+      console.error('Failed to save activity:', error);
+      showFlash('Failed to save activity: ' + (error?.message || 'Unknown error'), 'error');
+      setIsSaving(false);
+    }
+  }
+  
+  function toggleFullscreen() {
+    const container = document.querySelector('.tvs-virtual-training');
+    if (!container) return;
+    
+    if (!isFullscreen) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      }
+      setIsFullscreen(true);
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+      setIsFullscreen(false);
+    }
+  }
+  
+  // Listen for fullscreen changes
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsFullscreen(!!document.fullscreenElement);
+    }
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+  
+  // Keyboard shortcut for fullscreen (F key)
+  useEffect(() => {
+    function handleKeyPress(e) {
+      if (e.key === 'f' || e.key === 'F') {
+        if (!isWelcome) {
+          toggleFullscreen();
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyPress);
+    return () => document.removeEventListener('keydown', handleKeyPress);
+  }, [isWelcome, isFullscreen]);
   
   // Format time helper
   function formatTime(seconds) {
@@ -397,113 +1187,300 @@ export default function VirtualTraining({ routeData, routeId }) {
   
   // Welcome screen
   if (isWelcome) {
-    return h('div', { className: 'tvs-virtual-training tvs-virtual-training--welcome' },
-      h('div', { className: 'virtual-training-welcome' },
-        h('h2', null, routeTitle),
-        h('div', { className: 'welcome-stats' },
-          h('div', { className: 'stat' },
-            h('span', { className: 'stat-label' }, 'Distance'),
-            h('span', { className: 'stat-value' }, `${routeDistanceKm.toFixed(2)} km`)
+    // Show error if Mapbox token is missing
+    if (!mapboxToken) {
+      return h('div', { className: 'tvs-virtual-training tvs-virtual-training--welcome' },
+        h('div', { className: 'virtual-training-welcome' },
+          h('h2', null, '⚠️ Configuration Required'),
+          h('p', { style: { color: '#e53e3e', marginBottom: '1rem' } }, 
+            'Mapbox access token is missing. Please configure it in TVS Settings.'
           ),
-          h('div', { className: 'stat' },
-            h('span', { className: 'stat-label' }, 'Duration'),
-            h('span', { className: 'stat-value' }, `${durationMinutes} min`)
+          h('p', null,
+            'Administrators: Go to TVS → Settings and add your Mapbox token.'
+          )
+        )
+      );
+    }
+
+    return h('div', { className: 'tvs-virtual-training tvs-virtual-training--welcome' },
+      h('div', { className: 'tvs-panel tvs-welcome-panel' },
+        h('h2', { className: 'tvs-welcome-title' }, routeTitle),
+        
+        // Route info cards
+        h('div', { className: 'tvs-welcome-stats' },
+          h('div', { className: 'tvs-stat-card' },
+            h('span', { className: 'tvs-stat-label' }, 'Distance'),
+            h('span', { className: 'tvs-stat-value' }, 
+              routeDistanceKm > 0 ? `${routeDistanceKm.toFixed(2)} km` : 'Loading...'
+            )
+          ),
+          h('div', { className: 'tvs-stat-card' },
+            h('span', { className: 'tvs-stat-label' }, 'Est. Duration'),
+            h('span', { className: 'tvs-stat-value' }, 
+              durationMinutes > 0 ? `${durationMinutes} min` : '--'
+            )
           )
         ),
-        h('div', { className: 'speed-input' },
-          h('label', null, 'Your Speed (km/h)'),
-          h('input', {
-            type: 'number',
-            value: speed,
-            onChange: (e) => setSpeed(Number(e.target.value) || 12),
-            min: 1,
-            max: 50,
-            step: 0.5
-          })
+        
+        // Speed input with better styling
+        h('div', { className: 'tvs-speed-section' },
+          h('label', { className: 'tvs-speed-label' }, 
+            h('span', { className: 'tvs-speed-title' }, 'Set your initial speed'),
+            h('span', { className: 'tvs-speed-hint' }, 'You can increase/decrease during the activity according to your treadmill speed')
+          ),
+          h('div', { className: 'tvs-speed-input-group' },
+            h('input', {
+              type: 'number',
+              className: 'tvs-input tvs-speed-input',
+              value: speed,
+              onChange: (e) => setSpeed(Number(e.target.value) || 12),
+              min: 1,
+              max: 50,
+              step: 0.5
+            }),
+            h('span', { className: 'tvs-speed-unit' }, 'km/h')
+          )
         ),
+        
         h('button', {
-          className: 'tvs-btn tvs-btn--primary',
-          onClick: startTraining
-        }, 'Start Training')
+          className: 'tvs-btn tvs-btn--primary tvs-welcome-btn',
+          onClick: startTraining,
+          disabled: routeDistanceKm <= 0
+        }, routeDistanceKm > 0 ? 'Start Training' : 'Loading route data...')
       )
     );
   }
   
   // Training screen
-  return h('div', { className: 'tvs-virtual-training' },
+  return h('div', { className: `tvs-virtual-training ${isFullscreen ? 'tvs-virtual-training--fullscreen' : ''}` },
     // Map container
     h('div', {
       ref: mapRef,
       className: 'virtual-training-map',
-      style: { width: '100%', height: '70vh' }
+      style: { 
+        width: '100%', 
+        height: isFullscreen ? 'calc(100vh - 80px)' : '70vh' 
+      }
     }),
-    
+
     // Stats overlay
     h('div', { className: 'training-stats' },
       h('div', { className: 'stat-item' },
         h('span', { className: 'stat-label' }, 'Distance'),
-        h('span', { className: 'stat-value' }, `${currentDistanceKm.toFixed(2)} / ${routeDistanceKm.toFixed(2)} km`)
+        h('span', { className: 'stat-value' }, `${
+          isWelcome ? '0.00' : currentDistanceKm.toFixed(2)
+        } / ${routeDistanceKm.toFixed(2)} km`)
       ),
       h('div', { className: 'stat-item' },
         h('span', { className: 'stat-label' }, 'Time'),
-        h('span', { className: 'stat-value' }, `${formatTime(elapsedTime)} / ${formatTime(durationMinutes * 60)}`)
+        h('span', { className: 'stat-value' }, `${
+          isWelcome ? '0:00' : formatTime(elapsedTime)
+        } / ${isWelcome ? formatTime(durationMinutes * 60) : formatTime(estimatedTotalTime)}`)
       ),
       h('div', { className: 'stat-item' },
         h('span', { className: 'stat-label' }, 'Speed'),
         h('span', { className: 'stat-value' }, `${speed} km/h`)
+      ),
+      h('div', { className: 'stat-item' },
+        h('span', { className: 'stat-label' }, 'Elevation'),
+        h('span', { className: 'stat-value' }, `${currentElevation} m`)
+      ),
+      h('div', { className: 'stat-item' },
+        h('span', { className: 'stat-label' }, 'Gradient'),
+        h('span', { 
+          className: 'stat-value',
+          style: { 
+            color: currentGradient > 0 ? '#f56565' : currentGradient < 0 ? '#48bb78' : 'white'
+          }
+        }, `${currentGradient > 0 ? '+' : ''}${currentGradient}%`)
+      ),
+      
+      // Elevation chart
+      h('div', { className: 'elevation-chart-container' },
+        h('canvas', {
+          ref: elevationCanvasRef,
+          className: 'elevation-chart',
+          width: 300,
+          height: 80
+        }),
+        h('div', {
+          ref: elevationMarkerRef,
+          className: 'elevation-marker',
+          style: {
+            left: '0%'
+          }
+        })
+      )
+    ),
+
+    // Overlay: Push play to start
+    !isPlaying && !isWelcome && h('div', { 
+      className: 'training-overlay-start',
+      onClick: togglePlay
+    },
+      h('div', { className: 'overlay-content' },
+        h('button', { 
+          className: 'overlay-play-btn',
+          onClick: togglePlay
+        }, h(RiPlayCircleLine, { size: 64 })),
+        h('div', { style: { fontSize: 20, fontWeight: 600, marginTop: 16 } }, 'Push play to start')
       )
     ),
     
     // PoI popup
-    activePoI && h('div', { className: 'poi-popup' },
-      h('div', { className: 'poi-icon' }, activePoI.icon),
-      h('h3', null, activePoI.name),
-      h('p', null, activePoI.description)
+    activePoI && h('div', { 
+      className: `poi-popup tvs-panel tvs-panel--elevated${isPoIHiding ? ' poi-popup--hiding' : ''}` 
+    },
+      activePoI.imageThumbnail && h('div', { className: 'poi-image' },
+        h('img', { src: activePoI.imageThumbnail, alt: activePoI.name })
+      ),
+      h('div', { className: 'poi-content' },
+        h('div', { className: 'poi-header' },
+          activePoI.iconType === 'custom' && activePoI.customIconUrl 
+            ? h('div', { 
+                className: 'poi-icon poi-icon-custom',
+                style: { backgroundColor: activePoI.color || '#8b5cf6' }
+              },
+                h('img', { src: activePoI.customIconUrl, alt: 'Icon', style: { width: '100%', height: '100%', objectFit: 'contain', filter: 'brightness(0) invert(1)' } })
+              )
+            : h('div', { 
+                className: 'poi-icon',
+                style: { backgroundColor: activePoI.color || '#8b5cf6' }
+              }, ICON_LIBRARY[activePoI.icon] || activePoI.icon || '📍'),
+          h('h3', { className: 'poi-title' }, activePoI.name)
+        ),
+        activePoI.description && h('p', { className: 'poi-description' }, activePoI.description)
+      )
     ),
     
     // Controls
     h('div', { className: 'training-controls' },
+      // 1. Play / pause
       h('button', {
         className: 'control-btn',
         onClick: togglePlay,
         title: isPlaying ? 'Pause' : 'Play'
-      }, h(isPlaying ? RiPauseCircleLine : RiPlayCircleLine, { size: 32 })),
+      }, h(isPlaying ? RiPauseCircleLine : RiPlayCircleLine, { size: 24 })),
       
+      // 2. Minus speed
       h('button', {
         className: 'control-btn',
-        onClick: restart,
-        title: 'Restart'
-      }, h(RiRestartLine, { size: 24 })),
+        onClick: decreaseSpeed,
+        title: 'Decrease Speed'
+      }, h(RiSubtractLine, { size: 24 })),
       
+      // 3. Plus speed
       h('button', {
         className: 'control-btn',
-        onClick: zoomIn,
-        title: 'Zoom In'
-      }, h(RiZoomInLine, { size: 24 })),
+        onClick: increaseSpeed,
+        title: 'Increase Speed'
+      }, h(RiAddLine, { size: 24 })),
       
+      // 4. Zoom out
       h('button', {
         className: 'control-btn',
         onClick: zoomOut,
         title: 'Zoom Out'
       }, h(RiZoomOutLine, { size: 24 })),
       
+      // 5. Zoom in
+      h('button', {
+        className: 'control-btn',
+        onClick: zoomIn,
+        title: 'Zoom In'
+      }, h(RiZoomInLine, { size: 24 })),
+      
+      // 6. Camera follow
       h('button', {
         className: `control-btn ${followMode ? 'active' : ''}`,
         onClick: () => setFollowMode(!followMode),
-        title: followMode ? 'Disable Follow' : 'Enable Follow'
-      }, h(followMode ? RiEyeLine : RiEyeOffLine, { size: 24 })),
+        title: followMode ? 'Camera Follow On' : 'Camera Follow Off'
+      }, h(followMode ? RiVideoOnLine : RiVideoOffLine, { size: 24 })),
       
+      // 7. Compass mode
+      h('button', {
+        className: `control-btn ${rotateWithDirection ? 'active' : ''}`,
+        onClick: () => setRotateWithDirection(!rotateWithDirection),
+        title: rotateWithDirection ? 'Compass Mode On' : 'Compass Mode Off',
+        disabled: !followMode
+      }, h(rotateWithDirection ? RiCompass3Fill : RiCompassLine, { size: 24 })),
+      
+      // 8. Hide route line
       h('button', {
         className: `control-btn ${showRouteLine ? 'active' : ''}`,
         onClick: toggleRouteLine,
         title: showRouteLine ? 'Hide Route Line' : 'Show Route Line'
-      }, 'Route'),
+      }, h(FaRoute, { size: 20 })),
       
+      // 9. Restart
       h('button', {
         className: 'control-btn',
-        onClick: enterFullscreen,
-        title: 'Fullscreen'
-      }, h(RiFullscreenLine, { size: 24 }))
+        onClick: restart,
+        title: 'Restart'
+      }, h(RiRestartLine, { size: 24 })),
+      
+      // 10. Save activity
+      h('button', {
+        className: 'control-btn save-btn',
+        onClick: openSaveModal,
+        title: 'Save Activity',
+        disabled: isWelcome || currentDistanceKm < 0.1
+      }, h(AiOutlineSave, { size: 24 })),
+      
+      // 11. Full screen
+      h('button', {
+        className: 'control-btn',
+        onClick: toggleFullscreen,
+        title: isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'
+      }, h(isFullscreen ? RiFullscreenExitLine : RiFullscreenLine, { size: 24 }))
+    ),
+    
+    // Save Activity Modal
+    showSaveModal && h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
+      h('div', { className: 'save-modal', onClick: (e) => e.stopPropagation() },
+        h('h3', null, '💾 Save Activity'),
+        h('p', null, 'Enter actual data from your treadmill:'),
+        
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Distance (km)'),
+          h('input', {
+            type: 'text',
+            value: actualDistance,
+            onChange: (e) => setActualDistance(e.target.value),
+            placeholder: '8.234'
+          }),
+          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
+            'Supports decimals (e.g., 8.234 km)'
+          )
+        ),
+        
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Time (H:MM:SS, MM:SS, or seconds)'),
+          h('input', {
+            type: 'text',
+            value: actualTime,
+            onChange: (e) => setActualTime(e.target.value),
+            placeholder: '1:23:45 or 45:23'
+          }),
+          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
+            'Format: H:MM:SS (e.g., 1:23:45), MM:SS (e.g., 45:23), or just seconds (e.g., 2723)'
+          )
+        ),
+        
+        h('div', { className: 'modal-buttons' },
+          h('button', {
+            className: 'btn-secondary',
+            onClick: () => setShowSaveModal(false),
+            disabled: isSaving
+          }, 'Cancel'),
+          
+          h('button', {
+            className: 'btn-primary',
+            onClick: saveActivity,
+            disabled: isSaving
+          }, isSaving ? 'Saving...' : 'Save Activity')
+        )
+      )
     )
   );
 }

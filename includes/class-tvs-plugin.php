@@ -17,6 +17,7 @@ require_once TVS_PLUGIN_DIR . 'includes/class-tvs-user-profile.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-frontend.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-admin.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-roles.php';
+require_once TVS_PLUGIN_DIR . 'includes/admin/class-route-pois-meta-box.php';
 
 class TVS_Plugin {
     /** @var string */
@@ -88,6 +89,9 @@ class TVS_Plugin {
         // Initialize admin
         $admin = new TVS_Admin();
         $admin->init();
+        
+        // Initialize PoI meta box
+        new TVS_Route_POIs_Meta_Box();
     }
 
     public function register_blocks() {
