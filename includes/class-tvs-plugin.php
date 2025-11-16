@@ -358,6 +358,10 @@ class TVS_Plugin {
         $attr_route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
         $route_id = $attr_route_id > 0 ? $attr_route_id : ( is_singular( 'tvs_route' ) ? get_the_ID() : 0 );
 
+        // Check if route has Vimeo video (real route) or is virtual (mapbox simulation only)
+        $vimeo_id = get_post_meta( $route_id, 'vimeo_id', true );
+        $is_virtual = empty( $vimeo_id ) || trim( $vimeo_id ) === '';
+
         // Get route meta for location
         $meta = get_post_meta( $route_id, 'meta', true );
         $lat = '0';
@@ -384,6 +388,7 @@ class TVS_Plugin {
                  data-lng="<?php echo esc_attr( $lng ); ?>"
                  data-debug="<?php echo esc_attr( $debug ? '1' : '0' ); ?>"
                  data-plugin-url="<?php echo esc_attr( TVS_PLUGIN_URL ); ?>"
+                 data-is-virtual="<?php echo esc_attr( $is_virtual ? '1' : '0' ); ?>"
             >
                 <div class="tvs-weather-loading">
                     <div class="tvs-weather-shimmer">

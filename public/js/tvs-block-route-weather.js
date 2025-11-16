@@ -27,9 +27,16 @@
         const maxDistance = container.dataset.maxDistance || '50';
         const debug = container.dataset.debug === '1';
         const pluginUrl = container.dataset.pluginUrl || '';
+        const isVirtual = container.dataset.isVirtual === '1';
 
         if (debug) {
-            console.log('[TVS Weather] Init:', { routeId, title, maxDistance, pluginUrl });
+            console.log('[TVS Weather] Init:', { routeId, title, maxDistance, pluginUrl, isVirtual });
+        }
+
+        // For virtual routes, render fictional sunny weather immediately
+        if (isVirtual) {
+            renderVirtualWeather(container, { lat, lng }, title, pluginUrl, debug);
+            return;
         }
 
         // Build API URL
@@ -72,6 +79,34 @@
             console.error('[TVS Weather] Error:', error);
             renderError(container, error.message, title);
         });
+    }
+
+    function renderVirtualWeather(container, location, title, pluginUrl, debug) {
+        if (debug) {
+            console.log('[TVS Weather] Rendering virtual weather for location:', location);
+        }
+
+        // Fictional perfect weather data
+        const virtualWeather = {
+            temperature: 20,
+            wind_speed: 2.5,
+            wind_direction: 180,
+            humidity: 55,
+            weather_code: 1, // Fair weather
+            nearest_station_name: 'Virtual World Station',
+            nearest_distance_km: '0',
+            reference_time: new Date().toISOString(),
+            is_virtual: true
+        };
+
+        renderWeather(container, virtualWeather, debug, title, pluginUrl);
+        
+        // Add a small badge to indicate this is virtual weather
+        const badge = document.createElement('div');
+        badge.className = 'tvs-weather-virtual-badge';
+        badge.style.cssText = 'text-align: center; padding: 8px; margin-top: 12px; background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%); border-radius: 6px; font-size: 13px; font-weight: 500; color: #78350f;';
+        badge.textContent = '☀️ In the virtual world, the sun always shines';
+        container.appendChild(badge);
     }
 
     function renderWeather(container, weather, debug, title, pluginUrl) {
@@ -179,7 +214,7 @@
         html += '</div>';
 
         // Station info
-        if (weather.nearest_station_name && weather.reference_time) {
+        if (weather.nearest_station_name && weather.reference_time && !weather.is_virtual) {
             const dt = new Date(weather.reference_time);
             const formattedDate = dt.toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const formattedTime = dt.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' });
@@ -193,12 +228,14 @@
             `;
         }
 
-        // Credit
-        html += `
-            <p class="tvs-weather-credit">
-                <small>Weather data by <a href="https://yr.no" target="_blank" rel="noopener">yr.no</a></small>
-            </p>
-        `;
+        // Credit (skip for virtual weather)
+        if (!weather.is_virtual) {
+            html += `
+                <p class="tvs-weather-credit">
+                    <small>Weather data by <a href="https://yr.no" target="_blank" rel="noopener">yr.no</a></small>
+                </p>
+            `;
+        }
 
         if (debug) {
             console.log('[TVS Weather] Final HTML length:', html.length, 'First 200 chars:', html.substring(0, 200));

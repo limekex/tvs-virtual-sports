@@ -10,7 +10,13 @@ function PersonalRecords({ React, title, showBestTime, showAvgPace, showAvgTempo
   const { createElement: h, useEffect, useState } = React;
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
+  const isLoggedIn = !!(window.TVS_SETTINGS?.user);
+
   useEffect(() => {
+    if (!isLoggedIn) {
+      setData(null);
+      return;
+    }
     let cancelled = false;
     async function load(){
       try{
@@ -26,7 +32,29 @@ function PersonalRecords({ React, title, showBestTime, showAvgPace, showAvgTempo
     }
     load();
     return () => { cancelled = true; };
-  }, [routeId]);
+  }, [routeId, isLoggedIn]);
+
+  if (!isLoggedIn) {
+    const demoItems = [];
+    if (showBestTime) demoItems.push('Best time: 8:45');
+    if (showAvgPace) demoItems.push('Average pace: 5:30/km');
+    if (showAvgTempo) demoItems.push('Average speed: 10.9 km/h');
+    if (showMostRecent) demoItems.push('Most recent: 10:12');
+
+    return h('div', { className: 'tvs-panel' },
+      h('h3', { className: 'tvs-activities-title' }, title || 'Personal Records'),
+      h('ul', { className: 'tvs-list', style: { opacity: 0.5 } }, 
+        demoItems.map((it, i) => h('li', { key: i }, it))
+      ),
+      h('div', { className: 'tvs-activities-footer' },
+        h('div', { className: 'tvs-text-muted', style: { marginBottom: '0.5rem' } }, 'Sign in to see your personal records.'),
+        h('div', null,
+          h('a', { href: '/login', className: 'tvs-link', style: { marginRight: 12 } }, 'Log in'),
+          h('a', { href: '/register', className: 'tvs-link' }, 'Register')
+        )
+      )
+    );
+  }
 
   const items = [];
   if(showBestTime){

@@ -372,7 +372,25 @@ function ActivityHeatmap({ React, title, type, routeId, showDistance, showPace, 
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   const [days, setDays] = useState(180); // allow 7/30/365 via UI for sparkline
+  const isLoggedIn = !!(window.TVS_SETTINGS?.user);
+
   useEffect(() => {
+    if (!isLoggedIn) {
+      // Generate demo data for logged-out users
+      const demoItems = Array.from({ length: days > 90 ? 180 : days }, (_, i) => {
+        const date = new Date();
+        date.setDate(date.getDate() - (days > 90 ? 180 : days) + i);
+        return {
+          date: date.toISOString().slice(0, 10),
+          count: Math.floor(Math.random() * 3),
+          distance_km: Math.random() * 10,
+          avg_pace_s_per_km: 300 + Math.random() * 120
+        };
+      });
+      setData({ items: demoItems });
+      return;
+    }
+
     let cancelled = false;
     async function load(){
       try{
@@ -389,7 +407,28 @@ function ActivityHeatmap({ React, title, type, routeId, showDistance, showPace, 
     }
     load();
     return () => { cancelled = true; };
-  }, [routeId, days]);
+  }, [routeId, days, isLoggedIn]);
+
+  if (!isLoggedIn) {
+    return h('div', { className: 'tvs-panel' },
+      h('h3', { className: 'tvs-activities-title' }, title || 'Activity Heatmap'),
+      (type === 'sparkline') ? h('div', { className: 'tvs-mini-seg' },
+        h('button', { className: days===7?'is-active':'', onClick: () => setDays(7), disabled: true }, '1w'),
+        h('button', { className: days===30?'is-active':'', onClick: () => setDays(30), disabled: true }, '1m'),
+        h('button', { className: days===365?'is-active':'', onClick: () => setDays(365), disabled: true }, '1y')
+      ) : null,
+      h('div', { style: { opacity: 0.5, pointerEvents: 'none' } },
+        type === 'calendar' ? h(CalendarHeatmap, { React, data }) : h(Sparkline, { React, data, showDistance, showPace, showCumulative })
+      ),
+      h('div', { className: 'tvs-activities-footer' },
+        h('div', { className: 'tvs-text-muted', style: { marginBottom: '0.5rem' } }, 'Sign in to see your activity heatmap.'),
+        h('div', null,
+          h('a', { href: '/login', className: 'tvs-link', style: { marginRight: 12 } }, 'Log in'),
+          h('a', { href: '/register', className: 'tvs-link' }, 'Register')
+        )
+      )
+    );
+  }
 
   return h('div', { className: 'tvs-panel' },
     h('h3', { className: 'tvs-activities-title' }, title || 'Activity Heatmap'),
@@ -400,7 +439,7 @@ function ActivityHeatmap({ React, title, type, routeId, showDistance, showPace, 
     ) : null,
     (!data && !err) ? h('div', { className: 'tvs-text-muted', style: { marginBottom: '0.5rem' } }, 'Loading…') : null,
     err ? h('div', { className: 'tvs-text-danger' }, String(err)) : null,
-    type === 'calendar' ? h(CalendarHeatmap, { React, data }) : h(Sparkline, { React, data, showDistance, showPace, showCumulative })
+    data ? (type === 'calendar' ? h(CalendarHeatmap, { React, data }) : h(Sparkline, { React, data, showDistance, showPace, showCumulative })) : null
   );
 }
 
