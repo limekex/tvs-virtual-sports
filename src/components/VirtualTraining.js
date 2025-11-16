@@ -60,6 +60,7 @@ export default function VirtualTraining({ routeData, routeId }) {
   const [actualDistance, setActualDistance] = useState('');
   const [actualTime, setActualTime] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [activityType, setActivityType] = useState('Run'); // 'Walk', 'Run', or 'Ride'
   
   // Refs
   const mapRef = useRef(null);
@@ -1096,7 +1097,9 @@ export default function VirtualTraining({ routeData, routeId }) {
           ended_at: now,
           duration_s: durationS,
           distance_m: distanceM,
-          visibility: 'private'
+          visibility: 'private',
+          activity_type: activityType,
+          is_virtual: true // Mark as virtual for Strava sync
         })
       });
       
@@ -1439,7 +1442,40 @@ export default function VirtualTraining({ routeData, routeId }) {
     showSaveModal && h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
       h('div', { className: 'save-modal', onClick: (e) => e.stopPropagation() },
         h('h3', null, '💾 Save Activity'),
-        h('p', null, 'Enter actual data from your treadmill:'),
+        h('p', null, `Enter actual data from your ${activityType === 'Ride' ? 'bike/trainer' : 'treadmill'}:`),
+        
+        // Activity Type Selector
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Activity Type'),
+          h('div', { className: 'activity-type-selector', style: { display: 'flex', gap: '8px', marginTop: '8px' } },
+            ['Walk', 'Run', 'Ride'].map(type => 
+              h('button', {
+                key: type,
+                type: 'button',
+                className: `activity-type-btn ${activityType === type ? 'active' : ''}`,
+                onClick: () => setActivityType(type),
+                style: {
+                  flex: 1,
+                  padding: '12px',
+                  border: activityType === type ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  background: activityType === type ? '#eff6ff' : 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.2s'
+                }
+              },
+                h('span', { style: { fontSize: '24px' } }, 
+                  type === 'Walk' ? '🚶' : type === 'Run' ? '🏃' : '🚴'
+                ),
+                h('span', { style: { fontSize: '14px', fontWeight: activityType === type ? '600' : '400' } }, type)
+              )
+            )
+          )
+        ),
         
         h('div', { className: 'modal-field' },
           h('label', null, 'Distance (km)'),

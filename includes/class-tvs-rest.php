@@ -1528,7 +1528,7 @@ class TVS_REST {
         wp_update_post( array( 'ID' => $post_id, 'post_name' => (string) $post_id ) );
 
         // Save meta
-        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility');
+        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility','activity_type','is_virtual');
         foreach ( $keys as $k ) {
             if ( isset( $data[ $k ] ) ) {
                 update_post_meta( $post_id, $k, sanitize_text_field( $data[ $k ] ) );

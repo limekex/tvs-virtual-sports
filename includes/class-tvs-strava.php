@@ -174,11 +174,29 @@ class TVS_Strava {
         $duration_s = get_post_meta( $activity_post_id, '_tvs_duration_s', true ) ?: get_post_meta( $activity_post_id, 'duration_s', true );
         $distance_m = get_post_meta( $activity_post_id, '_tvs_distance_m', true ) ?: get_post_meta( $activity_post_id, 'distance_m', true );
         
-        // Get activity type from taxonomy or meta
+        // Get activity type from meta (preferred) or taxonomy (fallback)
         $activity_type = 'VirtualRun'; // default - virtual activities
-        $terms = wp_get_post_terms( $activity_post_id, 'tvs_activity_type', array( 'fields' => 'names' ) );
-        if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
-            $activity_type = $this->map_activity_type( $terms[0] );
+        $stored_type = get_post_meta( $activity_post_id, 'activity_type', true );
+        if ( $stored_type ) {
+            $activity_type = $this->map_activity_type( $stored_type );
+        } else {
+            // Fallback to taxonomy for backward compatibility
+            $terms = wp_get_post_terms( $activity_post_id, 'tvs_activity_type', array( 'fields' => 'names' ) );
+            if ( ! empty( $terms ) && ! is_wp_error( $terms ) ) {
+                $activity_type = $this->map_activity_type( $terms[0] );
+            }
+        }
+        
+        // For virtual activities, ensure we use Virtual prefix (VirtualRun, VirtualRide)
+        $is_virtual = get_post_meta( $activity_post_id, 'is_virtual', true );
+        if ( $is_virtual && $is_virtual !== 'false' && $is_virtual !== '0' ) {
+            if ( $activity_type === 'Run' ) {
+                $activity_type = 'VirtualRun';
+            } elseif ( $activity_type === 'Ride' ) {
+                $activity_type = 'VirtualRide';
+            } elseif ( $activity_type === 'Walk' ) {
+                $activity_type = 'Walk'; // Walk stays as Walk even for virtual
+            }
         }
 
         // Build activity name and template context
@@ -385,14 +403,14 @@ class TVS_Strava {
     }
 
     /**
-     * Map TVS activity type to Strava activity type
+     * Map TVS activity type to Strava activity type (base mapping, virtualization applied separately)
      */
     protected function map_activity_type( $tvs_type ) {
         $map = array(
-            'run' => 'VirtualRun',
-            'løp' => 'VirtualRun',
-            'ride' => 'VirtualRide',
-            'sykkel' => 'VirtualRide',
+            'run' => 'Run',
+            'løp' => 'Run',
+            'ride' => 'Ride',
+            'sykkel' => 'Ride',
             'walk' => 'Walk',
             'gå' => 'Walk',
             'hike' => 'Hike',
@@ -400,7 +418,7 @@ class TVS_Strava {
         );
         
         $lower = strtolower( trim( $tvs_type ) );
-        return isset( $map[ $lower ] ) ? $map[ $lower ] : 'VirtualRun';
+        return isset( $map[ $lower ] ) ? $map[ $lower ] : 'Run';
     }
 
     /**
