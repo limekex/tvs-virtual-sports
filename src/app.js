@@ -25,6 +25,11 @@ export default function App({ initialData, routeId }) {
   const [showMinimap, setShowMinimap] = useState(true);
   const [showRouteInfo, setShowRouteInfo] = useState(true);
   const [showControlPanel, setShowControlPanel] = useState(true);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [activityType, setActivityType] = useState('Run');
+  const [actualTime, setActualTime] = useState('');
+  const [actualDistance, setActualDistance] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const videoRef = useRef(null);
   const playerRef = useRef(null);
 
@@ -325,31 +330,85 @@ export default function App({ initialData, routeId }) {
 
   async function finishAndSaveActivity() {
     try {
-      setIsPosting(true);
       log('Finish clicked');
       const player = await ensurePlayerReady();
-      setLastStatus('saving');
+      setLastStatus('pausing');
       try {
         await player.pause();
-        log('Playback paused before save');
+        log('Playback paused before save dialog');
       } catch (e) {
-        err('pause before save failed:', e);
+        err('pause before save dialog failed:', e);
       }
-  const seconds = await player.getCurrentTime();
-  const durationS = Math.max(0, Math.floor(seconds || 0));
-  const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1000).toISOString();
-  const endISO = new Date(new Date(startISO).getTime() + durationS * 1000).toISOString();
-  const distanceM = estimateDistance(durationS);
+      
+      // Pre-populate modal with video data
+      const seconds = await player.getCurrentTime();
+      const durationS = Math.max(0, Math.floor(seconds || 0));
+      const distanceM = estimateDistance(durationS);
+      
+      // Format for display
+      const mins = Math.floor(durationS / 60);
+      const secs = durationS % 60;
+      setActualTime(`${mins}:${secs.toString().padStart(2, '0')}`);
+      setActualDistance((distanceM / 1000).toFixed(2));
+      
+      // Open modal
+      setShowSaveModal(true);
+      
+    } catch (e) {
+      err('[TVS] Failed to open save dialog:', e);
+      showFlash('Failed to open save dialog: ' + (e?.message || String(e)), 'error');
+      setLastStatus('error');
+    }
+  }
+
+  async function saveActivityFromModal() {
+    try {
+      setIsSaving(true);
+      
+      // Parse user input for time (supports H:MM:SS, MM:SS, or seconds)
+      let durationS = 0;
+      if (actualTime.includes(':')) {
+        const parts = actualTime.split(':').map(s => parseInt(s.trim()) || 0);
+        if (parts.length === 3) {
+          // H:MM:SS format
+          const [hours, mins, secs] = parts;
+          durationS = hours * 3600 + mins * 60 + secs;
+        } else if (parts.length === 2) {
+          // MM:SS format
+          const [mins, secs] = parts;
+          durationS = mins * 60 + secs;
+        } else {
+          // Invalid format
+          durationS = 0;
+        }
+      } else {
+        // If just a number, treat as total seconds
+        durationS = parseInt(actualTime) || 0;
+      }
+      
+      const distanceM = Math.round(parseFloat(actualDistance) * 1000);
+      
+      if (distanceM <= 0 || durationS <= 0) {
+        showFlash('Distance and time must be greater than zero', 'error');
+        setIsSaving(false);
+        return;
+      }
+      
+      const now = new Date().toISOString();
+      const startISO = sessionStartAt ? sessionStartAt.toISOString() : new Date(Date.now() - durationS * 1000).toISOString();
+      const endISO = new Date(new Date(startISO).getTime() + durationS * 1000).toISOString();
 
       const payload = {
         route_id: data.id,
         route_name: data.title || 'Unknown Route',
-        activity_date: new Date().toISOString(),
+        activity_date: now,
         started_at: startISO,
         ended_at: endISO,
         duration_s: durationS,
         distance_m: distanceM,
         visibility: 'private',
+        activity_type: activityType,
+        is_virtual: false // Real video activity
       };
       const nonce = window.TVS_SETTINGS?.nonce || '';
 
@@ -366,10 +425,18 @@ export default function App({ initialData, routeId }) {
         throw new Error(res.message || `HTTP ${r.status}`);
       }
       await r.json();
-      showFlash('Activity saved!');
+      
+      // Close modal and reset
+      setShowSaveModal(false);
+      setIsSaving(false);
+      setActualTime('');
+      setActualDistance('');
+      
+      showFlash('Activity saved! 🎉', 'success');
       setLastStatus('ok');
       setIsSessionActive(false);
       setSessionStartAt(null);
+      
       // Notify My Activities widget to refresh
       window.dispatchEvent(new CustomEvent('tvs:activity-updated'));
     } catch (e) {
@@ -377,8 +444,7 @@ export default function App({ initialData, routeId }) {
       showFlash('Failed to save activity: ' + (e?.message || String(e)), 'error');
       setLastError(e?.message || String(e));
       setLastStatus('error');
-    } finally {
-      setIsPosting(false);
+      setIsSaving(false);
     }
   }
 
@@ -732,6 +798,91 @@ export default function App({ initialData, routeId }) {
           )
         )
       : null,
-    DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null
+    DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null,
+    
+    // Save Activity Modal
+    showSaveModal && h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
+      h('div', { className: 'save-modal', onClick: (e) => e.stopPropagation() },
+        h('h3', null, '💾 Save Activity'),
+        h('p', null, `Enter actual data from your ${activityType === 'Ride' ? 'bike/trainer' : 'treadmill'}:`),
+        
+        // Activity Type Selector
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Activity Type'),
+          h('div', { className: 'activity-type-selector', style: { display: 'flex', gap: '8px', marginTop: '8px' } },
+            ['Walk', 'Run', 'Ride'].map(type => 
+              h('button', {
+                key: type,
+                type: 'button',
+                className: `activity-type-btn ${activityType === type ? 'active' : ''}`,
+                onClick: () => setActivityType(type),
+                style: {
+                  flex: 1,
+                  padding: '12px',
+                  border: activityType === type ? '2px solid #3b82f6' : '2px solid #e5e7eb',
+                  borderRadius: '8px',
+                  background: activityType === type ? '#eff6ff' : 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'all 0.2s'
+                }
+              },
+                h('span', { style: { fontSize: '24px' } }, 
+                  type === 'Walk' ? '🚶' : type === 'Run' ? '🏃' : '🚴'
+                ),
+                h('span', { style: { fontSize: '14px', fontWeight: activityType === type ? '600' : '400' } }, type)
+              )
+            )
+          )
+        ),
+        
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Distance (km)'),
+          h('input', {
+            type: 'text',
+            value: actualDistance,
+            onChange: (e) => setActualDistance(e.target.value),
+            placeholder: '8.234'
+          }),
+          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
+            'Supports decimals (e.g., 8.234 km)'
+          )
+        ),
+        
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Time (H:MM:SS, MM:SS, or seconds)'),
+          h('input', {
+            type: 'text',
+            value: actualTime,
+            onChange: (e) => setActualTime(e.target.value),
+            placeholder: '1:23:45 or 45:23'
+          }),
+          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
+            'Format: H:MM:SS (e.g., 1:23:45), MM:SS (e.g., 45:23), or just seconds (e.g., 2723)'
+          )
+        ),
+        
+        h('div', { className: 'modal-buttons' },
+          h('button', {
+            className: 'btn-secondary',
+            onClick: () => {
+              setShowSaveModal(false);
+              setActualTime('');
+              setActualDistance('');
+            },
+            disabled: isSaving
+          }, 'Cancel'),
+          
+          h('button', {
+            className: 'btn-primary',
+            onClick: saveActivityFromModal,
+            disabled: isSaving
+          }, isSaving ? 'Saving...' : 'Save Activity')
+        )
+      )
+    )
   );
 }

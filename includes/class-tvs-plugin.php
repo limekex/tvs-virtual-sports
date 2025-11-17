@@ -49,6 +49,10 @@ class TVS_Plugin {
         // Safety: Ensure DB tables exist even if plugin wasn't re-activated after updates
         add_action( 'admin_init', array( $this, 'ensure_invites_table' ) );
 
+        // Allow GPX file uploads
+        add_filter( 'upload_mimes', array( $this, 'allow_gpx_uploads' ) );
+        add_filter( 'wp_check_filetype_and_ext', array( $this, 'gpx_filetype_check' ), 10, 4 );
+
         // Enqueue Gutenberg block editor assets (to make blocks appear in Inserter)
         add_action( 'enqueue_block_editor_assets', array( $this, 'editor_assets' ) );
 
@@ -662,5 +666,25 @@ class TVS_Plugin {
                 exit;
             }
         }
+    }
+
+    /**
+     * Allow GPX file uploads
+     */
+    public function allow_gpx_uploads( $mimes ) {
+        $mimes['gpx'] = 'application/gpx+xml';
+        return $mimes;
+    }
+
+    /**
+     * Fix GPX filetype check (WordPress sometimes blocks XML files)
+     */
+    public function gpx_filetype_check( $data, $file, $filename, $mimes ) {
+        $ext = pathinfo( $filename, PATHINFO_EXTENSION );
+        if ( 'gpx' === strtolower( $ext ) ) {
+            $data['ext']  = 'gpx';
+            $data['type'] = 'application/gpx+xml';
+        }
+        return $data;
     }
 }

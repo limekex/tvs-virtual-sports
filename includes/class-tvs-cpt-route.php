@@ -13,6 +13,17 @@ class TVS_CPT_Route {
         // Always bust routes cache on any route save (separate from meta save/nonce)
         add_action( 'save_post_tvs_route', array( $this, 'bust_routes_cache' ), 99, 2 );
         add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
+        add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_media_uploader' ) );
+    }
+    
+    /**
+     * Enqueue WordPress media uploader on route edit screens
+     */
+    public function enqueue_media_uploader( $hook ) {
+        global $post_type;
+        if ( 'tvs_route' === $post_type && ( 'post.php' === $hook || 'post-new.php' === $hook ) ) {
+            wp_enqueue_media();
+        }
     }
 
     public function register_post_type() {
@@ -116,14 +127,88 @@ class TVS_CPT_Route {
         echo '<div class="tvs-route-meta">';
         foreach ( $values as $k => $v ) {
             $label = esc_html( str_replace( '_', ' ', $k ) );
-            printf(
-                '<p><label for="tvs_route_meta_%1$s">%2$s</label><br/><input type="text" id="tvs_route_meta_%1$s" name="tvs_route_meta[%1$s]" value="%3$s" class="widefat"/></p>',
-                esc_attr( $k ),
-                esc_html( ucfirst( $label ) ),
-                esc_attr( $v )
-            );
+            
+            // Special handling for gpx_url field with upload capability
+            if ( $k === 'gpx_url' ) {
+                echo '<p>';
+                printf( '<label for="tvs_route_meta_%s">%s</label><br/>', esc_attr( $k ), esc_html( ucfirst( $label ) ) );
+                
+                if ( empty( $v ) ) {
+                    // Show file upload button when empty
+                    echo '<button type="button" class="button tvs-upload-gpx" data-post-id="' . esc_attr( $post->ID ) . '">';
+                    echo esc_html__( 'Upload GPX File', 'tvs-virtual-sports' );
+                    echo '</button>';
+                    printf( '<input type="text" id="tvs_route_meta_%1$s" name="tvs_route_meta[%1$s]" value="%2$s" class="widefat" style="margin-top:8px;" placeholder="' . esc_attr__( 'Or enter GPX URL manually', 'tvs-virtual-sports' ) . '"/>', esc_attr( $k ), esc_attr( $v ) );
+                } else {
+                    // Show current URL with option to replace
+                    printf( '<input type="text" id="tvs_route_meta_%1$s" name="tvs_route_meta[%1$s]" value="%2$s" class="widefat"/>', esc_attr( $k ), esc_attr( $v ) );
+                    echo '<button type="button" class="button tvs-replace-gpx" data-post-id="' . esc_attr( $post->ID ) . '" style="margin-top:8px;">';
+                    echo esc_html__( 'Replace with upload', 'tvs-virtual-sports' );
+                    echo '</button>';
+                }
+                echo '</p>';
+            } else {
+                // Standard text input for other fields
+                printf(
+                    '<p><label for="tvs_route_meta_%1$s">%2$s</label><br/><input type="text" id="tvs_route_meta_%1$s" name="tvs_route_meta[%1$s]" value="%3$s" class="widefat"/></p>',
+                    esc_attr( $k ),
+                    esc_html( ucfirst( $label ) ),
+                    esc_attr( $v )
+                );
+            }
         }
         echo '<p class="description">' . esc_html__( 'Enter route details (distance in meters, duration in seconds, GPX URL, Vimeo ID, etc.)', 'tvs-virtual-sports' ) . '</p>';
         echo '</div>';
+        
+        // Enqueue media uploader script
+        $this->enqueue_upload_script();
+    }
+    
+    /**
+     * Enqueue script for GPX file upload using WordPress media library
+     */
+    private function enqueue_upload_script() {
+        ?>
+        <script>
+        jQuery(document).ready(function($) {
+            var gpxUploader;
+            
+            // Handle upload button click
+            $(document).on('click', '.tvs-upload-gpx, .tvs-replace-gpx', function(e) {
+                e.preventDefault();
+                var $button = $(this);
+                var postId = $button.data('post-id');
+                
+                // If the uploader already exists, reuse it
+                if (gpxUploader) {
+                    gpxUploader.open();
+                    return;
+                }
+                
+                // Create the media uploader
+                gpxUploader = wp.media({
+                    title: '<?php echo esc_js( __( 'Upload GPX File', 'tvs-virtual-sports' ) ); ?>',
+                    button: {
+                        text: '<?php echo esc_js( __( 'Use this GPX', 'tvs-virtual-sports' ) ); ?>'
+                    },
+                    multiple: false
+                });
+                
+                // When a file is selected, populate the gpx_url field
+                gpxUploader.on('select', function() {
+                    var attachment = gpxUploader.state().get('selection').first().toJSON();
+                    $('#tvs_route_meta_gpx_url').val(attachment.url);
+                    
+                    // Visual feedback
+                    $('#tvs_route_meta_gpx_url').css('border', '2px solid #46b450').delay(1000).queue(function() {
+                        $(this).css('border', '').dequeue();
+                    });
+                });
+                
+                gpxUploader.open();
+            });
+        });
+        </script>
+        <?php
     }
 }
