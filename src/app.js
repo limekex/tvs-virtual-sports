@@ -2,7 +2,7 @@ import { DEBUG, log, err } from './utils/debug.js';
 import { delay, withTimeout } from './utils/async.js';
 import { React } from './utils/reactMount.js';
 import ProgressBar from './components/ProgressBar.js';
-import { RiRunLine, RiRestartLine, RiUserLine, RiSaveLine, RiFullscreenLine, RiFullscreenExitLine, RiMapPinLine, RiFileListLine, RiArrowUpSLine, RiArrowDownSLine } from 'react-icons/ri';
+import { RiPlayCircleLine, RiPauseCircleLine, RiRestartLine, RiSaveLine, RiFullscreenLine, RiFullscreenExitLine, RiMapPinLine, RiFileListLine, RiArrowUpSLine, RiArrowDownSLine } from 'react-icons/ri';
 import Loading from './components/Loading.js';
 import DevOverlay from './components/DevOverlay.js';
 import VirtualTraining from './components/VirtualTraining.js';
@@ -503,7 +503,7 @@ export default function App({ initialData, routeId }) {
   const controlButtons = !isLoggedIn
     ? h(
         'div',
-        { className: 'tvs-alert tvs-alert--warning' },
+        { className: 'tvs-alert tvs-alert--warning', style: { margin: '0 auto', maxWidth: '500px' } },
         h(
           'div',
           { className: 'tvs-row tvs-mb-2' },
@@ -526,121 +526,161 @@ export default function App({ initialData, routeId }) {
         sessionStartAt &&
         (duration === 0 || currentTime < duration - 0.5)
           ? [
+              // Resume button (play icon)
               h(
                 'button',
                 {
                   key: 'resume',
-                  className: 'tvs-btn tvs-btn--primary',
+                  className: 'control-btn',
                   onClick: resumeActivitySession,
                   disabled: isPosting || !isPlayerReady,
-                  'aria-label': 'Resume activity',
-                  title: 'Resume activity',
+                  title: 'Resume activity'
                 },
-                isPosting
-                  ? [
-                      h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                      h('span', { className: 'tvs-btn__label' }, 'RESUME'),
-                    ]
-                  : [
-                      h(RiRunLine, { 'aria-hidden': true }),
-                      h('span', { className: 'tvs-btn__label' }, 'RESUME'),
-                    ]
+                h(RiPlayCircleLine, { size: 24 })
               ),
+              // Save button
               h(
                 'button',
                 {
                   key: 'finish',
-                  className: 'tvs-btn tvs-btn--success',
+                  className: 'control-btn save-btn',
                   onClick: finishAndSaveActivity,
                   disabled: isPosting || !isPlayerReady,
-                  'aria-label': 'Finish and save activity',
-                  title: 'Finish and save activity',
+                  title: 'Finish and save activity'
                 },
-                isPosting
-                  ? [
-                      h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                      h('span', { className: 'tvs-btn__label' }, 'SAVE'),
-                    ]
-                  : [
-                      h(RiSaveLine, { 'aria-hidden': true }),
-                      h('span', { className: 'tvs-btn__label' }, 'SAVE'),
-                    ]
+                h(RiSaveLine, { size: 24 })
               ),
+              // Restart button
               h(
                 'button',
                 {
                   key: 'restart',
-                  className: 'tvs-btn tvs-btn--outline',
+                  className: 'control-btn',
                   onClick: startActivitySession,
                   disabled: isPosting || !isPlayerReady,
-                  'aria-label': 'Restart from beginning',
-                  title: 'Restart from beginning',
+                  title: 'Restart from beginning'
                 },
-                isPosting
-                  ? [
-                      h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                      h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
-                    ]
-                  : [
-                      h(RiRestartLine, { 'aria-hidden': true }),
-                      h('span', { className: 'tvs-btn__label' }, 'BEGINNING'),
-                    ]
+                h(RiRestartLine, { size: 24 })
               ),
+              // Fullscreen button (only in normal mode)
+              !isCinematicMode && h(
+                'button',
+                {
+                  key: 'fullscreen',
+                  className: 'control-btn',
+                  onClick: async () => {
+                    if (!isPlayerReady) {
+                      showFlash('Please wait for video to load', 'warning');
+                      return;
+                    }
+                    setIsCinematicMode(true);
+                    try {
+                      const appElement = document.querySelector('.tvs-app');
+                      if (appElement && appElement.requestFullscreen) {
+                        await appElement.requestFullscreen();
+                      }
+                    } catch (err) {
+                      console.warn('Fullscreen not supported or denied:', err);
+                    }
+                  },
+                  disabled: !isPlayerReady,
+                  title: 'Enter fullscreen mode (F)'
+                },
+                h(RiFullscreenLine, { size: 24 })
+              )
             ]
-          : h(
-              'button',
-              {
-                className: 'tvs-btn tvs-btn--primary',
-                onClick: startActivitySession,
-                disabled: isPosting || !isPlayerReady,
-                'aria-label': 'Start activity',
-                title: 'Start activity',
-              },
-              isPosting
-                ? [
-                    h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                    h('span', { className: 'tvs-btn__label' }, 'START'),
-                  ]
-                : [
-                    h(RiRunLine, { 'aria-hidden': true }),
-                    h('span', { className: 'tvs-btn__label' }, 'START'),
-                  ]
-            )
+          : [
+              // Start button (play icon)
+              h(
+                'button',
+                {
+                  key: 'start',
+                  className: 'control-btn',
+                  onClick: startActivitySession,
+                  disabled: isPosting || !isPlayerReady,
+                  title: 'Start activity'
+                },
+                h(RiPlayCircleLine, { size: 24 })
+              ),
+              // Fullscreen button (only in normal mode)
+              !isCinematicMode && h(
+                'button',
+                {
+                  key: 'fullscreen',
+                  className: 'control-btn',
+                  onClick: async () => {
+                    if (!isPlayerReady) {
+                      showFlash('Please wait for video to load', 'warning');
+                      return;
+                    }
+                    setIsCinematicMode(true);
+                    try {
+                      const appElement = document.querySelector('.tvs-app');
+                      if (appElement && appElement.requestFullscreen) {
+                        await appElement.requestFullscreen();
+                      }
+                    } catch (err) {
+                      console.warn('Fullscreen not supported or denied:', err);
+                    }
+                  },
+                  disabled: !isPlayerReady,
+                  title: 'Enter fullscreen mode (F)'
+                },
+                h(RiFullscreenLine, { size: 24 })
+              )
+            ]
       )
     : [
+        // Pause button
         h(
           'button',
           {
             key: 'pause',
-            className: 'tvs-btn tvs-btn--warning',
+            className: 'control-btn',
             onClick: pauseActivitySession,
             disabled: isPosting || !isPlayerReady,
-            'aria-label': 'Pause activity',
-            title: 'Pause activity',
+            title: 'Pause activity'
           },
-          h(RiUserLine, { 'aria-hidden': true }),
-          h('span', { className: 'tvs-btn__label' }, 'PAUSE')
+          h(RiPauseCircleLine, { size: 24 })
         ),
+        // Save button
         h(
           'button',
           {
             key: 'finish',
-            className: 'tvs-btn tvs-btn--success',
+            className: 'control-btn save-btn',
             onClick: finishAndSaveActivity,
             disabled: isPosting || !isPlayerReady,
-            'aria-label': 'Finish and save activity',
-            title: 'Finish and save activity',
+            title: 'Finish and save activity'
           },
-          isPosting
-            ? [
-                h('span', { className: 'tvs-spinner', 'aria-hidden': 'true' }),
-                h('span', { className: 'tvs-btn__label' }, 'SAVE'),
-              ]
-            : [
-                h(RiSaveLine, { 'aria-hidden': true }),
-                h('span', { className: 'tvs-btn__label' }, 'SAVE'),
-              ]
+          h(RiSaveLine, { size: 24 })
         ),
+        // Fullscreen button (only in normal mode)
+        !isCinematicMode && h(
+          'button',
+          {
+            key: 'fullscreen',
+            className: 'control-btn',
+            onClick: async () => {
+              if (!isPlayerReady) {
+                showFlash('Please wait for video to load', 'warning');
+                return;
+              }
+              setIsCinematicMode(true);
+              try {
+                const appElement = document.querySelector('.tvs-app');
+                if (appElement && appElement.requestFullscreen) {
+                  await appElement.requestFullscreen();
+                }
+              } catch (err) {
+                console.warn('Fullscreen not supported or denied:', err);
+              }
+            },
+            disabled: !isPlayerReady,
+            title: 'Enter fullscreen mode (F)'
+          },
+          h(RiFullscreenLine, { size: 24 })
+        )
       ];
 
   return h(
@@ -695,37 +735,8 @@ export default function App({ initialData, routeId }) {
         : null,
       !isCinematicMode && h(
         'div', 
-        { className: 'tvs-btns' },
-        controlButtons,
-        h(
-          'button',
-          {
-            className: 'tvs-btn tvs-btn--outline tvs-cinematic-toggle',
-            onClick: async () => {
-              // Wait for player to be ready before entering cinematic mode
-              if (!isPlayerReady) {
-                showFlash('Please wait for video to load', 'warning');
-                return;
-              }
-              
-              setIsCinematicMode(true);
-              
-              // Try to enter native fullscreen
-              try {
-                const appElement = document.querySelector('.tvs-app');
-                if (appElement && appElement.requestFullscreen) {
-                  await appElement.requestFullscreen();
-                }
-              } catch (err) {
-                console.warn('Fullscreen not supported or denied:', err);
-              }
-            },
-            'aria-label': 'Enter cinematic mode',
-            title: 'Enter cinematic mode (F)',
-            disabled: !isPlayerReady,
-          },
-          h(RiFullscreenLine, { 'aria-hidden': true })
-        )
+        { className: 'training-controls' },
+        controlButtons
       )
     ),
     // Control panel (only in cinematic mode)
@@ -751,34 +762,32 @@ export default function App({ initialData, routeId }) {
           h(
             'div',
             { className: 'tvs-control-panel-content' },
-            h('div', { className: 'tvs-btns' }, controlButtons),
+            h('div', { className: 'training-controls', style: { position: 'relative', bottom: 'auto', left: 'auto', transform: 'none' } }, controlButtons),
             h(
               'div',
-              { className: 'tvs-cinematic-controls' },
+              { className: 'tvs-cinematic-extras', style: { display: 'flex', gap: '12px', marginLeft: 'auto' } },
               h(
                 'button',
                 {
-                  className: 'tvs-btn tvs-btn--outline',
+                  className: 'control-btn',
                   onClick: () => setShowMinimap(prev => !prev),
-                  'aria-label': showMinimap ? 'Hide minimap' : 'Show minimap',
                   title: showMinimap ? 'Hide minimap' : 'Show minimap',
                 },
-                h(RiMapPinLine, { 'aria-hidden': true })
+                h(RiMapPinLine, { size: 24 })
               ),
               h(
                 'button',
                 {
-                  className: 'tvs-btn tvs-btn--outline',
+                  className: 'control-btn',
                   onClick: () => setShowRouteInfo(prev => !prev),
-                  'aria-label': showRouteInfo ? 'Hide route info' : 'Show route info',
                   title: showRouteInfo ? 'Hide route info' : 'Show route info',
                 },
-                h(RiFileListLine, { 'aria-hidden': true })
+                h(RiFileListLine, { size: 24 })
               ),
               h(
                 'button',
                 {
-                  className: 'tvs-btn tvs-btn--outline tvs-exit-cinematic',
+                  className: 'control-btn',
                   onClick: async () => {
                     setIsCinematicMode(false);
                     if (document.fullscreenElement) {
@@ -789,10 +798,9 @@ export default function App({ initialData, routeId }) {
                       }
                     }
                   },
-                  'aria-label': 'Exit cinematic mode (press F or Escape)',
                   title: 'Exit cinematic mode (press F or Escape)',
                 },
-                h(RiFullscreenExitLine, { 'aria-hidden': true })
+                h(RiFullscreenExitLine, { size: 24 })
               )
             )
           )

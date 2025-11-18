@@ -1007,17 +1007,34 @@ class TVS_REST {
             return new WP_Error( 'no_gpx', 'No GPX file available for this route', array( 'status' => 404 ) );
         }
 
-        // Convert URL to file path to avoid SSL issues in dev
+        // Convert URL to file path to avoid SSL/network issues
         $gpx_source = $gpx_url;
         if ( filter_var( $gpx_url, FILTER_VALIDATE_URL ) ) {
             // Try to convert to local file path
             $upload_dir = wp_upload_dir();
-            $upload_url = $upload_dir['baseurl'];
             $upload_path = $upload_dir['basedir'];
             
-            // If URL is in uploads directory, convert to file path
-            if ( strpos( $gpx_url, $upload_url ) === 0 ) {
-                $gpx_source = str_replace( $upload_url, $upload_path, $gpx_url );
+            // Parse URL to get path component
+            $parsed_url = parse_url( $gpx_url );
+            $url_path = isset( $parsed_url['path'] ) ? $parsed_url['path'] : '';
+            
+            // Check if URL path contains /wp-content/uploads/
+            if ( ! empty( $url_path ) && strpos( $url_path, '/wp-content/uploads/' ) !== false ) {
+                // Extract the relative path after /wp-content/uploads/
+                $relative_path = substr( $url_path, strpos( $url_path, '/wp-content/uploads/' ) + strlen( '/wp-content/uploads/' ) );
+                
+                // Security: Remove any path traversal attempts
+                $relative_path = str_replace( array( '../', '..\\' ), '', $relative_path );
+                
+                // Build full path
+                $gpx_source = $upload_path . '/' . $relative_path;
+                
+                // Security: Verify the resolved path is still within uploads directory
+                $real_path = realpath( $gpx_source );
+                if ( $real_path === false || strpos( $real_path, $upload_path ) !== 0 ) {
+                    // Path is outside uploads directory, fall back to URL
+                    $gpx_source = $gpx_url;
+                }
             }
         }
 

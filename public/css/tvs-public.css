@@ -450,7 +450,27 @@
   border: 1px solid var(--tvs-color-border-subtle, #e5e7eb);
   border-radius: var(--tvs-radius-lg, 12px);
   padding: var(--tvs-space-5, 20px);
+  padding-bottom: 100px; /* Extra space for controls at bottom */
   box-shadow: var(--tvs-shadow-sm, 0 1px 2px rgba(0,0,0,.06));
+  position: relative;
+}
+
+/* Video player training controls */
+.tvs-app .tvs-panel .training-controls {
+  position: absolute;
+  bottom: 30px; /* Above progress bar */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 1rem;
+  border-radius: 12px;
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  min-width: 280px; /* Fixed minimum width to prevent jumping */
+  width: fit-content;
 }
 
 /* Alerts */

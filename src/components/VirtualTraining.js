@@ -25,15 +25,38 @@ const ICON_LIBRARY = {
 export default function VirtualTraining({ routeData, routeId }) {
   const { useEffect, useState, useRef, createElement: h } = React;
   
+  // Get Mapbox settings from WordPress
+  const mapboxSettings = window.TVS_SETTINGS?.mapbox || {};
+  
+  const {
+    accessToken: configAccessToken = '',
+    style: configMapStyle = 'mapbox://styles/mapbox/satellite-streets-v12',
+    initialZoom: configInitialZoom = 14,
+    flyToZoom: configFlyToZoom = 16,
+    minZoom: configMinZoom = 10,
+    maxZoom: configMaxZoom = 18,
+    pitch: configPitch = 60,
+    bearing: configBearing = 0,
+    defaultSpeed: configDefaultSpeed = 1.0,
+    cameraOffset: configCameraOffset = 0.0002,
+    smoothFactor: configSmoothFactor = 0.7,
+    markerColor: configMarkerColor = '#ff0000',
+    routeColor: configRouteColor = '#ec4899',
+    routeWidth: configRouteWidth = 6,
+    terrainEnabled: configTerrainEnabled = false,
+    terrainExaggeration: configTerrainExaggeration = 1.5,
+    buildings3dEnabled: configBuildings3dEnabled = false
+  } = mapboxSettings;
+  
   // Debug mode check (URL parameter)
   const isDebugMode = new URLSearchParams(window.location.search).get('debug') === '1';
   
   // Debug logger - only logs if debug=1 in URL
-  function debugLog(...args) {
+  const debugLog = (...args) => {
     if (isDebugMode) {
-      console.log(...args);
+      console.log('[VirtualTraining]', ...args);
     }
-  }
+  };
   
   // Flash message helper
   function showFlash(message, type = 'success') {
@@ -137,6 +160,26 @@ export default function VirtualTraining({ routeData, routeId }) {
   useEffect(() => {
     currentSpeedRef.current = speed;
   }, [speed]);
+  
+  // Debug: Log TVS_SETTINGS on mount only (runs once)
+  useEffect(() => {
+    if (isDebugMode) {
+      console.log('🌍 window.TVS_SETTINGS:', window.TVS_SETTINGS);
+      console.log('📦 window.TVS_SETTINGS.mapbox:', window.TVS_SETTINGS?.mapbox);
+      console.log('📊 mapboxSettings object:', mapboxSettings);
+      console.log('🔧 Mapbox Settings:', {
+        hasSettings: !!window.TVS_SETTINGS?.mapbox,
+        style: configMapStyle,
+        initialZoom: configInitialZoom,
+        pitch: configPitch,
+        terrainEnabled: configTerrainEnabled,
+        terrainExaggeration: configTerrainExaggeration,
+        markerColor: configMarkerColor,
+        routeColor: configRouteColor,
+        routeWidth: configRouteWidth
+      });
+    }
+  }, []); // Empty dependency array = runs only once on mount
   
   // Haversine distance calculation
   function haversineDistance(lat1, lng1, lat2, lng2) {
@@ -444,21 +487,63 @@ export default function VirtualTraining({ routeData, routeId }) {
         }
         
         // Initialize Mapbox with token from WordPress settings
-        window.mapboxgl.accessToken = mapboxToken;
+        window.mapboxgl.accessToken = mapboxToken || configAccessToken;
         
         const map = new window.mapboxgl.Map({
           container: mapRef.current,
-          style: 'mapbox://styles/mapbox/satellite-streets-v12',
+          style: configMapStyle,
           center: [gpxData.points[0].lng, gpxData.points[0].lat],
-          zoom: 14,
-          pitch: 60,
-          bearing: 0
+          zoom: configInitialZoom,
+          pitch: configPitch,
+          bearing: configBearing,
+          minZoom: configMinZoom,
+          maxZoom: configMaxZoom
         });
         
         mapInstanceRef.current = map;
         
         map.on('load', () => {
           debugLog('🛠️ Map loaded, attempting to create GSAP timeline...');
+          
+          // Enable 3D terrain if configured
+          if (configTerrainEnabled) {
+            debugLog('🏔️ Enabling 3D terrain with exaggeration:', configTerrainExaggeration);
+            map.addSource('mapbox-dem', {
+              type: 'raster-dem',
+              url: 'mapbox://mapbox.mapbox-terrain-dem-v1',
+              tileSize: 512,
+              maxzoom: 14
+            });
+            map.setTerrain({ 
+              source: 'mapbox-dem', 
+              exaggeration: configTerrainExaggeration 
+            });
+          }
+          
+          // Enable 3D buildings if configured
+          if (configBuildings3dEnabled) {
+            debugLog('🏢 Enabling 3D buildings');
+            const layers = map.getStyle().layers;
+            const labelLayerId = layers.find(
+              layer => layer.type === 'symbol' && layer.layout['text-field']
+            )?.id;
+            
+            map.addLayer({
+              'id': '3d-buildings',
+              'source': 'composite',
+              'source-layer': 'building',
+              'filter': ['==', 'extrude', 'true'],
+              'type': 'fill-extrusion',
+              'minzoom': 15,
+              'paint': {
+                'fill-extrusion-color': '#aaa',
+                'fill-extrusion-height': ['get', 'height'],
+                'fill-extrusion-base': ['get', 'min_height'],
+                'fill-extrusion-opacity': 0.6
+              }
+            }, labelLayerId);
+          }
+          
           // Add full route line (gray)
           const routeCoordinates = gpxData.points.map(p => [p.lng, p.lat]);
           
@@ -483,8 +568,8 @@ export default function VirtualTraining({ routeData, routeId }) {
               'line-cap': 'round'
             },
             paint: {
-              'line-color': '#ec4899', // --tvs-color-neon-magenta
-              'line-width': 6,
+              'line-color': configRouteColor,
+              'line-width': configRouteWidth,
               'line-opacity': 1.0
             }
           });
@@ -513,8 +598,8 @@ export default function VirtualTraining({ routeData, routeId }) {
               'line-cap': 'round'
             },
             paint: {
-              'line-color': '#84cc16', // --tvs-color-neon-lime
-              'line-width': 6,
+              'line-color': '#84cc16', // --tvs-color-neon-lime (always green for completed)
+              'line-width': configRouteWidth,
               'line-opacity': 1.0
             }
           });
@@ -527,7 +612,7 @@ export default function VirtualTraining({ routeData, routeId }) {
           el.style.width = '20px';
           el.style.height = '20px';
           el.style.borderRadius = '50%';
-          el.style.backgroundColor = '#ff0000';
+          el.style.backgroundColor = configMarkerColor;
           el.style.border = '3px solid white';
           el.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
           
@@ -895,7 +980,7 @@ export default function VirtualTraining({ routeData, routeId }) {
           debugLog('✈️ Starting flyTo animation (2s):', { 
             lng: startCoords.lng, 
             lat: startCoords.lat, 
-            zoom: 16,
+            zoom: configInitialZoom + 2, // Zoom in slightly from initial
             currentZoom: mapInstanceRef.current.getZoom()
           });
           
@@ -904,8 +989,8 @@ export default function VirtualTraining({ routeData, routeId }) {
           
           mapInstanceRef.current.flyTo({
             center: [startCoords.lng, startCoords.lat],
-            zoom: 16,
-            pitch: 60,
+            zoom: configFlyToZoom,
+            pitch: configPitch,
             duration: 2000,
             essential: true
           });

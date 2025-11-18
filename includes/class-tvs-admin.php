@@ -157,6 +157,16 @@ class TVS_Admin {
 			'tvs-weather',
 			array( $this, 'render_weather_settings_page' )
 		);
+
+		// Add Mapbox submenu (administrators)
+		add_submenu_page(
+			'tvs-settings',
+			__( 'Mapbox Settings', 'tvs-virtual-sports' ),
+			__( 'Mapbox', 'tvs-virtual-sports' ),
+			'manage_options',
+			'tvs-mapbox-settings',
+			array( $this, 'render_mapbox_settings_page' )
+		);
 	}
 
 	/**
@@ -1222,6 +1232,296 @@ class TVS_Admin {
 	 */
 	public function handle_clear_weather_cache() {
 		// This is handled in render_weather_settings_page now
+	}
+
+	/** Render Mapbox settings page */
+	public function render_mapbox_settings_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( __( 'Insufficient permissions.', 'tvs-virtual-sports' ) );
+		}
+
+		// Save settings
+		if ( isset( $_POST['tvs_mapbox_settings_nonce'] ) && wp_verify_nonce( $_POST['tvs_mapbox_settings_nonce'], 'tvs_mapbox_settings' ) ) {
+			$access_token = sanitize_text_field( $_POST['tvs_mapbox_access_token'] ?? '' );
+			$map_style = sanitize_text_field( $_POST['tvs_mapbox_map_style'] ?? 'mapbox://styles/mapbox/satellite-streets-v12' );
+			$initial_zoom = floatval( $_POST['tvs_mapbox_initial_zoom'] ?? 14 );
+			$flyto_zoom = floatval( $_POST['tvs_mapbox_flyto_zoom'] ?? 16 );
+			$max_zoom = floatval( $_POST['tvs_mapbox_max_zoom'] ?? 18 );
+			$min_zoom = floatval( $_POST['tvs_mapbox_min_zoom'] ?? 10 );
+			$pitch = floatval( $_POST['tvs_mapbox_pitch'] ?? 60 );
+			$bearing = floatval( $_POST['tvs_mapbox_bearing'] ?? 0 );
+			$default_speed = floatval( $_POST['tvs_mapbox_default_speed'] ?? 1.0 );
+			$camera_offset = floatval( $_POST['tvs_mapbox_camera_offset'] ?? 0.0002 );
+			$smooth_factor = floatval( $_POST['tvs_mapbox_smooth_factor'] ?? 0.7 );
+			$marker_color = sanitize_hex_color( $_POST['tvs_mapbox_marker_color'] ?? '#ff0000' );
+			$route_color = sanitize_hex_color( $_POST['tvs_mapbox_route_color'] ?? '#ec4899' );
+			$route_width = intval( $_POST['tvs_mapbox_route_width'] ?? 6 );
+			$terrain_enabled = isset( $_POST['tvs_mapbox_terrain_enabled'] ) ? 1 : 0;
+			$terrain_exaggeration = floatval( $_POST['tvs_mapbox_terrain_exaggeration'] ?? 1.5 );
+			$buildings_3d_enabled = isset( $_POST['tvs_mapbox_buildings_3d_enabled'] ) ? 1 : 0;
+
+			update_option( 'tvs_mapbox_access_token', $access_token );
+			update_option( 'tvs_mapbox_map_style', $map_style );
+			update_option( 'tvs_mapbox_initial_zoom', $initial_zoom );
+			update_option( 'tvs_mapbox_flyto_zoom', $flyto_zoom );
+			update_option( 'tvs_mapbox_max_zoom', $max_zoom );
+			update_option( 'tvs_mapbox_min_zoom', $min_zoom );
+			update_option( 'tvs_mapbox_pitch', $pitch );
+			update_option( 'tvs_mapbox_bearing', $bearing );
+			update_option( 'tvs_mapbox_default_speed', $default_speed );
+			update_option( 'tvs_mapbox_camera_offset', $camera_offset );
+			update_option( 'tvs_mapbox_smooth_factor', $smooth_factor );
+			update_option( 'tvs_mapbox_marker_color', $marker_color );
+			update_option( 'tvs_mapbox_route_color', $route_color );
+			update_option( 'tvs_mapbox_route_width', $route_width );
+			update_option( 'tvs_mapbox_terrain_enabled', $terrain_enabled );
+			update_option( 'tvs_mapbox_terrain_exaggeration', $terrain_exaggeration );
+			update_option( 'tvs_mapbox_buildings_3d_enabled', $buildings_3d_enabled );
+
+			echo '<div class="notice notice-success is-dismissible"><p>' . esc_html__( 'Mapbox settings saved.', 'tvs-virtual-sports' ) . '</p></div>';
+		}
+
+		// Get current values
+		$access_token = get_option( 'tvs_mapbox_access_token', '' );
+		$map_style = get_option( 'tvs_mapbox_map_style', 'mapbox://styles/mapbox/satellite-streets-v12' );
+		$initial_zoom = get_option( 'tvs_mapbox_initial_zoom', 14 );
+		$flyto_zoom = get_option( 'tvs_mapbox_flyto_zoom', 16 );
+		$max_zoom = get_option( 'tvs_mapbox_max_zoom', 18 );
+		$min_zoom = get_option( 'tvs_mapbox_min_zoom', 10 );
+		$pitch = get_option( 'tvs_mapbox_pitch', 60 );
+		$bearing = get_option( 'tvs_mapbox_bearing', 0 );
+		$default_speed = get_option( 'tvs_mapbox_default_speed', 1.0 );
+		$camera_offset = get_option( 'tvs_mapbox_camera_offset', 0.0002 );
+		$smooth_factor = get_option( 'tvs_mapbox_smooth_factor', 0.7 );
+		$marker_color = get_option( 'tvs_mapbox_marker_color', '#ff0000' );
+		$route_color = get_option( 'tvs_mapbox_route_color', '#ec4899' );
+		$route_width = get_option( 'tvs_mapbox_route_width', 6 );
+		$terrain_enabled = get_option( 'tvs_mapbox_terrain_enabled', 0 );
+		$terrain_exaggeration = get_option( 'tvs_mapbox_terrain_exaggeration', 1.5 );
+		$buildings_3d_enabled = get_option( 'tvs_mapbox_buildings_3d_enabled', 0 );
+
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<p><?php esc_html_e( 'Configure Mapbox settings for virtual training visualization.', 'tvs-virtual-sports' ); ?></p>
+			
+			<form method="post" action="">
+				<?php wp_nonce_field( 'tvs_mapbox_settings', 'tvs_mapbox_settings_nonce' ); ?>
+				
+				<table class="form-table">
+					<!-- Access Token -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_access_token"><?php esc_html_e( 'Access Token', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<input 
+								type="text" 
+								id="tvs_mapbox_access_token" 
+								name="tvs_mapbox_access_token" 
+								value="<?php echo esc_attr( $access_token ); ?>" 
+								class="large-text"
+								placeholder="pk.eyJ1IjoieW91ci11c2VybmFtZSIsImEiOiJ4eHh4eHh4In0.xxxxxxxxxx"
+							/>
+							<p class="description">
+								<?php esc_html_e( 'Your Mapbox public access token. Get one at', 'tvs-virtual-sports' ); ?> 
+								<a href="https://account.mapbox.com/access-tokens/" target="_blank">mapbox.com/access-tokens</a>
+							</p>
+						</td>
+					</tr>
+
+					<!-- Map Style -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_map_style"><?php esc_html_e( 'Map Style', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<select id="tvs_mapbox_map_style" name="tvs_mapbox_map_style">
+								<option value="mapbox://styles/mapbox/streets-v12" <?php selected( $map_style, 'mapbox://styles/mapbox/streets-v12' ); ?>>Streets</option>
+								<option value="mapbox://styles/mapbox/outdoors-v12" <?php selected( $map_style, 'mapbox://styles/mapbox/outdoors-v12' ); ?>>Outdoors</option>
+								<option value="mapbox://styles/mapbox/light-v11" <?php selected( $map_style, 'mapbox://styles/mapbox/light-v11' ); ?>>Light</option>
+								<option value="mapbox://styles/mapbox/dark-v11" <?php selected( $map_style, 'mapbox://styles/mapbox/dark-v11' ); ?>>Dark</option>
+								<option value="mapbox://styles/mapbox/satellite-v9" <?php selected( $map_style, 'mapbox://styles/mapbox/satellite-v9' ); ?>>Satellite</option>
+								<option value="mapbox://styles/mapbox/satellite-streets-v12" <?php selected( $map_style, 'mapbox://styles/mapbox/satellite-streets-v12' ); ?>>Satellite Streets (default)</option>
+							</select>
+							<p class="description"><?php esc_html_e( 'Choose the base map style.', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Zoom Levels -->
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Zoom Levels', 'tvs-virtual-sports' ); ?></th>
+						<td>
+							<label for="tvs_mapbox_initial_zoom"><?php esc_html_e( 'Initial Zoom:', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_initial_zoom" name="tvs_mapbox_initial_zoom" value="<?php echo esc_attr( $initial_zoom ); ?>" min="0" max="22" step="0.1" style="width: 80px;" />
+							<br>
+							<label for="tvs_mapbox_flyto_zoom"><?php esc_html_e( 'Fly To Zoom:', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_flyto_zoom" name="tvs_mapbox_flyto_zoom" value="<?php echo esc_attr( $flyto_zoom ); ?>" min="0" max="22" step="0.1" style="width: 80px;" />
+							<br>
+							<label for="tvs_mapbox_min_zoom"><?php esc_html_e( 'Minimum Zoom:', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_min_zoom" name="tvs_mapbox_min_zoom" value="<?php echo esc_attr( $min_zoom ); ?>" min="0" max="22" step="0.1" style="width: 80px;" />
+							<br>
+							<label for="tvs_mapbox_max_zoom"><?php esc_html_e( 'Maximum Zoom:', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_max_zoom" name="tvs_mapbox_max_zoom" value="<?php echo esc_attr( $max_zoom ); ?>" min="0" max="22" step="0.1" style="width: 80px;" />
+							<p class="description"><?php esc_html_e( 'Control zoom range (0-22). Initial: default view, Fly To: zoom when play starts, Min/Max: user limits.', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Camera Angle -->
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Camera Angle', 'tvs-virtual-sports' ); ?></th>
+						<td>
+							<label for="tvs_mapbox_pitch"><?php esc_html_e( 'Pitch (tilt):', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_pitch" name="tvs_mapbox_pitch" value="<?php echo esc_attr( $pitch ); ?>" min="0" max="85" step="1" style="width: 80px;" />°
+							<br>
+							<label for="tvs_mapbox_bearing"><?php esc_html_e( 'Bearing (rotation):', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_bearing" name="tvs_mapbox_bearing" value="<?php echo esc_attr( $bearing ); ?>" min="-180" max="180" step="1" style="width: 80px;" />°
+							<p class="description"><?php esc_html_e( 'Pitch: 0 = top-down, 60 = angled view. Bearing: map rotation (0 = north).', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Animation Settings -->
+					<tr>
+						<th scope="row"><?php esc_html_e( 'Animation', 'tvs-virtual-sports' ); ?></th>
+						<td>
+							<label for="tvs_mapbox_camera_offset"><?php esc_html_e( 'Camera Look-Ahead:', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_camera_offset" name="tvs_mapbox_camera_offset" value="<?php echo esc_attr( $camera_offset ); ?>" min="0" max="0.01" step="0.0001" style="width: 100px;" />
+							<br>
+							<label for="tvs_mapbox_smooth_factor"><?php esc_html_e( 'Smooth Factor:', 'tvs-virtual-sports' ); ?></label>
+							<input type="number" id="tvs_mapbox_smooth_factor" name="tvs_mapbox_smooth_factor" value="<?php echo esc_attr( $smooth_factor ); ?>" min="0.1" max="1" step="0.1" style="width: 80px;" />
+							<p class="description"><?php esc_html_e( 'Look-Ahead: how far camera points ahead (0.0002 default). Smooth: animation easing (0.7 = smooth, 1 = instant).', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Default Speed -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_default_speed"><?php esc_html_e( 'Default Animation Speed', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<input 
+								type="number" 
+								id="tvs_mapbox_default_speed" 
+								name="tvs_mapbox_default_speed" 
+								value="<?php echo esc_attr( $default_speed ); ?>" 
+								min="0.1" 
+								max="10" 
+								step="0.1" 
+								style="width: 80px;"
+							/>
+							<p class="description"><?php esc_html_e( 'Default speed multiplier for route animation (0.1 - 10x).', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Marker Color -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_marker_color"><?php esc_html_e( 'Marker Color', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<input 
+								type="color" 
+								id="tvs_mapbox_marker_color" 
+								name="tvs_mapbox_marker_color" 
+								value="<?php echo esc_attr( $marker_color ); ?>" 
+							/>
+							<p class="description"><?php esc_html_e( 'Color of the animated position marker.', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Route Line Color -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_route_color"><?php esc_html_e( 'Route Line Color', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<input 
+								type="color" 
+								id="tvs_mapbox_route_color" 
+								name="tvs_mapbox_route_color" 
+								value="<?php echo esc_attr( $route_color ); ?>" 
+							/>
+							<p class="description"><?php esc_html_e( 'Color of the route line on the map.', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- Route Line Width -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_route_width"><?php esc_html_e( 'Route Line Width', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<input 
+								type="number" 
+								id="tvs_mapbox_route_width" 
+								name="tvs_mapbox_route_width" 
+								value="<?php echo esc_attr( $route_width ); ?>" 
+								min="1" 
+								max="20" 
+								step="1" 
+								style="width: 80px;"
+							/>
+							<p class="description"><?php esc_html_e( 'Width of the route line in pixels (1-20).', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- 3D Terrain -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_terrain_enabled"><?php esc_html_e( '3D Terrain', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<label>
+								<input 
+									type="checkbox" 
+									id="tvs_mapbox_terrain_enabled" 
+									name="tvs_mapbox_terrain_enabled" 
+									value="1"
+									<?php checked( $terrain_enabled, 1 ); ?>
+								/>
+								<?php esc_html_e( 'Enable 3D terrain', 'tvs-virtual-sports' ); ?>
+							</label>
+							<br>
+							<label for="tvs_mapbox_terrain_exaggeration"><?php esc_html_e( 'Terrain Exaggeration:', 'tvs-virtual-sports' ); ?></label>
+							<input 
+								type="number" 
+								id="tvs_mapbox_terrain_exaggeration" 
+								name="tvs_mapbox_terrain_exaggeration" 
+								value="<?php echo esc_attr( $terrain_exaggeration ); ?>" 
+								min="0" 
+								max="5" 
+								step="0.1" 
+								style="width: 80px;"
+							/>
+							<p class="description"><?php esc_html_e( 'Show elevation in 3D (requires Mapbox Terrain tileset). Exaggeration: 1 = realistic, 1.5 = emphasized.', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+
+					<!-- 3D Buildings -->
+					<tr>
+						<th scope="row">
+							<label for="tvs_mapbox_buildings_3d_enabled"><?php esc_html_e( '3D Buildings', 'tvs-virtual-sports' ); ?></label>
+						</th>
+						<td>
+							<label>
+								<input 
+									type="checkbox" 
+									id="tvs_mapbox_buildings_3d_enabled" 
+									name="tvs_mapbox_buildings_3d_enabled" 
+									value="1"
+									<?php checked( $buildings_3d_enabled, 1 ); ?>
+								/>
+								<?php esc_html_e( 'Enable 3D buildings', 'tvs-virtual-sports' ); ?>
+							</label>
+							<p class="description"><?php esc_html_e( 'Show buildings in 3D (experimental, works best with satellite/streets styles).', 'tvs-virtual-sports' ); ?></p>
+						</td>
+					</tr>
+				</table>
+
+				<?php submit_button( __( 'Save Mapbox Settings', 'tvs-virtual-sports' ) ); ?>
+			</form>
+		</div>
+		<?php
 	}
 
 	/** Render invitation codes textarea */
