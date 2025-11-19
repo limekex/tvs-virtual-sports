@@ -1563,6 +1563,28 @@ class TVS_REST {
             $pace = (int) round( $duration_s / max( 0.001, $dist / 1000.0 ) );
             update_post_meta( $post_id, 'pace_s_per_km', (string) $pace );
         }
+        
+        // Generate static map image if route has polyline
+        if ( $route_id > 0 && get_post_type( $route_id ) === 'tvs_route' ) {
+            $polyline = get_post_meta( $route_id, 'polyline', true );
+            if ( empty( $polyline ) ) {
+                $polyline = get_post_meta( $route_id, 'summary_polyline', true );
+            }
+            
+            if ( ! empty( $polyline ) ) {
+                $mapbox_static = new TVS_Mapbox_Static();
+                $image_url = $mapbox_static->generate_activity_image( $post_id, $polyline, array(
+                    'width'          => 1200,
+                    'height'         => 800,
+                    'stroke_color'   => '84cc16', // Green completed route
+                    'stroke_width'   => 4,
+                    'stroke_opacity' => 0.9,
+                ) );
+                if ( is_wp_error( $image_url ) ) {
+                    error_log( 'TVS: Failed to generate static map for activity ' . $post_id . ': ' . $image_url->get_error_message() );
+                }
+            }
+        }
 
         return rest_ensure_response( array( 'id' => $post_id ) );
     }
@@ -2177,6 +2199,22 @@ class TVS_REST {
             if ( ! empty( $dy['season'] ) ) {
                 $this->maybe_set_season_thumbnail( $pid, $dy['season'] );
             }
+            
+            // Generate static map image from polyline if available
+            if ( ! empty( $data['map']['summary_polyline'] ) || ! empty( $data['map']['polyline'] ) ) {
+                $polyline = ! empty( $data['map']['polyline'] ) ? $data['map']['polyline'] : $data['map']['summary_polyline'];
+                $mapbox_static = new TVS_Mapbox_Static();
+                $map_result = $mapbox_static->generate_and_set_featured_image( $pid, $polyline, array(
+                    'width'         => 1200,
+                    'height'        => 800,
+                    'stroke_color'  => 'F56565', // Red route line
+                    'stroke_width'  => 4,
+                    'stroke_opacity' => 0.9,
+                ) );
+                if ( is_wp_error( $map_result ) ) {
+                    error_log( 'TVS: Failed to generate static map for route ' . $pid . ': ' . $map_result->get_error_message() );
+                }
+            }
         }
 
         // Optional: Try to store a GPX export URL reference (Strava requires auth; leave blank if not usable)
@@ -2336,6 +2374,24 @@ class TVS_REST {
         // Set default featured image based on derived season
         if ( ! empty( $dy['season'] ) ) {
             $this->maybe_set_season_thumbnail( $pid, $dy['season'] );
+        }
+        
+        // Generate static map image from polyline if available
+        if ( isset( $activity['map'] ) && is_array( $activity['map'] ) ) {
+            $polyline = ! empty( $activity['map']['polyline'] ) ? $activity['map']['polyline'] : ( ! empty( $activity['map']['summary_polyline'] ) ? $activity['map']['summary_polyline'] : null );
+            if ( $polyline ) {
+                $mapbox_static = new TVS_Mapbox_Static();
+                $map_result = $mapbox_static->generate_and_set_featured_image( $pid, $polyline, array(
+                    'width'         => 1200,
+                    'height'        => 800,
+                    'stroke_color'  => 'F56565', // Red route line
+                    'stroke_width'  => 4,
+                    'stroke_opacity' => 0.9,
+                ) );
+                if ( is_wp_error( $map_result ) ) {
+                    error_log( 'TVS: Failed to generate static map for imported activity ' . $pid . ': ' . $map_result->get_error_message() );
+                }
+            }
         }
 
         // Build GPX from streams and attach

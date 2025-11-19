@@ -221,6 +221,20 @@ class TVS_Strava {
                 'type'         => $activity_type,
                 'route_url'    => $route_url,
             );
+            
+        // Check if activity has static map image attached
+        $map_image_url = get_post_meta( $activity_post_id, '_tvs_map_image_url', true );
+        $map_attachment_id = get_post_meta( $activity_post_id, '_tvs_map_image_attachment_id', true );
+        if ( $map_attachment_id ) {
+            // Use permanent WordPress attachment URL if available
+            $attachment_url = wp_get_attachment_url( $map_attachment_id );
+            if ( $attachment_url ) {
+                $context['map_image_url'] = $attachment_url;
+            }
+        } elseif ( $map_image_url ) {
+            // Fallback to direct Mapbox API URL
+            $context['map_image_url'] = $map_image_url;
+        }
 
         $title_tpl = get_option( 'tvs_strava_title_template', 'TVS: {route_title}' );
         $desc_tpl  = get_option( 'tvs_strava_desc_template', 'Uploaded from TVS Virtual Sports (Activity ID: {activity_id})' );

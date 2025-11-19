@@ -13,6 +13,7 @@ require_once TVS_PLUGIN_DIR . 'includes/class-tvs-taxonomies.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-rest.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-strava.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-gpx.php';
+require_once TVS_PLUGIN_DIR . 'includes/class-tvs-mapbox-static.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-user-profile.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-frontend.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-admin.php';
