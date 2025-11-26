@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/manual-activity-tracker",
+  "version": "1.0.0",
+  "title": "TVS Manual Activity Tracker",
+  "category": "widgets",
+  "icon": "controls-play",
+  "description": "Track manual indoor activities like treadmill runs, stationary bike rides, and more.",
+  "keywords": ["tvs", "activity", "manual", "treadmill", "indoor"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "example": {
+    "attributes": {
+      "title": "Start Activity",
+      "showTypeSelector": true,
+      "defaultType": "Run"
+    }
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Start Activity"
+    },
+    "showTypeSelector": {
+      "type": "boolean",
+      "default": true
+    },
+    "allowedTypes": {
+      "type": "array",
+      "default": ["Run", "Ride", "Walk", "Hike", "Swim", "Workout"]
+    },
+    "autoStart": {
+      "type": "boolean",
+      "default": false
+    },
+    "defaultType": {
+      "type": "string",
+      "default": "Run"
+    }
+  },
+  "editorScript": "tvs-manual-activity-tracker-editor",
+  "viewScript": "file:../../public/js/tvs-block-manual-activity-tracker.js"
+}

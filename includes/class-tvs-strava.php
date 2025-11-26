@@ -202,6 +202,8 @@ class TVS_Strava {
         // Build activity name and template context
         $route_title = '';
         $route_url = '';
+        $is_manual = get_post_meta( $activity_post_id, '_tvs_is_manual', true );
+        
         if ( $route_id ) {
             $route_post = get_post( $route_id );
             if ( $route_post ) {
@@ -212,15 +214,56 @@ class TVS_Strava {
                 $route_url = $permalink;
             }
         }
-            $context = array(
-                'route_title'  => $route_title,
-                'activity_id'  => $activity_post_id,
-                'distance_km'  => $this->format_km_with_unit( $distance_m ),
-                'duration_hms' => $this->format_hms_smart( $duration_s ),
-                'date_local'   => $started_at ? date( 'Y-m-d H:i', strtotime( $started_at ) ) : date( 'Y-m-d H:i' ),
-                'type'         => $activity_type,
-                'route_url'    => $route_url,
-            );
+        
+        // Build context with all available placeholders
+        $context = array(
+            'route_title'  => $route_title,
+            'activity_id'  => $activity_post_id,
+            'distance_km'  => $this->format_km_with_unit( $distance_m ),
+            'duration_hms' => $this->format_hms_smart( $duration_s ),
+            'date_local'   => $started_at ? date( 'Y-m-d H:i', strtotime( $started_at ) ) : date( 'Y-m-d H:i' ),
+            'type'         => $activity_type,
+            'route_url'    => $route_url,
+        );
+        
+        // Add activity-specific placeholders
+        if ( $stored_type === 'Swim' ) {
+            $laps = (int) get_post_meta( $activity_post_id, '_tvs_laps', true );
+            $pool_length = (int) get_post_meta( $activity_post_id, '_tvs_pool_length', true );
+            $avg_pace = (int) get_post_meta( $activity_post_id, '_tvs_pace', true );
+            
+            $context['laps'] = $laps;
+            $context['pool_length'] = $pool_length;
+            $context['avg_pace_sec_lap'] = $avg_pace > 0 ? $avg_pace : '-';
+        }
+        
+        if ( $stored_type === 'Workout' ) {
+            $exercises_json = get_post_meta( $activity_post_id, '_tvs_manual_exercises', true );
+            $exercises = $exercises_json ? json_decode( $exercises_json, true ) : array();
+            
+            $context['exercise_count'] = count( $exercises );
+            
+            // Build formatted exercise list
+            $exercise_list_items = array();
+            foreach ( $exercises as $idx => $ex ) {
+                $name = isset( $ex['name'] ) ? $ex['name'] : 'Exercise';
+                $sets = isset( $ex['sets'] ) ? $ex['sets'] : 0;
+                $reps = isset( $ex['reps'] ) ? $ex['reps'] : 0;
+                $weight = isset( $ex['weight'] ) ? $ex['weight'] : 0;
+                $metric_type = isset( $ex['metric_type'] ) ? $ex['metric_type'] : 'reps';
+                
+                $line = sprintf( '%d. %s (%d × %d', $idx + 1, $name, $sets, $reps );
+                if ( $metric_type === 'time' ) {
+                    $line .= 's';
+                }
+                if ( $weight > 0 ) {
+                    $line .= sprintf( ' @ %dkg', $weight );
+                }
+                $line .= ')';
+                $exercise_list_items[] = $line;
+            }
+            $context['exercise_list'] = implode( "\n", $exercise_list_items );
+        }
             
         // Check if activity has static map image attached
         $map_image_url = get_post_meta( $activity_post_id, '_tvs_map_image_url', true );
@@ -236,13 +279,55 @@ class TVS_Strava {
             $context['map_image_url'] = $map_image_url;
         }
 
-        $title_tpl = get_option( 'tvs_strava_title_template', 'TVS: {route_title}' );
-        $desc_tpl  = get_option( 'tvs_strava_desc_template', 'Uploaded from TVS Virtual Sports (Activity ID: {activity_id})' );
+        // Choose appropriate templates based on activity type
+        if ( $stored_type === 'Swim' ) {
+            // Swim-specific templates
+            $default_title = 'Swim Activity';
+            $default_desc = 'Swim session: {laps} laps × {pool_length}m = {distance_km} in {duration_hms}.\n\nAverage pace: {avg_pace_sec_lap} sec/lap';
+            $title_tpl = get_option( 'tvs_strava_title_template_swim', $default_title );
+            $desc_tpl  = get_option( 'tvs_strava_desc_template_swim', $default_desc );
+        } elseif ( $stored_type === 'Workout' ) {
+            // Workout-specific templates
+            $default_title = 'Workout Session';
+            $default_desc = 'Completed {exercise_count} exercises in {duration_hms}.\n\n{exercise_list}';
+            $title_tpl = get_option( 'tvs_strava_title_template_workout', $default_title );
+            $desc_tpl  = get_option( 'tvs_strava_desc_template_workout', $default_desc );
+        } elseif ( ! $is_manual ) {
+            // Virtual routes (Run, Walk, Hike)
+            $default_title = 'TVS: {route_title}';
+            $default_desc = 'I just completed a {type} activity from virtualsport.online: {route_title}. The virtual track is {distance_km} and I finished in {duration_hms}. Take a look at the route at: {route_url}';
+            $title_tpl = get_option( 'tvs_strava_title_template_virtual', $default_title );
+            $desc_tpl  = get_option( 'tvs_strava_desc_template_virtual', $default_desc );
+            
+            // Check if user disabled route URL for virtual activities
+            $show_route_url = (bool) get_option( 'tvs_strava_show_route_url_virtual', true );
+            if ( ! $show_route_url ) {
+                // Remove route_url placeholder from context to avoid showing it
+                $context['route_url'] = '';
+            }
+        } else {
+            // Generic manual activity (shouldn't happen with current types, but fallback)
+            $default_title = '{type} Activity';
+            $default_desc = 'I completed a {type} activity: {distance_km} in {duration_hms}.';
+            // Use old generic templates as fallback
+            $title_tpl = get_option( 'tvs_strava_title_template', $default_title );
+            $desc_tpl  = get_option( 'tvs_strava_desc_template', $default_desc );
+        }
+        
         $is_private = (bool) get_option( 'tvs_strava_private', true );
 
         $name = $this->render_template( $title_tpl, $context );
-        if ( ! $name ) {
-            $name = $route_title ? "TVS: {$route_title}" : sprintf( 'TVS Activity %d', $activity_post_id );
+        if ( ! $name || trim( $name ) === '' ) {
+            // Fallback based on activity type
+            if ( $stored_type === 'Swim' ) {
+                $name = 'Swim Activity';
+            } elseif ( $stored_type === 'Workout' ) {
+                $name = 'Workout Session';
+            } elseif ( $is_manual ) {
+                $name = $stored_type ? "{$stored_type} Activity" : 'Activity';
+            } else {
+                $name = $route_title ? "TVS: {$route_title}" : sprintf( 'TVS Activity %d', $activity_post_id );
+            }
         }
 
         // Build payload for Strava API
@@ -372,7 +457,21 @@ class TVS_Strava {
         foreach ( $ctx as $k => $v ) {
             $replacements['{' . $k . '}'] = (string) $v;
         }
-        return strtr( $tpl, $replacements );
+        $result = strtr( $tpl, $replacements );
+        
+        // Clean up any remaining empty placeholders or their surrounding text
+        // Remove patterns like ": {route_title}" when route_title is empty
+        $result = preg_replace('/:\s*\{\w+\}\s*\.?/', '', $result);
+        // Remove patterns like "at: {route_url}" when route_url is empty
+        $result = preg_replace('/\bat:\s*\{\w+\}/', '', $result);
+        // Remove any leftover empty placeholders
+        $result = preg_replace('/\{\w+\}/', '', $result);
+        // Clean up multiple spaces and trailing punctuation
+        $result = preg_replace('/\s+/', ' ', $result);
+        $result = preg_replace('/\s+([.,;!?])/', '$1', $result);
+        $result = trim( $result );
+        
+        return $result;
     }
 
     protected function format_km( $meters ) {
@@ -422,12 +521,11 @@ class TVS_Strava {
     protected function map_activity_type( $tvs_type ) {
         $map = array(
             'run' => 'Run',
-            'løp' => 'Run',
             'ride' => 'Ride',
-            'sykkel' => 'Ride',
             'walk' => 'Walk',
-            'gå' => 'Walk',
             'hike' => 'Hike',
+            'swim' => 'Swim',
+            'workout' => 'WeightTraining',
             'ski' => 'NordicSki',
         );
         
@@ -740,5 +838,77 @@ class TVS_Strava {
         require_once ABSPATH . 'wp-admin/includes/image.php';
         wp_update_attachment_metadata( $attach_id, wp_generate_attachment_metadata( $attach_id, $path ) );
         return $attach_id;
+    }
+
+    /**
+     * Issue #21: Create manual activity on Strava (no GPS track)
+     * Used for treadmill/indoor activities
+     * 
+     * @param int $user_id WordPress user ID
+     * @param array $payload Activity data (name, type, elapsed_time, distance, trainer=1)
+     * @return array|WP_Error Strava API response or error
+     */
+    public function create_manual_activity( $user_id, $payload ) {
+        // Ensure token is valid
+        $token = $this->ensure_token( $user_id );
+        if ( is_wp_error( $token ) ) {
+            return $token;
+        }
+
+        $access_token = $token['access'];
+
+        // Build Strava API payload
+        $strava_payload = array(
+            'name' => isset( $payload['name'] ) ? $payload['name'] : 'Manual Activity',
+            'type' => isset( $payload['type'] ) ? $this->map_activity_type( $payload['type'] ) : 'Run',
+            'start_date_local' => isset( $payload['start_date_local'] ) ? $payload['start_date_local'] : date( 'c' ),
+            'elapsed_time' => isset( $payload['elapsed_time'] ) ? intval( $payload['elapsed_time'] ) : 0,
+            'distance' => isset( $payload['distance'] ) ? floatval( $payload['distance'] ) : 0,
+            'trainer' => 1, // Mark as indoor/trainer activity
+            'description' => isset( $payload['description'] ) ? $payload['description'] : '',
+        );
+
+        // Add optional fields
+        if ( isset( $payload['private'] ) ) {
+            $strava_payload['private'] = (bool) $payload['private'];
+        }
+
+        error_log( 'TVS Strava: Creating manual activity: ' . wp_json_encode( $strava_payload ) );
+
+        // POST to Strava API
+        $response = wp_remote_post( $this->api_base . '/activities', array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $access_token,
+                'Content-Type' => 'application/json',
+            ),
+            'body' => wp_json_encode( $strava_payload ),
+            'timeout' => 30,
+        ) );
+
+        if ( is_wp_error( $response ) ) {
+            error_log( 'TVS Strava: Manual activity creation failed: ' . $response->get_error_message() );
+            return $response;
+        }
+
+        $code = wp_remote_retrieve_response_code( $response );
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $code !== 201 ) {
+            $error_msg = isset( $body['message'] ) ? $body['message'] : 'Unknown error';
+            error_log( "TVS Strava: Manual activity creation failed (HTTP {$code}): {$error_msg}" );
+            
+            // Handle specific errors
+            if ( $code === 401 ) {
+                return new WP_Error( 'strava_auth', 'Strava authentication failed. Please reconnect.', array( 'status' => 401 ) );
+            }
+            if ( $code === 429 ) {
+                return new WP_Error( 'strava_rate_limit', 'Strava API rate limit exceeded. Please try again later.', array( 'status' => 429 ) );
+            }
+            
+            return new WP_Error( 'strava_error', $error_msg, array( 'status' => $code ) );
+        }
+
+        error_log( 'TVS Strava: Manual activity created successfully: ID ' . ( $body['id'] ?? 'unknown' ) );
+        return $body;
     }
 }

@@ -9,13 +9,16 @@
     "build:block:route-insights": "esbuild src/blocks/route-insights/view.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-block-route-insights.js",
     "build:block:personal-records": "esbuild src/blocks/personal-records/view.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-block-personal-records.js",
     "build:block:activity-heatmap": "esbuild src/blocks/activity-heatmap/view.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-block-activity-heatmap.js",
-    "build": "npm run build:app && npm run build:block:my-activities && npm run build:block:route-insights && npm run build:block:personal-records && npm run build:block:activity-heatmap",
+    "build:block:manual-activity-tracker": "esbuild src/blocks/manual-activity-tracker/view.js --bundle --minify --sourcemap --format=iife --outfile=public/js/tvs-block-manual-activity-tracker.js",
+    "build:block:manual-activity-tracker:editor": "esbuild blocks/manual-activity-tracker/index.js --bundle --minify --sourcemap --format=iife --outfile=blocks/manual-activity-tracker/index.min.js --external:@wordpress/* --external:react --external:react-dom --loader:.js=jsx",
+    "build": "npm run build:app && npm run build:block:my-activities && npm run build:block:route-insights && npm run build:block:personal-records && npm run build:block:activity-heatmap && npm run build:block:manual-activity-tracker && npm run build:block:manual-activity-tracker:editor",
     "dev:app": "esbuild src/index.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-app.js --watch",
     "dev:block:my-activities": "esbuild src/blocks/my-activities/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-my-activities.js --watch",
     "dev:block:route-insights": "esbuild src/blocks/route-insights/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-route-insights.js --watch",
     "dev:block:personal-records": "esbuild src/blocks/personal-records/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-personal-records.js --watch",
     "dev:block:activity-heatmap": "esbuild src/blocks/activity-heatmap/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-activity-heatmap.js --watch",
-    "dev": "npm-run-all -p dev:app dev:block:my-activities dev:block:route-insights dev:block:personal-records dev:block:activity-heatmap"
+    "dev:block:manual-activity-tracker": "esbuild src/blocks/manual-activity-tracker/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-manual-activity-tracker.js --watch",
+    "dev": "npm-run-all -p dev:app dev:block:my-activities dev:block:route-insights dev:block:personal-records dev:block:activity-heatmap dev:block:manual-activity-tracker"
   },
   "devDependencies": {
     "esbuild": "0.17.19",

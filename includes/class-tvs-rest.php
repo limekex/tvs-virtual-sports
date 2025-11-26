@@ -629,6 +629,64 @@ class TVS_REST {
             ),
         ) );
 
+        // Issue #21: Manual activity tracking (treadmill/indoor)
+        register_rest_route( $ns, '/activities/manual/start', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'manual_activity_start' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'type' => array(
+                    'required' => true,
+                    'type' => 'string',
+                    'enum' => array( 'Run', 'Ride', 'Walk', 'Hike', 'Swim', 'Workout' ),
+                    'sanitize_callback' => 'sanitize_text_field',
+                ),
+            ),
+        ) );
+
+        register_rest_route( $ns, '/activities/manual/(?P<id>[a-zA-Z0-9_.-]+)', array(
+            'methods' => 'PATCH',
+            'callback' => array( $this, 'manual_activity_update' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'id' => array( 'required' => true, 'type' => 'string' ),
+                'elapsed_time' => array( 'type' => 'integer', 'minimum' => 0 ),
+                'distance' => array( 'type' => 'number', 'minimum' => 0 ),
+                'speed' => array( 'type' => 'number', 'minimum' => 0 ),
+                'pace' => array( 'type' => 'number', 'minimum' => 0 ),
+                'incline' => array( 'type' => 'number' ),
+                'cadence' => array( 'type' => 'integer', 'minimum' => 0 ),
+                'power' => array( 'type' => 'integer', 'minimum' => 0 ),
+                'sets' => array( 'type' => 'integer', 'minimum' => 0 ),
+                'reps' => array( 'type' => 'integer', 'minimum' => 0 ),
+                'exercises' => array( 'type' => 'array' ),
+                'laps' => array( 'type' => 'integer', 'minimum' => 0 ),
+                'pool_length' => array( 'type' => 'integer', 'minimum' => 0 ),
+            ),
+        ) );
+
+        register_rest_route( $ns, '/activities/manual/(?P<id>[a-zA-Z0-9_.-]+)/finish', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'manual_activity_finish' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'id' => array( 'required' => true, 'type' => 'string' ),
+            ),
+        ) );
+
+        register_rest_route( $ns, '/activities/(?P<id>\d+)/strava/manual', array(
+            'methods' => 'POST',
+            'callback' => array( $this, 'strava_upload_manual' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'id' => array(
+                    'required' => true,
+                    'type' => 'integer',
+                    'validate_callback' => function( $param ) { return is_numeric( $param ); },
+                ),
+            ),
+        ) );
+
         // P1: Strava athlete routes (contributors and above)
         register_rest_route( $ns, '/strava/routes', array(
             'methods'  => 'GET',
@@ -1989,6 +2047,302 @@ class TVS_REST {
             'strava_id' => isset( $res['id'] ) ? $res['id'] : null,
             'strava_url' => isset( $res['id'] ) ? "https://www.strava.com/activities/{$res['id']}" : null,
             'activity_id' => $id,
+        ) );
+    }
+
+    /**
+     * Issue #21: Start manual activity session
+     * POST /tvs/v1/activities/manual/start
+     */
+    public function manual_activity_start( $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        }
+
+        $type = sanitize_text_field( $request['type'] );
+        
+        // Generate unique session ID
+        $session_id = uniqid( 'manual_', true );
+        
+        // Initialize session data
+        $session_data = array(
+            'session_id' => $session_id,
+            'user_id' => $user_id,
+            'type' => $type,
+            'start_time' => current_time( 'mysql' ),
+            'start_timestamp' => time(),
+            'elapsed_time' => 0,
+            'distance' => 0,
+            'speed' => 0,
+            'pace' => 0,
+            'incline' => 0,
+            'cadence' => 0,
+            'power' => 0,
+            'is_paused' => false,
+            'metrics_history' => array(),
+        );
+        
+        // Store session in transient (1 hour expiry)
+        $transient_key = "tvs_manual_session_{$user_id}_{$session_id}";
+        set_transient( $transient_key, $session_data, HOUR_IN_SECONDS );
+        
+        return rest_ensure_response( array(
+            'success' => true,
+            'session_id' => $session_id,
+            'session_data' => $session_data,
+            'message' => "Manual {$type} activity started",
+        ) );
+    }
+
+    /**
+     * Issue #21: Update manual activity metrics
+     * PATCH /tvs/v1/activities/manual/{id}
+     */
+    public function manual_activity_update( $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        }
+
+        $session_id = sanitize_text_field( $request['id'] );
+        $transient_key = "tvs_manual_session_{$user_id}_{$session_id}";
+        
+        // Retrieve existing session
+        $session_data = get_transient( $transient_key );
+        if ( ! $session_data ) {
+            return new WP_Error( 'session_not_found', 'Session not found or expired', array( 'status' => 404 ) );
+        }
+        
+        // Verify ownership
+        if ( $session_data['user_id'] !== $user_id ) {
+            return new WP_Error( 'forbidden', 'You do not own this session', array( 'status' => 403 ) );
+        }
+        
+        // Update metrics
+        $updatable_fields = array( 'elapsed_time', 'distance', 'speed', 'pace', 'incline', 'cadence', 'power', 'is_paused', 'sets', 'reps', 'weight', 'exercises', 'laps', 'pool_length' );
+        foreach ( $updatable_fields as $field ) {
+            if ( isset( $request[ $field ] ) ) {
+                $session_data[ $field ] = $request[ $field ];
+            }
+        }
+        
+        // Track metrics history
+        $session_data['metrics_history'][] = array(
+            'timestamp' => time(),
+            'elapsed_time' => $session_data['elapsed_time'],
+            'distance' => $session_data['distance'],
+            'speed' => $session_data['speed'],
+            'pace' => $session_data['pace'],
+        );
+        
+        $session_data['last_update'] = current_time( 'mysql' );
+        
+        // Update transient
+        set_transient( $transient_key, $session_data, HOUR_IN_SECONDS );
+        
+        return rest_ensure_response( array(
+            'success' => true,
+            'session_data' => $session_data,
+            'message' => 'Session updated',
+        ) );
+    }
+
+    /**
+     * Issue #21: Finish manual activity and save as tvs_activity
+     * POST /tvs/v1/activities/manual/{id}/finish
+     */
+    public function manual_activity_finish( $request ) {
+        $user_id = get_current_user_id();
+        if ( ! $user_id ) {
+            return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        }
+
+        $session_id = sanitize_text_field( $request['id'] );
+        $transient_key = "tvs_manual_session_{$user_id}_{$session_id}";
+        
+        // Retrieve session
+        $session_data = get_transient( $transient_key );
+        if ( ! $session_data ) {
+            return new WP_Error( 'session_not_found', 'Session not found or expired', array( 'status' => 404 ) );
+        }
+        
+        // Verify ownership
+        if ( $session_data['user_id'] !== $user_id ) {
+            return new WP_Error( 'forbidden', 'You do not own this session', array( 'status' => 403 ) );
+        }
+        
+        // Create activity post
+        $activity_title = sprintf( 
+            'Manual %s - %s', 
+            $session_data['type'],
+            date( 'Y-m-d H:i', strtotime( $session_data['start_time'] ) )
+        );
+        
+        $post_id = wp_insert_post( array(
+            'post_type' => 'tvs_activity',
+            'post_title' => $activity_title,
+            'post_status' => 'publish',
+            'post_author' => $user_id,
+        ) );
+        
+        if ( is_wp_error( $post_id ) ) {
+            return $post_id;
+        }
+        
+        // Enforce numeric slug for clean /activity/{id} URLs
+        wp_update_post( array( 'ID' => $post_id, 'post_name' => (string) $post_id ) );
+        
+        // Calculate ended_at timestamp
+        $started_timestamp = strtotime( $session_data['start_time'] );
+        $ended_timestamp = $started_timestamp + intval( $session_data['elapsed_time'] );
+        $ended_at = date( 'Y-m-d H:i:s', $ended_timestamp );
+        
+        // Save standard activity meta (same structure as virtual/video activities)
+        update_post_meta( $post_id, 'route_id', 0 ); // No route for manual activities
+        update_post_meta( $post_id, 'route_name', '' );
+        update_post_meta( $post_id, 'activity_date', $session_data['start_time'] );
+        update_post_meta( $post_id, 'started_at', $session_data['start_time'] );
+        update_post_meta( $post_id, 'ended_at', $ended_at );
+        update_post_meta( $post_id, 'duration_s', intval( $session_data['elapsed_time'] ) );
+        update_post_meta( $post_id, 'distance_m', floatval( $session_data['distance'] ) * 1000 ); // Convert km to m
+        update_post_meta( $post_id, 'activity_type', $session_data['type'] );
+        update_post_meta( $post_id, 'visibility', 'private' ); // Default to private
+        update_post_meta( $post_id, 'is_virtual', false ); // Manual activities are not virtual
+        
+        // Calculate and save pace (seconds per km) if distance > 0
+        $distance_m = floatval( $session_data['distance'] ) * 1000;
+        if ( $distance_m > 1 && $session_data['elapsed_time'] > 0 ) {
+            $pace = (int) round( $session_data['elapsed_time'] / max( 0.001, $distance_m / 1000.0 ) );
+            update_post_meta( $post_id, 'pace_s_per_km', (string) $pace );
+        }
+        
+        // Manual activity specific flags
+        update_post_meta( $post_id, '_tvs_is_manual', true );
+        
+        // Store metrics history for manual activities
+        update_post_meta( $post_id, '_tvs_manual_metrics', wp_json_encode( $session_data['metrics_history'] ) );
+        
+        // Optional metrics (incline, cadence, power)
+        if ( ! empty( $session_data['incline'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_incline', floatval( $session_data['incline'] ) );
+        }
+        if ( ! empty( $session_data['cadence'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_cadence', intval( $session_data['cadence'] ) );
+        }
+        if ( ! empty( $session_data['power'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_power', intval( $session_data['power'] ) );
+        }
+        
+        // Workout-specific metrics (exercises, sets, reps)
+        if ( ! empty( $session_data['exercises'] ) && is_array( $session_data['exercises'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_exercises', wp_json_encode( $session_data['exercises'] ) );
+        }
+        if ( isset( $session_data['sets'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_sets', intval( $session_data['sets'] ) );
+        }
+        if ( isset( $session_data['reps'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_reps', intval( $session_data['reps'] ) );
+        }
+        if ( isset( $session_data['weight'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_weight', floatval( $session_data['weight'] ) );
+        }
+        
+        // Swim-specific metrics (laps, pool_length)
+        if ( isset( $session_data['laps'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_laps', intval( $session_data['laps'] ) );
+        }
+        if ( isset( $session_data['pool_length'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_pool_length', intval( $session_data['pool_length'] ) );
+        }
+        
+        // Clear session transient
+        delete_transient( $transient_key );
+        
+        // Get activity permalink
+        $permalink = get_permalink( $post_id );
+        
+        return rest_ensure_response( array(
+            'success' => true,
+            'activity_id' => $post_id,
+            'permalink' => $permalink,
+            'message' => 'Manual activity saved successfully',
+            'session_data' => $session_data,
+        ) );
+    }
+
+    /**
+     * Issue #21: Upload manual activity to Strava
+     * POST /tvs/v1/activities/{id}/strava/manual
+     */
+    public function strava_upload_manual( $request ) {
+        $id = intval( $request['id'] );
+        
+        // Verify activity exists
+        $post = get_post( $id );
+        if ( ! $post || $post->post_type !== 'tvs_activity' ) {
+            return new WP_Error( 'not_found', 'Activity not found', array( 'status' => 404 ) );
+        }
+        
+        // Verify this is a manual activity
+        $is_manual = get_post_meta( $id, '_tvs_is_manual', true );
+        if ( ! $is_manual ) {
+            return new WP_Error( 'not_manual', 'This is not a manual activity. Use /strava endpoint instead.', array( 'status' => 400 ) );
+        }
+        
+        // Verify ownership
+        $user_id = get_current_user_id();
+        if ( ! $user_id || $user_id !== (int) $post->post_author ) {
+            return new WP_Error( 'forbidden', 'You do not own this activity', array( 'status' => 403 ) );
+        }
+        
+        // Check if already synced
+        $already_synced = get_post_meta( $id, '_tvs_synced_strava', true );
+        if ( $already_synced ) {
+            $remote_id = get_post_meta( $id, '_tvs_strava_remote_id', true );
+            return rest_ensure_response( array(
+                'message' => 'Activity already synced to Strava',
+                'synced' => true,
+                'strava_id' => $remote_id,
+                'strava_url' => "https://www.strava.com/activities/{$remote_id}",
+            ) );
+        }
+        
+        // Get activity meta
+        $manual_type = get_post_meta( $id, '_tvs_manual_type', true );
+        $started_at = get_post_meta( $id, '_tvs_started_at', true );
+        $duration_s = get_post_meta( $id, '_tvs_duration_s', true );
+        $distance_m = get_post_meta( $id, '_tvs_distance_m', true );
+        
+        // Upload to Strava via TVS_Strava class
+        $strava = new TVS_Strava();
+        $res = $strava->create_manual_activity( $user_id, array(
+            'name' => $post->post_title,
+            'type' => $manual_type,
+            'start_date_local' => date( 'c', strtotime( $started_at ) ),
+            'elapsed_time' => intval( $duration_s ),
+            'distance' => floatval( $distance_m ),
+            'trainer' => 1, // Mark as indoor/trainer activity
+            'description' => sprintf( 'Manual activity uploaded from TVS Virtual Sports (ID: %d)', $id ),
+        ) );
+        
+        if ( is_wp_error( $res ) ) {
+            return $res;
+        }
+        
+        // Mark as synced
+        update_post_meta( $id, '_tvs_synced_strava', 1 );
+        update_post_meta( $id, '_tvs_synced_strava_at', current_time( 'mysql' ) );
+        if ( isset( $res['id'] ) ) {
+            update_post_meta( $id, '_tvs_strava_remote_id', $res['id'] );
+        }
+        
+        return rest_ensure_response( array(
+            'success' => true,
+            'message' => 'Manual activity uploaded to Strava',
+            'synced' => true,
+            'strava_id' => isset( $res['id'] ) ? $res['id'] : null,
+            'strava_url' => isset( $res['id'] ) ? "https://www.strava.com/activities/{$res['id']}" : null,
         ) );
     }
 

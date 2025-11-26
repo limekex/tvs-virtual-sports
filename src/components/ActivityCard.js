@@ -12,6 +12,19 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
   const duration = meta._tvs_duration_s?.[0] || meta.duration_s?.[0] || 0;
   const routeName = meta._tvs_route_name?.[0] || meta.route_name?.[0] || 'Unknown Route';
   const activityDate = meta._tvs_activity_date?.[0] || meta.activity_date?.[0] || activity.date || '';
+  const activityType = meta._tvs_activity_type?.[0] || meta.activity_type?.[0] || '';
+  
+  // Parse manual exercises if present
+  const exercisesJson = meta._tvs_manual_exercises?.[0];
+  let exercises = [];
+  if (exercisesJson) {
+    try {
+      exercises = JSON.parse(exercisesJson);
+    } catch (e) {
+      exercises = [];
+    }
+  }
+  const isManualWorkout = activityType === 'Workout' && exercises.length > 0;
 
   let formattedDate = '';
   if (activityDate) {
@@ -62,9 +75,13 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
         h('div', { style: { flex: 1, minWidth: 0 } },
           h('div', { className: 'tvs-activity-card__title' }, activityTitle),
           h('div', { className: 'tvs-activity-card__meta tvs-text-muted' },
-            distance > 0 ? (distance / 1000).toFixed(2) + ' km' : '',
-            distance > 0 && duration > 0 ? ' · ' : '',
-            duration > 0 ? Math.floor(duration / 60) + ' min' : ''
+            isManualWorkout
+              ? `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''} · ${Math.floor(duration / 60)} min`
+              : (
+                  (distance > 0 ? (distance / 1000).toFixed(2) + ' km' : '') +
+                  (distance > 0 && duration > 0 ? ' · ' : '') +
+                  (duration > 0 ? Math.floor(duration / 60) + ' min' : '')
+                )
           )
         ),
         h('div', { className: 'tvs-activity-card__actions', style: { flexShrink: 0 }, onClick: (e) => e.stopPropagation(), onKeyDown: (e) => e.stopPropagation() },
@@ -96,8 +113,12 @@ export default function ActivityCard({ activity, uploadToStrava, uploading, Reac
       h('div', null,
         h('strong', null, activityTitle),
         h('div', { className: 'tvs-activity-card__meta tvs-text-muted' },
-          distance > 0 ? h('span', null, 'Distance: ' + (distance / 1000).toFixed(2) + ' km ') : null,
-          duration > 0 ? h('span', null, 'Duration: ' + Math.floor(duration / 60) + ' min') : null
+          isManualWorkout
+            ? h('span', null, `${exercises.length} exercise${exercises.length !== 1 ? 's' : ''} · Duration: ${Math.floor(duration / 60)} min`)
+            : (
+                (distance > 0 ? h('span', null, 'Distance: ' + (distance / 1000).toFixed(2) + ' km ') : null) +
+                (duration > 0 ? h('span', null, 'Duration: ' + Math.floor(duration / 60) + ' min') : null)
+              )
         )
       ),
       h('div', { className: 'tvs-activity-card__right' },

@@ -398,6 +398,79 @@ class TVS_Admin {
 			)
 		);
 
+		// Activity-specific templates: Virtual Routes (Run, Walk, Hike)
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_title_template_virtual',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => 'TVS: {route_title}',
+			)
+		);
+
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_desc_template_virtual',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_textarea_field',
+				'default'           => 'I just completed a {type} activity from virtualsport.online: {route_title}. The virtual track is {distance_km} and I finished in {duration_hms}. Take a look at the route at: {route_url}',
+			)
+		);
+
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_show_route_url_virtual',
+			array(
+				'type'              => 'boolean',
+				'sanitize_callback' => function( $v ) { return ! empty( $v ); },
+				'default'           => true,
+			)
+		);
+
+		// Activity-specific templates: Swim
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_title_template_swim',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => 'Swim Activity',
+			)
+		);
+
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_desc_template_swim',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_textarea_field',
+				'default'           => 'Swim session: {laps} laps × {pool_length}m = {distance_km} in {duration_hms}.\n\nAverage pace: {avg_pace_sec_lap} sec/lap',
+			)
+		);
+
+		// Activity-specific templates: WeightTraining (Workout)
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_title_template_workout',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_text_field',
+				'default'           => 'Workout Session',
+			)
+		);
+
+		register_setting(
+			'tvs_strava_settings',
+			'tvs_strava_desc_template_workout',
+			array(
+				'type'              => 'string',
+				'sanitize_callback' => 'sanitize_textarea_field',
+				'default'           => 'Completed {exercise_count} exercises in {duration_hms}.\n\n{exercise_list}',
+			)
+		);
+
 		// Add settings fields.
 		add_settings_field(
 			'tvs_strava_client_id',
@@ -435,6 +508,31 @@ class TVS_Admin {
 			'tvs_strava_private',
 			__( 'Publish as Private', 'tvs-virtual-sports' ),
 			array( $this, 'render_private_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		// Activity-specific template fields
+		add_settings_field(
+			'tvs_strava_templates_virtual',
+			__( 'Virtual Routes (Run, Walk, Hike)', 'tvs-virtual-sports' ),
+			array( $this, 'render_virtual_templates_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		add_settings_field(
+			'tvs_strava_templates_swim',
+			__( 'Swim Activities', 'tvs-virtual-sports' ),
+			array( $this, 'render_swim_templates_field' ),
+			'tvs-strava-settings',
+			'tvs_strava_settings_section'
+		);
+
+		add_settings_field(
+			'tvs_strava_templates_workout',
+			__( 'Workout Activities (WeightTraining)', 'tvs-virtual-sports' ),
+			array( $this, 'render_workout_templates_field' ),
 			'tvs-strava-settings',
 			'tvs_strava_settings_section'
 		);
@@ -1048,6 +1146,72 @@ class TVS_Admin {
 		<p class="description">
 			<?php esc_html_e( 'Note: Strava does not allow setting activities as "Only You" via API. To make an activity fully private, you must change it manually on Strava after upload.', 'tvs-virtual-sports' ); ?>
 		</p>
+		<?php
+	}
+
+	/**
+	 * Render Virtual Routes template fields
+	 */
+	public function render_virtual_templates_field() {
+		$title = get_option( 'tvs_strava_title_template_virtual', 'TVS: {route_title}' );
+		$desc = get_option( 'tvs_strava_desc_template_virtual', 'I just completed a {type} activity from virtualsport.online: {route_title}. The virtual track is {distance_km} and I finished in {duration_hms}. Take a look at the route at: {route_url}' );
+		$show_url = (bool) get_option( 'tvs_strava_show_route_url_virtual', true );
+		?>
+		<div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; margin-bottom:10px;">
+			<h4 style="margin-top:0;"><?php esc_html_e( 'Virtual Routes (Run, Walk, Hike)', 'tvs-virtual-sports' ); ?></h4>
+			<p><label><strong><?php esc_html_e( 'Title Template:', 'tvs-virtual-sports' ); ?></strong></label></p>
+			<input type="text" name="tvs_strava_title_template_virtual" value="<?php echo esc_attr( $title ); ?>" class="large-text" />
+			<p><label><strong><?php esc_html_e( 'Description Template:', 'tvs-virtual-sports' ); ?></strong></label></p>
+			<textarea name="tvs_strava_desc_template_virtual" rows="4" class="large-text"><?php echo esc_textarea( $desc ); ?></textarea>
+			<p><label>
+				<input type="checkbox" name="tvs_strava_show_route_url_virtual" value="1" <?php checked( $show_url, true ); ?> />
+				<?php esc_html_e( 'Include route URL in description', 'tvs-virtual-sports' ); ?>
+			</label></p>
+			<p class="description">
+				<?php esc_html_e( 'Placeholders: {route_title}, {route_url}, {activity_id}, {distance_km}, {duration_hms}, {date_local}, {type}, {map_image_url}', 'tvs-virtual-sports' ); ?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render Swim template fields
+	 */
+	public function render_swim_templates_field() {
+		$title = get_option( 'tvs_strava_title_template_swim', 'Swim Activity' );
+		$desc = get_option( 'tvs_strava_desc_template_swim', 'Swim session: {laps} laps × {pool_length}m = {distance_km} in {duration_hms}.\n\nAverage pace: {avg_pace_sec_lap} sec/lap' );
+		?>
+		<div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; margin-bottom:10px;">
+			<h4 style="margin-top:0;"><?php esc_html_e( 'Swim Activities', 'tvs-virtual-sports' ); ?></h4>
+			<p><label><strong><?php esc_html_e( 'Title Template:', 'tvs-virtual-sports' ); ?></strong></label></p>
+			<input type="text" name="tvs_strava_title_template_swim" value="<?php echo esc_attr( $title ); ?>" class="large-text" />
+			<p><label><strong><?php esc_html_e( 'Description Template:', 'tvs-virtual-sports' ); ?></strong></label></p>
+			<textarea name="tvs_strava_desc_template_swim" rows="4" class="large-text"><?php echo esc_textarea( $desc ); ?></textarea>
+			<p class="description">
+				<?php esc_html_e( 'Placeholders: {laps}, {pool_length}, {distance_km}, {duration_hms}, {avg_pace_sec_lap}, {date_local}, {activity_id}', 'tvs-virtual-sports' ); ?>
+			</p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Render Workout template fields
+	 */
+	public function render_workout_templates_field() {
+		$title = get_option( 'tvs_strava_title_template_workout', 'Workout Session' );
+		$desc = get_option( 'tvs_strava_desc_template_workout', 'Completed {exercise_count} exercises in {duration_hms}.\n\n{exercise_list}' );
+		?>
+		<div style="border:1px solid #ddd; padding:15px; background:#f9f9f9; margin-bottom:10px;">
+			<h4 style="margin-top:0;"><?php esc_html_e( 'Workout Activities (WeightTraining)', 'tvs-virtual-sports' ); ?></h4>
+			<p><label><strong><?php esc_html_e( 'Title Template:', 'tvs-virtual-sports' ); ?></strong></label></p>
+			<input type="text" name="tvs_strava_title_template_workout" value="<?php echo esc_attr( $title ); ?>" class="large-text" />
+			<p><label><strong><?php esc_html_e( 'Description Template:', 'tvs-virtual-sports' ); ?></strong></label></p>
+			<textarea name="tvs_strava_desc_template_workout" rows="4" class="large-text"><?php echo esc_textarea( $desc ); ?></textarea>
+			<p class="description">
+				<?php esc_html_e( 'Placeholders: {exercise_count}, {exercise_list}, {duration_hms}, {date_local}, {activity_id}', 'tvs-virtual-sports' ); ?>
+				<br><?php esc_html_e( '{exercise_list} will be formatted as: "1. Bench Press (3 × 10 @ 80kg)\n2. Squats (4 × 8 @ 100kg)"', 'tvs-virtual-sports' ); ?>
+			</p>
+		</div>
 		<?php
 	}
 

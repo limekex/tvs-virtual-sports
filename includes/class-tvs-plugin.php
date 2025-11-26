@@ -201,6 +201,11 @@ class TVS_Plugin {
                     'debug'       => array( 'type' => 'boolean', 'default' => false ),
                 ),
             ) );
+
+            // Issue #21: Manual Activity Tracker - Register via block.json
+            register_block_type( TVS_PLUGIN_DIR . 'blocks/manual-activity-tracker/block.json', array(
+                'render_callback' => array( $this, 'render_manual_activity_tracker_block' ),
+            ) );
         }
     }
 
@@ -428,6 +433,45 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_manual_activity_tracker_block( $attributes ) {
+        // Must be logged in to use manual activity tracker
+        if ( ! is_user_logged_in() ) {
+            return '<div class="tvs-app"><p>' . esc_html__( 'You must be logged in to track activities.', 'tvs-virtual-sports' ) . '</p></div>';
+        }
+
+        // Enqueue block-specific frontend script and styles
+        wp_enqueue_script( 'tvs-block-manual-activity-tracker' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-manual-tracker-' . uniqid();
+        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Start Activity';
+        $show_type_selector = isset( $attributes['showTypeSelector'] ) ? (bool) $attributes['showTypeSelector'] : true;
+        $allowed_types = isset( $attributes['allowedTypes'] ) && is_array( $attributes['allowedTypes'] ) 
+            ? array_map( 'sanitize_text_field', $attributes['allowedTypes'] ) 
+            : array( 'Run', 'Ride', 'Walk', 'Hike', 'Swim', 'Workout' );
+        $auto_start = isset( $attributes['autoStart'] ) ? (bool) $attributes['autoStart'] : false;
+        $default_type = isset( $attributes['defaultType'] ) ? sanitize_text_field( $attributes['defaultType'] ) : 'Run';
+
+        ob_start();
+        ?>
+        <div class="tvs-app tvs-manual-tracker-widget">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-manual-activity-tracker"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-show-type-selector="<?php echo esc_attr( $show_type_selector ? '1' : '0' ); ?>"
+                 data-allowed-types="<?php echo esc_attr( wp_json_encode( $allowed_types ) ); ?>"
+                 data-auto-start="<?php echo esc_attr( $auto_start ? '1' : '0' ); ?>"
+                 data-default-type="<?php echo esc_attr( $default_type ); ?>"
+            >
+                <div class="tvs-tracker-loading">
+                    <p><?php esc_html_e( 'Loading activity tracker...', 'tvs-virtual-sports' ); ?></p>
+                </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -492,6 +536,7 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-personal-records', TVS_PLUGIN_URL . 'public/js/tvs-block-personal-records.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-heatmap', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-heatmap.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-route-weather', TVS_PLUGIN_URL . 'public/js/tvs-block-route-weather.js', array(), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-manual-activity-tracker', TVS_PLUGIN_URL . 'public/js/tvs-block-manual-activity-tracker.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
@@ -546,6 +591,15 @@ class TVS_Plugin {
             true
         );
         wp_enqueue_script( 'tvs-blocks-editor' );
+
+        // Register manual activity tracker editor script with proper dependencies
+        wp_register_script(
+            'tvs-manual-activity-tracker-editor',
+            TVS_PLUGIN_URL . 'blocks/manual-activity-tracker/index-simple.js',
+            array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor' ),
+            TVS_PLUGIN_VERSION,
+            true
+        );
 
         // Also load the frontend invites block script so it can render inside the editor canvas
         // (it mounts onto .tvs-invite-friends-block and needs TVS_SETTINGS)
