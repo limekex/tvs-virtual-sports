@@ -9,8 +9,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once TVS_PLUGIN_DIR . 'includes/helpers.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-cpt-route.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-cpt-activity.php';
+require_once TVS_PLUGIN_DIR . 'includes/class-tvs-cpt-exercise.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-taxonomies.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-rest.php';
+require_once TVS_PLUGIN_DIR . 'includes/class-tvs-rest-exercises.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-strava.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-gpx.php';
 require_once TVS_PLUGIN_DIR . 'includes/class-tvs-mapbox-static.php';
@@ -85,6 +87,13 @@ class TVS_Plugin {
     public function register_components() {
         new TVS_CPT_Route();
         new TVS_CPT_Activity();
+        
+        // Exercise library
+        $cpt_exercise = new TVS_CPT_Exercise();
+        $cpt_exercise->init();
+        $rest_exercises = new TVS_REST_Exercises();
+        $rest_exercises->init();
+        
         new TVS_Taxonomies();
         new TVS_REST();
         new TVS_Strava();

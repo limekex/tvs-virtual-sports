@@ -1,4 +1,5 @@
 import { DEBUG, log } from '../utils/debug.js';
+import ExerciseSearchDropdown from './ExerciseSearchDropdown.js';
 
 const { useState, useEffect, useRef } = window.React;
 
@@ -74,8 +75,9 @@ export default function ManualActivityTracker({
   const [power, setPower] = useState(0);
   const [laps, setLaps] = useState(0);
   const [poolLength, setPoolLength] = useState(25); // meters
-  const [workoutExercises, setWorkoutExercises] = useState([]); // Array of {name, sets, reps, weight}
+  const [workoutExercises, setWorkoutExercises] = useState([]); // Array of {name, sets, reps, weight, exercise_id}
   const [currentExerciseName, setCurrentExerciseName] = useState('');
+  const [currentExerciseId, setCurrentExerciseId] = useState(null); // ID from library (if selected)
   const [currentSets, setCurrentSets] = useState(3);
   const [currentReps, setCurrentReps] = useState(10);
   const [currentWeight, setCurrentWeight] = useState(0);
@@ -275,7 +277,7 @@ export default function ManualActivityTracker({
 
       // Add workout-specific data
       if (selectedType === 'Workout') {
-        payload.exercises = workoutExercises; // Array of {name, sets, reps, weight}
+        payload.exercises = workoutExercises; // Array of {name, exercise_id, sets, reps, weight, metric_type}
       }
 
       // Add swim-specific data
@@ -888,12 +890,28 @@ export default function ManualActivityTracker({
           React.createElement(
             'div',
             { className: 'tvs-exercise-form-inputs' },
-            React.createElement('input', {
-              type: 'text',
-              placeholder: 'e.g., Squats, Bench Press',
+            React.createElement(ExerciseSearchDropdown, {
               value: currentExerciseName,
-              onChange: (e) => setCurrentExerciseName(e.target.value),
-              className: 'tvs-exercise-input tvs-input-name'
+              onChange: (value) => {
+                setCurrentExerciseName(value);
+                // Clear exercise_id when user types (custom exercise)
+                if (currentExerciseId) {
+                  setCurrentExerciseId(null);
+                }
+              },
+              onSelect: (exercise) => {
+                console.log('ManualActivityTracker: Exercise selected', exercise);
+                setCurrentExerciseName(exercise.name);
+                setCurrentExerciseId(exercise.id);
+                setCurrentMetricType(exercise.default_metric || 'reps');
+                if (exercise.default_metric === 'time') {
+                  setCurrentReps(60); // Default 60 seconds
+                } else {
+                  setCurrentReps(10); // Default 10 reps
+                }
+              },
+              placeholder: 'Search or type exercise name...',
+              className: 'tvs-exercise-search'
             }),
             React.createElement('input', {
               type: 'number',
@@ -929,12 +947,14 @@ export default function ManualActivityTracker({
                   if (currentExerciseName.trim()) {
                     setWorkoutExercises([...workoutExercises, {
                       name: currentExerciseName.trim(),
+                      exercise_id: currentExerciseId, // null if custom, ID if from library
                       sets: currentSets,
                       reps: currentReps,
                       weight: currentWeight,
                       metric_type: currentMetricType
                     }]);
                     setCurrentExerciseName('');
+                    setCurrentExerciseId(null);
                     setCurrentSets(3);
                     setCurrentReps(10);
                     setCurrentWeight(0);
