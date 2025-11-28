@@ -18,7 +18,7 @@
         </testsuite>
     </testsuites>
     <php>
-        <env name="WP_TESTS_DIR" value="/tmp/wordpress-tests-lib"/>
+        <env name="WP_TESTS_DIR" value="tests/wordpress-tests-lib"/>
         <env name="WP_CORE_DIR" value="/var/www/html"/>
     </php>
 </phpunit>

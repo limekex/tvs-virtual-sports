@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Manual Activity Tracker (Issue #21)**: Complete indoor workout tracking system
+  - Activity types: Run, Ride, Walk, Hike, Swim, Workout
+  - Live dashboard with real-time metrics (timer, distance, pace/speed, incline, cadence, power)
+  - Session management: start, pause, resume, finish with auto-save every 30s
+  - Session recovery from localStorage on page refresh
+  - Manual activity REST endpoints:
+    - `POST /tvs/v1/activities/manual/start` — Start new session with activity type validation
+    - `PATCH /tvs/v1/activities/manual/{id}` — Update metrics during session
+    - `POST /tvs/v1/activities/manual/{id}/finish` — Complete and save as `tvs_activity`
+  - **Workout Circuits** (Bonus): Support for strength training with exercises, sets, reps, and volume tracking
+  - Swim-specific metrics: laps, pool_length
+  - Activity meta fields: `_tvs_is_manual`, `_tvs_manual_type`, `_tvs_manual_metrics`, `_tvs_manual_circuits`
+  - Strava upload for manual activities (trainer=1 compliance)
+  - Integration with "My Activities" block (manual activities appear alongside route-based)
+
+### Testing
+- **PHPUnit**: 11 new REST API tests for manual activity endpoints (27 total tests passing)
+  - Authentication, validation, session management, activity creation, circuits
+- **Jest**: 36 JavaScript unit tests for calculation functions
+  - Time/pace formatting, distance calculations, workout metrics, state validation
+- Jest infrastructure: configuration, jsdom environment, test setup with mocked globals
+
 ## [1.1.2] - 2025-11-04
 
 ### Added

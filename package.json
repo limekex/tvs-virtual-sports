@@ -18,10 +18,15 @@
     "dev:block:personal-records": "esbuild src/blocks/personal-records/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-personal-records.js --watch",
     "dev:block:activity-heatmap": "esbuild src/blocks/activity-heatmap/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-activity-heatmap.js --watch",
     "dev:block:manual-activity-tracker": "esbuild src/blocks/manual-activity-tracker/view.js --bundle --sourcemap --format=iife --outfile=public/js/tvs-block-manual-activity-tracker.js --watch",
-    "dev": "npm-run-all -p dev:app dev:block:my-activities dev:block:route-insights dev:block:personal-records dev:block:activity-heatmap dev:block:manual-activity-tracker"
+    "dev": "npm-run-all -p dev:app dev:block:my-activities dev:block:route-insights dev:block:personal-records dev:block:activity-heatmap dev:block:manual-activity-tracker",
+    "test": "jest"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "esbuild": "0.17.19",
+    "jest": "^30.2.0",
+    "jest-environment-jsdom": "^30.2.0",
     "npm-run-all": "4.1.5",
     "react-icons": "^5.5.0"
   }

@@ -9,7 +9,9 @@ require_once dirname( dirname( __DIR__ ) ) . '/vendor/yoast/phpunit-polyfills/ph
 $_tests_dir = getenv( 'WP_TESTS_DIR' );
 
 if ( ! $_tests_dir ) {
-    $_tests_dir = '/tmp/wordpress-tests-lib';
+    // This file is: tests/phpunit/bootstrap.php
+    // We want: tests/wordpress-tests-lib
+    $_tests_dir = __DIR__ . '/../wordpress-tests-lib';
 }
 
 // Give access to tests_add_filter() function.

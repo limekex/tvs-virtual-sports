@@ -1,5 +1,6 @@
 import { DEBUG, log } from '../utils/debug.js';
 import ExerciseSearchDropdown from './ExerciseSearchDropdown.js';
+import WorkoutCircuit from './WorkoutCircuit.js';
 
 const { useState, useEffect, useRef } = window.React;
 
@@ -75,7 +76,16 @@ export default function ManualActivityTracker({
   const [power, setPower] = useState(0);
   const [laps, setLaps] = useState(0);
   const [poolLength, setPoolLength] = useState(25); // meters
+  
+  // Circuit-based workout structure
+  const [workoutCircuits, setWorkoutCircuits] = useState([
+    { id: 1, name: 'Circuit 1', sets: 1, exercises: [] }
+  ]); // Array of circuits, each with id, name, sets (rounds), and exercises array
+  const [activeCircuitId, setActiveCircuitId] = useState(1); // Which circuit we're adding exercises to
+  
+  // Backward compatibility: Keep old format for migration
   const [workoutExercises, setWorkoutExercises] = useState([]); // Array of {name, sets, reps, weight, exercise_id}
+  
   const [currentExerciseName, setCurrentExerciseName] = useState('');
   const [currentExerciseId, setCurrentExerciseId] = useState(null); // ID from library (if selected)
   const [currentSets, setCurrentSets] = useState(3);
@@ -166,15 +176,17 @@ export default function ManualActivityTracker({
       if (startTimeRef.current) {
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setElapsedTime(elapsed);
-        
-        // Auto-calculate distance from speed (only in live mode)
-        if (mode === 'live' && speed > 0) {
-          const distanceKm = (speed * elapsed) / 3600;
-          setDistance(parseFloat(distanceKm.toFixed(2)));
-        }
       }
     }, 1000);
   };
+
+  // Auto-calculate distance from speed and elapsed time (live mode only)
+  useEffect(() => {
+    if (mode === 'live' && step === 'tracking' && !isPaused && speed > 0 && elapsedTime > 0) {
+      const distanceKm = (speed * elapsedTime) / 3600;
+      setDistance(parseFloat(distanceKm.toFixed(2)));
+    }
+  }, [mode, step, isPaused, speed, elapsedTime]);
 
   const stopTimer = () => {
     if (timerRef.current) {
@@ -277,7 +289,16 @@ export default function ManualActivityTracker({
 
       // Add workout-specific data
       if (selectedType === 'Workout') {
-        payload.exercises = workoutExercises; // Array of {name, exercise_id, sets, reps, weight, metric_type}
+        payload.circuits = workoutCircuits; // Array of {id, name, sets, exercises[]}
+        
+        // Backward compatibility: Also save as flat exercise list
+        payload.exercises = workoutCircuits.flatMap(circuit => 
+          circuit.exercises.map(ex => ({
+            ...ex,
+            sets: circuit.sets, // Use circuit sets (rounds)
+            circuit_name: circuit.name
+          }))
+        );
       }
 
       // Add swim-specific data
@@ -407,7 +428,16 @@ export default function ManualActivityTracker({
     setPower(0);
     setLaps(0);
     setPoolLength(25);
+    
+    // Reset circuits to default
+    setWorkoutCircuits([
+      { id: Date.now(), name: 'Circuit 1', sets: 1, exercises: [] }
+    ]);
+    setActiveCircuitId(Date.now());
+    
+    // Clear old format (backward compatibility)
     setWorkoutExercises([]);
+    
     setCurrentExerciseName('');
     setCurrentSets(3);
     setCurrentReps(10);
@@ -452,10 +482,11 @@ export default function ManualActivityTracker({
   };
 
   // Format pace as MM:SS (no hours, for pace display)
-  const formatTimePace = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const formatTimePace = (totalMinutes) => {
+    // totalMinutes is a decimal like 6.5 (6 min 30 sec per km)
+    const m = Math.floor(totalMinutes);
+    const s = Math.round((totalMinutes - m) * 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   // Parse time string (h:mm:ss, mm:ss, or ss) to seconds
@@ -817,174 +848,97 @@ export default function ManualActivityTracker({
         metricsConfig.controls.map(renderControl)
       ),
 
-      // Workout Exercises (only for Workout type)
+      // Workout Circuits (only for Workout type)
       selectedType === 'Workout' && React.createElement(
         'div',
-        { className: 'tvs-workout-exercises' },
+        { className: 'tvs-workout-circuits' },
         React.createElement('h4', null, 'Strength Training'),
         React.createElement(
           'p',
           { className: 'tvs-workout-hint' },
-          `Add each exercise with its sets, reps, and weight. Track different loads per exercise.`
+          `Organize your workout into circuits. Each circuit can have multiple exercises and rounds.`
         ),
-        workoutExercises.length > 0 && React.createElement(
-          'div',
-          { className: 'tvs-exercise-list' },
-          workoutExercises.map((exercise, idx) =>
-            React.createElement(
-              'div',
-              { key: idx, className: 'tvs-exercise-item' },
-              React.createElement('span', { className: 'tvs-exercise-number' }, `${idx + 1}.`),
-              React.createElement('span', { className: 'tvs-exercise-name' }, exercise.name),
-              React.createElement('span', { className: 'tvs-exercise-stats' }, 
-                `${exercise.sets} × ${exercise.reps}${exercise.metric_type === 'time' ? 's' : ''}${exercise.weight > 0 ? ` @ ${exercise.weight}kg` : ''}`
-              ),
-              React.createElement(
-                'button',
-                {
-                  className: 'tvs-btn-icon',
-                  onClick: () => {
-                    setWorkoutExercises(workoutExercises.filter((_, i) => i !== idx));
-                  },
-                  title: 'Remove exercise'
-                },
-                '✕'
-              )
-            )
-          )
+        
+        // Render all circuits
+        workoutCircuits.map((circuit) =>
+          React.createElement(WorkoutCircuit, {
+            key: circuit.id,
+            circuit: circuit,
+            isActive: circuit.id === activeCircuitId,
+            onUpdate: (updatedCircuit) => {
+              setWorkoutCircuits(
+                workoutCircuits.map(c => c.id === updatedCircuit.id ? updatedCircuit : c)
+              );
+            },
+            onRemove: (circuitId) => {
+              const remaining = workoutCircuits.filter(c => c.id !== circuitId);
+              setWorkoutCircuits(remaining);
+              // Set next circuit as active, or create new if none left
+              if (remaining.length > 0) {
+                setActiveCircuitId(remaining[0].id);
+              } else {
+                const newCircuit = { 
+                  id: Date.now(), 
+                  name: 'Circuit 1', 
+                  sets: 1, 
+                  exercises: [] 
+                };
+                setWorkoutCircuits([newCircuit]);
+                setActiveCircuitId(newCircuit.id);
+              }
+            },
+            onSetActive: setActiveCircuitId,
+            canRemove: workoutCircuits.length > 1
+          })
         ),
+        
+        // Add new circuit button
         React.createElement(
-          'div',
-          { className: 'tvs-add-exercise' },
-          React.createElement(
-            'div',
-            { className: 'tvs-exercise-form-header' },
-            React.createElement('label', { className: 'tvs-form-label tvs-form-label-name' }, 'Exercise Name'),
-            React.createElement('label', { className: 'tvs-form-label tvs-form-label-sets' }, 'Sets'),
-            React.createElement(
-              'div',
-              { className: 'tvs-form-label tvs-form-label-reps tvs-metric-type-toggle' },
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  className: currentMetricType === 'reps' ? 'tvs-toggle-btn tvs-toggle-active' : 'tvs-toggle-btn',
-                  onClick: () => setCurrentMetricType('reps'),
-                  title: 'Repetitions'
-                },
-                '🔢'
-              ),
-              React.createElement(
-                'button',
-                {
-                  type: 'button',
-                  className: currentMetricType === 'time' ? 'tvs-toggle-btn tvs-toggle-active' : 'tvs-toggle-btn',
-                  onClick: () => setCurrentMetricType('time'),
-                  title: 'Time (seconds)'
-                },
-                '⏱'
-              )
-            ),
-            React.createElement('label', { className: 'tvs-form-label tvs-form-label-weight' }, 'Weight (kg)')
-          ),
-          React.createElement(
-            'div',
-            { className: 'tvs-exercise-form-inputs' },
-            React.createElement(ExerciseSearchDropdown, {
-              value: currentExerciseName,
-              onChange: (value) => {
-                setCurrentExerciseName(value);
-                // Clear exercise_id when user types (custom exercise)
-                if (currentExerciseId) {
-                  setCurrentExerciseId(null);
-                }
-              },
-              onSelect: (exercise) => {
-                console.log('ManualActivityTracker: Exercise selected', exercise);
-                setCurrentExerciseName(exercise.name);
-                setCurrentExerciseId(exercise.id);
-                setCurrentMetricType(exercise.default_metric || 'reps');
-                if (exercise.default_metric === 'time') {
-                  setCurrentReps(60); // Default 60 seconds
-                } else {
-                  setCurrentReps(10); // Default 10 reps
-                }
-              },
-              placeholder: 'Search or type exercise name...',
-              className: 'tvs-exercise-search'
-            }),
-            React.createElement('input', {
-              type: 'number',
-              placeholder: '3',
-              value: currentSets,
-              min: '1',
-              onChange: (e) => setCurrentSets(Math.max(1, parseInt(e.target.value) || 1)),
-              className: 'tvs-exercise-number tvs-input-sets'
-            }),
-            React.createElement('input', {
-              type: 'number',
-              placeholder: currentMetricType === 'reps' ? '10' : '60',
-              value: currentReps,
-              min: '1',
-              onChange: (e) => setCurrentReps(Math.max(1, parseInt(e.target.value) || 1)),
-              className: 'tvs-exercise-number tvs-input-reps',
-              title: currentMetricType === 'reps' ? 'Repetitions' : 'Seconds'
-            }),
-            React.createElement('input', {
-              type: 'number',
-              placeholder: '0',
-              value: currentWeight,
-              min: '0',
-              step: '0.5',
-              onChange: (e) => setCurrentWeight(Math.max(0, parseFloat(e.target.value) || 0)),
-              className: 'tvs-exercise-number tvs-input-weight'
-            }),
-            React.createElement(
-              'button',
-              {
-                className: 'tvs-btn tvs-btn-secondary tvs-btn-add-exercise',
-                onClick: () => {
-                  if (currentExerciseName.trim()) {
-                    setWorkoutExercises([...workoutExercises, {
-                      name: currentExerciseName.trim(),
-                      exercise_id: currentExerciseId, // null if custom, ID if from library
-                      sets: currentSets,
-                      reps: currentReps,
-                      weight: currentWeight,
-                      metric_type: currentMetricType
-                    }]);
-                    setCurrentExerciseName('');
-                    setCurrentExerciseId(null);
-                    setCurrentSets(3);
-                    setCurrentReps(10);
-                    setCurrentWeight(0);
-                    setCurrentMetricType('reps');
-                  }
-                },
-                disabled: !currentExerciseName.trim()
-              },
-              '+ Add'
-            )
-          )
+          'button',
+          {
+            className: 'tvs-btn tvs-btn-secondary tvs-btn-add-circuit',
+            onClick: () => {
+              const newCircuit = {
+                id: Date.now(),
+                name: `Circuit ${workoutCircuits.length + 1}`,
+                sets: 1,
+                exercises: []
+              };
+              setWorkoutCircuits([...workoutCircuits, newCircuit]);
+              setActiveCircuitId(newCircuit.id);
+            }
+          },
+          '+ Add Circuit'
         ),
-        workoutExercises.length > 0 && React.createElement(
-          'div',
-          { className: 'tvs-circuit-summary' },
-          React.createElement('p', null, `📋 ${workoutExercises.length} exercises`),
-          React.createElement(
-            'p',
-            null,
-            `💪 ${workoutExercises.reduce((sum, ex) => sum + (ex.sets * ex.reps), 0)} total reps`
-          ),
-          (() => {
-            const totalVolume = workoutExercises.reduce((sum, ex) => sum + (ex.sets * ex.reps * ex.weight), 0);
-            return totalVolume > 0 && React.createElement(
-              'p',
-              null,
-              `🏋️ Total volume: ${totalVolume.toFixed(1)} kg`
-            );
-          })()
-        )
+        
+        // Overall workout summary
+        (() => {
+          const hasExercises = workoutCircuits.some(c => c.exercises.length > 0);
+          if (!hasExercises) return null;
+          
+          const totalExercises = workoutCircuits.reduce((sum, c) => sum + c.exercises.length, 0);
+          const totalReps = workoutCircuits.reduce((sum, circuit) => {
+            const circuitReps = circuit.exercises.reduce((reps, ex) => {
+              return reps + (ex.metric_type === 'reps' ? ex.reps : 0);
+            }, 0);
+            return sum + (circuitReps * circuit.sets);
+          }, 0);
+          const totalVolume = workoutCircuits.reduce((sum, circuit) => {
+            const circuitVolume = circuit.exercises.reduce((vol, ex) => {
+              return vol + (ex.reps * ex.weight);
+            }, 0);
+            return sum + (circuitVolume * circuit.sets);
+          }, 0);
+          
+          return React.createElement(
+            'div',
+            { className: 'tvs-workout-summary' },
+            React.createElement('h5', null, 'Workout Totals'),
+            React.createElement('p', null, `📋 ${workoutCircuits.length} circuits • ${totalExercises} exercises`),
+            totalReps > 0 && React.createElement('p', null, `💪 ${totalReps} total reps`),
+            totalVolume > 0 && React.createElement('p', null, `🏋️ ${totalVolume.toFixed(1)}kg total volume`)
+          );
+        })()
       ),
 
       // Action buttons
@@ -1023,12 +977,15 @@ export default function ManualActivityTracker({
           {
             className: 'tvs-btn tvs-btn-finish',
             onClick: () => {
-              // Guard: Workout must have at least one exercise
-              if (selectedType === 'Workout' && workoutExercises.length === 0) {
-                if (typeof window.tvsFlash === 'function') {
-                  window.tvsFlash('⚠️ Add at least one exercise before finishing', 'error');
+              // Guard: Workout must have at least one exercise in any circuit
+              if (selectedType === 'Workout') {
+                const hasExercises = workoutCircuits.some(c => c.exercises.length > 0);
+                if (!hasExercises) {
+                  if (typeof window.tvsFlash === 'function') {
+                    window.tvsFlash('⚠️ Add at least one exercise before finishing', 'error');
+                  }
+                  return;
                 }
-                return;
               }
               
               if (mode === 'live') {
@@ -1265,7 +1222,10 @@ export default function ManualActivityTracker({
             selectedType !== 'Workout' && React.createElement('div', null, `📍 Distance: ${calibDistance.toFixed(2)} km`),
             selectedType === 'Swim' && React.createElement('div', null, `🏊 Laps: ${calibLaps}`),
             selectedType === 'Swim' && calibLaps > 0 && calibDuration > 0 && React.createElement('div', null, `⚡ Pace: ${Math.round(calibDuration / calibLaps)} sec/lap`),
-            selectedType === 'Workout' && workoutExercises.length > 0 && React.createElement('div', null, `🏋️ Exercises: ${workoutExercises.length}`)
+            selectedType === 'Workout' && (() => {
+              const totalExercises = workoutCircuits.reduce((sum, c) => sum + c.exercises.length, 0);
+              return totalExercises > 0 && React.createElement('div', null, `🏋️ ${workoutCircuits.length} circuits • ${totalExercises} exercises`);
+            })()
           ),
           React.createElement(
             'div',
@@ -1306,11 +1266,22 @@ export default function ManualActivityTracker({
 
     // Add activity-specific metrics
     if (selectedType === 'Workout') {
-      const totalReps = workoutExercises.reduce((sum, ex) => sum + (ex.sets * ex.reps), 0);
-      const totalVolume = workoutExercises.reduce((sum, ex) => sum + (ex.sets * ex.reps * ex.weight), 0);
+      const totalExercises = workoutCircuits.reduce((sum, c) => sum + c.exercises.length, 0);
+      const totalReps = workoutCircuits.reduce((sum, circuit) => {
+        const circuitReps = circuit.exercises.reduce((reps, ex) => {
+          return reps + (ex.metric_type === 'reps' ? ex.reps : 0);
+        }, 0);
+        return sum + (circuitReps * circuit.sets);
+      }, 0);
+      const totalVolume = workoutCircuits.reduce((sum, circuit) => {
+        const circuitVolume = circuit.exercises.reduce((vol, ex) => {
+          return vol + (ex.reps * ex.weight);
+        }, 0);
+        return sum + (circuitVolume * circuit.sets);
+      }, 0);
       
       summaryItems.push(
-        React.createElement('p', { key: 'exercises' }, `🏋️ Exercises: ${workoutExercises.length}`)
+        React.createElement('p', { key: 'circuits' }, `🏋️ ${workoutCircuits.length} circuits • ${totalExercises} exercises`)
       );
       
       if (totalReps > 0) {
@@ -1325,18 +1296,24 @@ export default function ManualActivityTracker({
         );
       }
       
-      // List all exercises
-      if (workoutExercises.length > 0) {
+      // List all circuits with exercises
+      if (totalExercises > 0) {
         summaryItems.push(
           React.createElement(
             'div',
-            { key: 'exercise-list', className: 'tvs-summary-exercises' },
-            React.createElement('h4', null, 'Exercises:'),
-            workoutExercises.map((exercise, idx) =>
-              React.createElement(
+            { key: 'circuit-list', className: 'tvs-summary-circuits' },
+            workoutCircuits.map((circuit, circuitIdx) =>
+              circuit.exercises.length > 0 && React.createElement(
                 'div',
-                { key: idx, className: 'tvs-summary-exercise' },
-                `${idx + 1}. ${exercise.name} (${exercise.sets} × ${exercise.reps}${exercise.metric_type === 'time' ? 's' : ''}${exercise.weight > 0 ? ` @ ${exercise.weight}kg` : ''})`
+                { key: circuitIdx, className: 'tvs-summary-circuit' },
+                React.createElement('h4', null, `${circuit.name} (${circuit.sets} ${circuit.sets === 1 ? 'round' : 'rounds'})`),
+                circuit.exercises.map((exercise, exIdx) =>
+                  React.createElement(
+                    'div',
+                    { key: exIdx, className: 'tvs-summary-exercise' },
+                    `${exIdx + 1}. ${exercise.name} (${exercise.reps}${exercise.metric_type === 'time' ? 's' : ''}${exercise.weight > 0 ? ` @ ${exercise.weight}kg` : ''})`
+                  )
+                )
               )
             )
           )
@@ -1380,40 +1357,61 @@ export default function ManualActivityTracker({
         { className: 'tvs-summary' },
         summaryItems
       ),
-      permalink && React.createElement(
-        'a',
-        { href: permalink, className: 'tvs-btn tvs-btn-primary' },
-        'View Activity'
-      ),
-      activityId && React.createElement(
-        'button',
-        {
-          className: 'tvs-btn tvs-btn-strava',
-          onClick: uploadToStrava,
-          disabled: uploadingToStrava
-        },
-        uploadingToStrava ? 'Uploading...' : '🚴 Upload to Strava'
-      ),
       React.createElement(
-        'button',
-        {
-          className: 'tvs-btn tvs-btn-secondary',
-          onClick: () => {
-            setStep('select');
-            setSessionId(null);
-            setElapsedTime(0);
-            setDistance(0);
-            setSpeed(0);
-            setPace(0);
-            setIncline(0);
-            setCadence(0);
-            setPower(0);
-            setLaps(0);
-            setSets(0);
-            setReps(0);
+        'div',
+        { className: 'tvs-finished-actions' },
+        permalink && React.createElement(
+          'a',
+          { href: permalink, className: 'tvs-btn tvs-btn-primary' },
+          'View Activity'
+        ),
+        activityId && React.createElement(
+          'button',
+          {
+            className: 'tvs-btn tvs-btn-strava',
+            onClick: uploadToStrava,
+            disabled: uploadingToStrava
           },
-        },
-        'Start Another Activity'
+          uploadingToStrava ? 'Uploading...' : React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+              'svg',
+              {
+                width: '18',
+                height: '18',
+                viewBox: '0 0 24 24',
+                fill: 'currentColor',
+                style: { marginRight: '8px', verticalAlign: 'middle' }
+              },
+              React.createElement('path', {
+                d: 'M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169'
+              })
+            ),
+            'Upload to Strava'
+          )
+        ),
+        React.createElement(
+          'button',
+          {
+            className: 'tvs-btn tvs-btn-secondary',
+            onClick: () => {
+              setStep('select');
+              setSessionId(null);
+              setElapsedTime(0);
+              setDistance(0);
+              setSpeed(0);
+              setPace(0);
+              setIncline(0);
+              setCadence(0);
+              setPower(0);
+              setLaps(0);
+              setSets(0);
+              setReps(0);
+            },
+          },
+          'Start Another Activity'
+        )
       )
     );
   }

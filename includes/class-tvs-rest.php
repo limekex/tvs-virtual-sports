@@ -660,6 +660,7 @@ class TVS_REST {
                 'sets' => array( 'type' => 'integer', 'minimum' => 0 ),
                 'reps' => array( 'type' => 'integer', 'minimum' => 0 ),
                 'exercises' => array( 'type' => 'array' ),
+                'circuits' => array( 'type' => 'array' ),
                 'laps' => array( 'type' => 'integer', 'minimum' => 0 ),
                 'pool_length' => array( 'type' => 'integer', 'minimum' => 0 ),
             ),
@@ -2062,6 +2063,21 @@ class TVS_REST {
 
         $type = sanitize_text_field( $request['type'] );
         
+        // Check if type is provided
+        if ( empty( $type ) ) {
+            return new WP_Error( 'missing_type', 'Activity type is required', array( 'status' => 400 ) );
+        }
+        
+        // Validate activity type
+        $valid_types = array( 'Run', 'Ride', 'Walk', 'Hike', 'Swim', 'Workout' );
+        if ( ! in_array( $type, $valid_types, true ) ) {
+            return new WP_Error( 
+                'invalid_type', 
+                sprintf( 'Invalid activity type. Must be one of: %s', implode( ', ', $valid_types ) ),
+                array( 'status' => 400 )
+            );
+        }
+        
         // Generate unique session ID
         $session_id = uniqid( 'manual_', true );
         
@@ -2120,7 +2136,7 @@ class TVS_REST {
         }
         
         // Update metrics
-        $updatable_fields = array( 'elapsed_time', 'distance', 'speed', 'pace', 'incline', 'cadence', 'power', 'is_paused', 'sets', 'reps', 'weight', 'exercises', 'laps', 'pool_length' );
+        $updatable_fields = array( 'elapsed_time', 'distance', 'speed', 'pace', 'incline', 'cadence', 'power', 'is_paused', 'sets', 'reps', 'weight', 'exercises', 'circuits', 'laps', 'pool_length' );
         foreach ( $updatable_fields as $field ) {
             if ( isset( $request[ $field ] ) ) {
                 $session_data[ $field ] = $request[ $field ];
@@ -2219,6 +2235,7 @@ class TVS_REST {
         
         // Manual activity specific flags
         update_post_meta( $post_id, '_tvs_is_manual', true );
+        update_post_meta( $post_id, '_tvs_manual_type', $session_data['type'] );
         
         // Store metrics history for manual activities
         update_post_meta( $post_id, '_tvs_manual_metrics', wp_json_encode( $session_data['metrics_history'] ) );
@@ -2234,9 +2251,12 @@ class TVS_REST {
             update_post_meta( $post_id, '_tvs_manual_power', intval( $session_data['power'] ) );
         }
         
-        // Workout-specific metrics (exercises, sets, reps)
+        // Workout-specific metrics (exercises, circuits, sets, reps)
         if ( ! empty( $session_data['exercises'] ) && is_array( $session_data['exercises'] ) ) {
             update_post_meta( $post_id, '_tvs_manual_exercises', wp_json_encode( $session_data['exercises'] ) );
+        }
+        if ( ! empty( $session_data['circuits'] ) && is_array( $session_data['circuits'] ) ) {
+            update_post_meta( $post_id, '_tvs_manual_circuits', wp_json_encode( $session_data['circuits'] ) );
         }
         if ( isset( $session_data['sets'] ) ) {
             update_post_meta( $post_id, '_tvs_manual_sets', intval( $session_data['sets'] ) );

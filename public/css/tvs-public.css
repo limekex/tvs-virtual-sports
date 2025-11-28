@@ -269,6 +269,7 @@
   color: var(--tvs-color-text-primary);
   transition: var(--tvs-transition-colors), var(--tvs-transition-shadow);
   min-width: 150px;
+  /* Don't set z-index here - let dropdown win */
 }
 
 .tvs-app .tvs-btn:focus {
@@ -1852,6 +1853,9 @@
   border: 1px solid var(--tvs-color-border-subtle);
   border-radius: var(--tvs-radius-xl);
   box-shadow: var(--tvs-shadow-lg);
+  min-width: 500px;
+  max-width: 700px;
+  margin: 0 auto;
 }
 
 .tvs-tracker-title {
@@ -2285,6 +2289,34 @@
   color: var(--tvs-color-success);
 }
 
+.tvs-finished-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 24px;
+}
+
+/* Strava Button - Official Brand Guidelines */
+.tvs-btn-strava {
+  background: #FC5200 !important;
+  color: white !important;
+  border: none;
+  font-weight: 600;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tvs-btn-strava:hover:not(:disabled) {
+  background: #E34A00 !important;
+}
+
+.tvs-btn-strava:disabled {
+  background: #999 !important;
+  cursor: not-allowed;
+}
+
 .tvs-summary {
   margin: var(--tvs-space-6) 0;
   padding: var(--tvs-space-6);
@@ -2510,7 +2542,7 @@
 
 .tvs-exercise-form-header {
   display: grid;
-  grid-template-columns: 1fr 70px 90px 90px;
+  grid-template-columns: 1fr 90px 90px;
   gap: var(--tvs-space-2);
   padding: 0;
   margin-bottom: var(--tvs-space-2);
@@ -2535,6 +2567,9 @@
 .tvs-form-label-reps {
   text-align: center;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tvs-form-label-weight {
@@ -2543,33 +2578,32 @@
 
 .tvs-exercise-form-inputs {
   display: grid;
-  grid-template-columns: 1fr 70px 90px 90px;
+  grid-template-columns: 1fr 90px 90px;
   gap: var(--tvs-space-2);
   align-items: center;
   position: relative;
   z-index: 1100;
+  margin-bottom: var(--tvs-space-2);
 }
 
 .tvs-input-name {
   grid-column: 1;
 }
 
-.tvs-input-sets {
+.tvs-input-reps {
   grid-column: 2;
 }
 
-.tvs-input-reps {
+.tvs-input-weight {
   grid-column: 3;
 }
 
-.tvs-input-weight {
-  grid-column: 4;
-}
-
 .tvs-btn-add-exercise {
+  width: 100%;
   white-space: nowrap;
   padding: var(--tvs-space-2) var(--tvs-space-3);
   font-size: var(--tvs-text-sm);
+  margin-top: var(--tvs-space-2);
 }
 
 .tvs-exercise-list {
@@ -2634,6 +2668,226 @@
   z-index: 1100;
 }
 
+/* Circuit-based workout styling */
+.tvs-workout-circuits {
+  margin-top: var(--tvs-space-4);
+  padding: var(--tvs-space-4);
+  background: var(--tvs-color-surface-raised);
+  border: 1px solid var(--tvs-color-border-subtle);
+  border-radius: var(--tvs-radius-lg);
+}
+
+.tvs-workout-circuits h4 {
+  margin: 0 0 var(--tvs-space-2) 0;
+  color: var(--tvs-color-text-primary);
+  font-size: var(--tvs-text-lg);
+}
+
+.tvs-circuit-container {
+  margin-bottom: var(--tvs-space-4);
+  padding: var(--tvs-space-4);
+  background: var(--tvs-glass-bg);
+  backdrop-filter: blur(var(--tvs-blur-md));
+  -webkit-backdrop-filter: blur(var(--tvs-blur-md));
+  border: 2px solid var(--tvs-color-border-subtle);
+  border-radius: var(--tvs-radius-md);
+  transition: var(--tvs-transition-all);
+  cursor: pointer;
+  /* Don't use position: relative to avoid creating stacking context */
+}
+
+.tvs-circuit-container:hover {
+  border-color: var(--tvs-color-border-default);
+  box-shadow: var(--tvs-shadow-md);
+}
+
+.tvs-circuit-active {
+  border-color: var(--tvs-color-accent);
+  box-shadow: 0 0 0 2px var(--tvs-color-accent-alpha);
+  cursor: default;
+}
+
+.tvs-circuit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--tvs-space-3);
+  gap: var(--tvs-space-3);
+}
+
+.tvs-circuit-name-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--tvs-space-2);
+  cursor: pointer;
+  padding: var(--tvs-space-1) var(--tvs-space-2);
+  margin: calc(-1 * var(--tvs-space-1)) calc(-1 * var(--tvs-space-2));
+  border-radius: var(--tvs-radius-sm);
+  transition: var(--tvs-transition-all);
+}
+
+.tvs-circuit-name-wrapper:hover {
+  background: var(--tvs-color-surface-base);
+}
+
+.tvs-circuit-name-wrapper:hover .tvs-circuit-edit-icon {
+  opacity: 1;
+}
+
+.tvs-circuit-name {
+  margin: 0;
+  font-size: var(--tvs-text-lg);
+  font-weight: var(--tvs-font-semibold);
+  color: var(--tvs-color-text-primary);
+  flex: 1;
+}
+
+.tvs-circuit-edit-icon {
+  font-size: var(--tvs-text-base);
+  color: var(--tvs-color-text-secondary);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.tvs-circuit-name-edit {
+  flex: 1;
+  padding: var(--tvs-space-2);
+  background: var(--tvs-color-surface-base);
+  border: 1px solid var(--tvs-color-accent);
+  border-radius: var(--tvs-radius-md);
+  font-size: var(--tvs-text-lg);
+  font-weight: var(--tvs-font-semibold);
+  color: var(--tvs-color-text-primary);
+}
+
+.tvs-circuit-sets {
+  display: flex;
+  align-items: center;
+  gap: var(--tvs-space-2);
+  font-size: var(--tvs-text-sm);
+  color: var(--tvs-color-text-secondary);
+}
+
+.tvs-circuit-sets-input {
+  width: 50px;
+  padding: var(--tvs-space-1) var(--tvs-space-2);
+  background: var(--tvs-color-surface-base);
+  border: 1px solid var(--tvs-color-border-default);
+  border-radius: var(--tvs-radius-sm);
+  text-align: center;
+  font-size: var(--tvs-text-sm);
+  font-weight: var(--tvs-font-semibold);
+  color: var(--tvs-color-text-primary);
+}
+
+.tvs-circuit-remove {
+  padding: var(--tvs-space-1) var(--tvs-space-2);
+  background: transparent;
+  border: none;
+  color: var(--tvs-color-error);
+  font-size: var(--tvs-text-lg);
+  cursor: pointer;
+  transition: var(--tvs-transition-all);
+}
+
+.tvs-circuit-remove:hover {
+  background: var(--tvs-color-error-alpha);
+  border-radius: var(--tvs-radius-sm);
+}
+
+.tvs-circuit-exercises {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tvs-space-2);
+  margin-bottom: var(--tvs-space-3);
+}
+
+.tvs-circuit-exercise-item {
+  display: grid;
+  grid-template-columns: 30px 1fr auto 30px;
+  gap: var(--tvs-space-2);
+  align-items: center;
+  padding: var(--tvs-space-2);
+  background: var(--tvs-color-surface-base);
+  border: 1px solid var(--tvs-color-border-subtle);
+  border-radius: var(--tvs-radius-sm);
+}
+
+.tvs-circuit-add-exercise {
+  margin-top: var(--tvs-space-3);
+  padding-top: var(--tvs-space-3);
+  border-top: 1px solid var(--tvs-color-border-subtle);
+  max-width: 100%;
+  position: relative;
+}
+
+.tvs-circuit-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--tvs-space-2);
+  font-size: var(--tvs-text-sm);
+  color: var(--tvs-color-text-secondary);
+  margin-top: var(--tvs-space-2);
+  padding-top: var(--tvs-space-2);
+  border-top: 1px solid var(--tvs-color-border-subtle);
+}
+
+.tvs-btn-add-circuit {
+  width: 100%;
+  margin-top: var(--tvs-space-3);
+  padding: var(--tvs-space-3);
+  font-size: var(--tvs-text-base);
+  font-weight: var(--tvs-font-semibold);
+}
+
+.tvs-workout-summary {
+  margin-top: var(--tvs-space-4);
+  padding: var(--tvs-space-4);
+  background: var(--tvs-color-accent-alpha);
+  border: 2px solid var(--tvs-color-accent);
+  border-radius: var(--tvs-radius-md);
+}
+
+.tvs-workout-summary h5 {
+  margin: 0 0 var(--tvs-space-2) 0;
+  font-size: var(--tvs-text-base);
+  font-weight: var(--tvs-font-semibold);
+  color: var(--tvs-color-accent);
+  text-transform: uppercase;
+  letter-spacing: var(--tvs-tracking-wide);
+}
+
+.tvs-workout-summary p {
+  margin: var(--tvs-space-1) 0;
+  font-size: var(--tvs-text-sm);
+  color: var(--tvs-color-text-primary);
+}
+
+.tvs-summary-circuits {
+  margin-top: var(--tvs-space-3);
+}
+
+.tvs-summary-circuit {
+  margin-bottom: var(--tvs-space-3);
+  padding: var(--tvs-space-3);
+  background: var(--tvs-color-surface-base);
+  border-radius: var(--tvs-radius-md);
+}
+
+.tvs-summary-circuit h4 {
+  margin: 0 0 var(--tvs-space-2) 0;
+  font-size: var(--tvs-text-sm);
+  font-weight: var(--tvs-font-semibold);
+  color: var(--tvs-color-accent);
+}
+
+.tvs-summary-exercise {
+  padding: var(--tvs-space-1) 0;
+  font-size: var(--tvs-text-sm);
+  color: var(--tvs-color-text-secondary);
+}
+
 /* Exercise input fields - using shared styles from form header above */
 .tvs-exercise-input,
 .tvs-exercise-search-container input,
@@ -2645,6 +2899,7 @@ input.tvs-input-name {
   color: var(--tvs-color-text-primary);
   font-size: var(--tvs-text-base);
   transition: var(--tvs-transition-all);
+  width: 90%;
 }
 
 .tvs-exercise-number {
@@ -2672,25 +2927,20 @@ input.tvs-input-name:focus {
 .tvs-exercise-search-container {
   position: relative;
   width: 100%;
-  z-index: 9999 !important;
 }
 
 .tvs-exercise-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 4px;
+  /* Position set via inline styles (React Portal) */
   max-height: 320px;
   overflow-y: auto;
-  background: var(--tvs-glass-bg);
-  backdrop-filter: blur(var(--tvs-glass-blur));
-  -webkit-backdrop-filter: blur(var(--tvs-glass-blur));
+  background: rgba(30, 30, 35, 0.98);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--tvs-glass-border);
   border-radius: var(--tvs-radius-lg);
-  box-shadow: var(--tvs-shadow-xl);
-  z-index: 9999 !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   animation: slideDown 0.2s var(--tvs-ease-out);
+  margin-top: 4px;
 }
 
 @keyframes slideDown {
@@ -2837,17 +3087,20 @@ input.tvs-input-name:focus {
 
 /* Metric Type Toggle (Reps vs Time) */
 .tvs-metric-type-toggle {
-  display: flex;
-  gap: 4px;
+  display: inline-flex;
+  gap: 2px;
   justify-content: center;
   align-items: center;
+  background: var(--tvs-color-surface-base);
+  border-radius: var(--tvs-radius-sm);
+  padding: 2px;
 }
 
 .tvs-toggle-btn {
   padding: 4px 8px;
   border: 1px solid var(--tvs-color-border-accent);
   border-radius: var(--tvs-radius-sm);
-  background: var(--tvs-color-surface-base);
+  background: transparent;
   color: var(--tvs-color-text-secondary);
   font-size: 16px;
   line-height: 1;
@@ -2863,7 +3116,6 @@ input.tvs-input-name:focus {
 .tvs-toggle-btn:hover {
   background: var(--tvs-color-surface-raised);
   border-color: var(--tvs-color-accent);
-  transform: scale(1.08);
 }
 
 .tvs-toggle-btn.tvs-toggle-active {
@@ -2921,6 +3173,7 @@ input.tvs-input-name:focus {
 @media (max-width: 640px) {
   .tvs-manual-tracker {
     padding: var(--tvs-space-5);
+    min-width: 100%;
   }
 
   .tvs-type-selector {

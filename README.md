@@ -79,9 +79,51 @@ The build keeps the public output at `public/js/tvs-app.js` so PHP doesn’t cha
 - WordPress not loading the new JS:
   - Verify the bundle exists at `public/js/tvs-app.js` and hard-refresh. Check PHP enqueues in `includes/class-tvs-plugin.php`.
 
-## Tests (future)
+## Tests
 
-We plan to add tiny tests for utils (e.g., `withTimeout`) and a smoke render to improve confidence. For now, manual smoke testing:
+### Running Tests
+
+**PHPUnit** (REST API tests):
+```sh
+# From Docker container
+docker compose exec wordpress bash -c "cd /var/www/html/wp-content/plugins/tvs-virtual-sports && vendor/bin/phpunit"
+
+# Run specific test suite
+vendor/bin/phpunit --filter TVS_REST_Manual_Activities_Tests
+```
+
+**Jest** (JavaScript unit tests):
+```sh
+# From plugin directory
+npm test
+
+# Watch mode
+npm test -- --watch
+```
+
+### Test Coverage
+
+- **PHPUnit**: 27 tests covering REST API endpoints
+  - Route endpoints (GET /tvs/v1/routes)
+  - Activity creation (POST /tvs/v1/activities)
+  - Manual activity endpoints (start, update, finish)
+  - Strava integration
+  - Favorites API
+- **Jest**: 36 tests covering JavaScript utilities
+  - Time/pace formatting
+  - Distance and pace calculations
+  - Workout circuit metrics
+  - Session state validation
+  - Metric bounds checking
+
+### Test Files
+- `tests/phpunit/test-rest-manual-activities.php` - Manual activity REST tests
+- `tests/phpunit/bootstrap.php` - WordPress test environment setup
+- `tests/jest/ManualActivityTracker.test.js` - Frontend unit tests
+- `jest.config.js` - Jest configuration
+- `tests/jest/setup.js` - Test environment setup with mocks
+
+For manual smoke testing:
 
 1. Open a route page that mounts the app.
 2. Start/pause/resume/finish; verify flash messages and that My Activities refreshes.

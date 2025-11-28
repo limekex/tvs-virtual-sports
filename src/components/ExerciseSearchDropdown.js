@@ -9,12 +9,13 @@
  * - Shows category and difficulty badges
  * - Click outside to close
  * - Loading states
+ * - Uses React Portal to escape stacking context issues
  *
  * @package TVS_Virtual_Sports
  * @since 1.3.0
  */
 
-import { React } from '../utils/reactMount.js';
+import { React, ReactDOM } from '../utils/reactMount.js';
 
 const { useState, useEffect, useRef } = React;
 
@@ -53,11 +54,48 @@ function ExerciseSearchDropdown({ value, onChange, onSelect, placeholder = 'Sear
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
   const [error, setError] = useState('');
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
 
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
 
   const debouncedSearchTerm = useDebounce(value, 300);
+
+  // Update dropdown position when shown
+  useEffect(() => {
+    if (showDropdown && inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
+  }, [showDropdown]);
+
+  // Recalculate position on scroll/resize
+  useEffect(() => {
+    if (!showDropdown) return;
+
+    const updatePosition = () => {
+      if (inputRef.current) {
+        const rect = inputRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + window.scrollY,
+          left: rect.left + window.scrollX,
+          width: rect.width,
+        });
+      }
+    };
+
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [showDropdown]);
 
   // Search exercises when debounced term changes
   useEffect(() => {
@@ -180,6 +218,86 @@ function ExerciseSearchDropdown({ value, onChange, onSelect, placeholder = 'Sear
     }
   };
 
+  // Render dropdown with React Portal to escape stacking contexts
+  const renderDropdown = () => {
+    if (!showDropdown || results.length === 0) return null;
+
+    return ReactDOM.createPortal(
+      React.createElement(
+        'div',
+        {
+          ref: dropdownRef,
+          className: 'tvs-exercise-dropdown',
+          style: {
+            position: 'absolute',
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+            zIndex: 999999,
+          },
+        },
+        results.map((exercise, idx) =>
+          React.createElement(
+            'div',
+            {
+              key: exercise.id,
+              className: `tvs-exercise-result ${idx === selectedIndex ? 'tvs-exercise-result-selected' : ''}`,
+              onClick: () => handleSelect(exercise),
+              onMouseEnter: () => setSelectedIndex(idx),
+            },
+            React.createElement(
+              'div',
+              null,
+              React.createElement(
+                'div',
+                null,
+                React.createElement(
+                  'div',
+                  null,
+                  exercise.name
+                ),
+                React.createElement(
+                  'div',
+                  null,
+                  exercise.category && React.createElement(
+                    'span',
+                    {
+                      className: 'tvs-badge tvs-badge-category',
+                    },
+                    exercise.category
+                  ),
+                  exercise.difficulty && React.createElement(
+                    'span',
+                    {
+                      className: 'tvs-badge tvs-badge-difficulty',
+                      style: {
+                        background: getDifficultyColor(exercise.difficulty),
+                      },
+                    },
+                    exercise.difficulty
+                  ),
+                  exercise.default_metric && React.createElement(
+                    'span',
+                    {
+                      className: 'tvs-badge-metric',
+                    },
+                    exercise.default_metric === 'reps' ? '🔢 Reps' : '⏱ Time'
+                  )
+                )
+              )
+            )
+          )
+        ),
+        results.length === 0 && !isSearching && debouncedSearchTerm.length >= 2 && React.createElement(
+          'div',
+          { style: { padding: '12px 16px', color: 'var(--tvs-text-secondary)', fontSize: '14px' } },
+          'No exercises found'
+        )
+      ),
+      document.body
+    );
+  };
+
   return React.createElement(
     'div',
     { className: `tvs-exercise-search-container ${className}` },
@@ -206,92 +324,7 @@ function ExerciseSearchDropdown({ value, onChange, onSelect, placeholder = 'Sear
       { className: 'tvs-search-error' },
       error
     ),
-    showDropdown && results.length > 0 && React.createElement(
-      'div',
-      {
-        ref: dropdownRef,
-        className: 'tvs-exercise-dropdown',
-      },
-      results.map((exercise, idx) =>
-        React.createElement(
-          'div',
-          {
-            key: exercise.id,
-            className: `tvs-exercise-result ${idx === selectedIndex ? 'tvs-exercise-result-selected' : ''}`,
-            onClick: () => handleSelect(exercise),
-            onMouseEnter: () => setSelectedIndex(idx),
-          },
-          React.createElement(
-            'div',
-            null,
-            React.createElement(
-              'div',
-              null,
-              React.createElement(
-                'div',
-                null,
-                exercise.name
-              ),
-              React.createElement(
-                'div',
-                null,
-                exercise.category && React.createElement(
-                  'span',
-                  {
-                    className: 'tvs-badge tvs-badge-category',
-                  },
-                  exercise.category
-                ),
-                exercise.difficulty && React.createElement(
-                  'span',
-                  {
-                    className: 'tvs-badge tvs-badge-difficulty',
-                    style: {
-                      background: getDifficultyColor(exercise.difficulty),
-                    },
-                  },
-                  exercise.difficulty
-                ),
-                exercise.default_metric && React.createElement(
-                  'span',
-                  {
-                    className: 'tvs-badge-metric',
-                  },
-                  exercise.default_metric === 'reps' ? '🔢 Reps' : '⏱ Time'
-                )
-              )
-            )
-          )
-        )
-      ),
-      results.length === 0 && !isSearching && debouncedSearchTerm.length >= 2 && React.createElement(
-        'div',
-        { style: { padding: '12px 16px', color: 'var(--tvs-text-secondary)', fontSize: '14px' } },
-        'No exercises found'
-      )
-    ),
-    showDropdown && results.length === 0 && debouncedSearchTerm.length < 2 && React.createElement(
-      'div',
-      {
-        ref: dropdownRef,
-        className: 'tvs-exercise-dropdown-hint',
-        style: {
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          marginTop: '4px',
-          padding: '8px 12px',
-          background: 'var(--tvs-bg-secondary)',
-          border: '1px solid var(--tvs-border)',
-          borderRadius: 'var(--tvs-radius)',
-          fontSize: '12px',
-          color: 'var(--tvs-text-secondary)',
-          zIndex: 1000,
-        },
-      },
-      'Type at least 2 characters to search'
-    )
+    renderDropdown()
   );
 }
 
