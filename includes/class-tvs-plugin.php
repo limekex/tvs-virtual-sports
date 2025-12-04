@@ -89,8 +89,7 @@ class TVS_Plugin {
         new TVS_CPT_Activity();
         
         // Exercise library
-        $cpt_exercise = new TVS_CPT_Exercise();
-        $cpt_exercise->init();
+        new TVS_CPT_Exercise();
         $rest_exercises = new TVS_REST_Exercises();
         $rest_exercises->init();
         
@@ -214,6 +213,36 @@ class TVS_Plugin {
             // Issue #21: Manual Activity Tracker - Register via block.json
             register_block_type( TVS_PLUGIN_DIR . 'blocks/manual-activity-tracker/block.json', array(
                 'render_callback' => array( $this, 'render_manual_activity_tracker_block' ),
+            ) );
+
+            // Activity Stats Dashboard block
+            register_block_type( 'tvs-virtual-sports/activity-stats-dashboard', array(
+                'title'           => __( 'TVS Activity Stats Dashboard', 'tvs-virtual-sports' ),
+                'description'     => __( 'Comprehensive dashboard with activity statistics and charts.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'chart-bar',
+                'render_callback' => array( $this, 'render_activity_stats_dashboard_block' ),
+                'attributes'      => array(
+                    'title'      => array( 'type' => 'string', 'default' => 'Activity Dashboard' ),
+                    'period'     => array( 'type' => 'string', 'default' => '30d' ),
+                    'showCharts' => array( 'type' => 'boolean', 'default' => true ),
+                    'userId'     => array( 'type' => 'integer', 'default' => 0 ),
+                ),
+            ) );
+
+            // Single Activity Details block
+            register_block_type( 'tvs-virtual-sports/single-activity-details', array(
+                'title'           => __( 'TVS Activity Details', 'tvs-virtual-sports' ),
+                'description'     => __( 'Display detailed statistics for a single activity.', 'tvs-virtual-sports' ),
+                'category'        => 'widgets',
+                'icon'            => 'analytics',
+                'render_callback' => array( $this, 'render_single_activity_details_block' ),
+                'attributes'      => array(
+                    'activityId'     => array( 'type' => 'integer', 'default' => 0 ),
+                    'showComparison' => array( 'type' => 'boolean', 'default' => true ),
+                    'showActions'    => array( 'type' => 'boolean', 'default' => true ),
+                    'showNotes'      => array( 'type' => 'boolean', 'default' => true ),
+                ),
             ) );
         }
     }
@@ -481,6 +510,95 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_activity_stats_dashboard_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-activity-stats-dashboard' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-activity-stats-dashboard-' . uniqid();
+        $user_id  = isset( $attributes['userId'] ) && $attributes['userId'] > 0 
+            ? intval( $attributes['userId'] ) 
+            : get_current_user_id();
+        $period   = isset( $attributes['period'] ) ? sanitize_text_field( $attributes['period'] ) : '30d';
+        $title    = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Activity Dashboard';
+        $show_charts = isset( $attributes['showCharts'] ) ? (bool) $attributes['showCharts'] : true;
+
+        ob_start();
+        ?>
+        <div class="tvs-app tvs-app--stats-dashboard">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-stats-dashboard-block"
+                 data-user-id="<?php echo esc_attr( $user_id ); ?>"
+                 data-period="<?php echo esc_attr( $period ); ?>"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-show-charts="<?php echo esc_attr( $show_charts ? '1' : '0' ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    public function render_single_activity_details_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-single-activity-details' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-single-activity-details-' . uniqid();
+        
+        // Auto-detect activity ID from global post or use attribute
+        $activity_id = isset( $attributes['activityId'] ) && $attributes['activityId'] > 0 
+            ? intval( $attributes['activityId'] ) 
+            : get_the_ID();
+        
+        // Verify it's an activity post
+        if ( get_post_type( $activity_id ) !== 'tvs_activity' ) {
+            return '<p>' . __( 'This block can only be used on activity pages.', 'tvs-virtual-sports' ) . '</p>';
+        }
+        
+        $show_comparison = isset( $attributes['showComparison'] ) ? (bool) $attributes['showComparison'] : true;
+        $show_actions = isset( $attributes['showActions'] ) ? (bool) $attributes['showActions'] : true;
+        $show_notes = isset( $attributes['showNotes'] ) ? (bool) $attributes['showNotes'] : true;
+        
+        $current_user_id = get_current_user_id();
+        $is_author = $current_user_id && ( $current_user_id == get_post_field( 'post_author', $activity_id ) );
+        
+        // Fetch metadata directly as fallback (since REST API might not expose it)
+        $meta_fields = array(
+            'distance_m' => get_post_meta( $activity_id, 'distance_m', true ),
+            'duration_s' => get_post_meta( $activity_id, 'duration_s', true ),
+            'rating' => get_post_meta( $activity_id, 'rating', true ),
+            'notes' => get_post_meta( $activity_id, 'notes', true ),
+            'activity_type' => get_post_meta( $activity_id, 'activity_type', true ),
+            'route_id' => get_post_meta( $activity_id, 'route_id', true ),
+            'source' => get_post_meta( $activity_id, 'source', true ),
+            'activity_date' => get_post_meta( $activity_id, 'activity_date', true ),
+        );
+        
+        // For workout activities, include exercises and circuits
+        $exercises_json = get_post_meta( $activity_id, '_tvs_manual_exercises', true );
+        $circuits_json = get_post_meta( $activity_id, '_tvs_manual_circuits', true );
+        if ( $exercises_json ) {
+            $meta_fields['exercises'] = json_decode( $exercises_json, true );
+        }
+        if ( $circuits_json ) {
+            $meta_fields['circuits'] = json_decode( $circuits_json, true );
+        }
+
+        ob_start();
+        ?>
+        <div class="tvs-app tvs-app--activity-details">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-single-activity-details-block"
+                 data-activity-id="<?php echo esc_attr( $activity_id ); ?>"
+                 data-show-comparison="<?php echo esc_attr( $show_comparison ? '1' : '0' ); ?>"
+                 data-show-actions="<?php echo esc_attr( $show_actions ? '1' : '0' ); ?>"
+                 data-show-notes="<?php echo esc_attr( $show_notes ? '1' : '0' ); ?>"
+                 data-is-author="<?php echo esc_attr( $is_author ? '1' : '0' ); ?>"
+                 data-meta="<?php echo esc_attr( wp_json_encode( $meta_fields ) ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -521,9 +639,9 @@ class TVS_Plugin {
     public function public_assets() {
         wp_enqueue_style( 'tvs-public', TVS_PLUGIN_URL . 'public/css/tvs-public.css', array(), TVS_PLUGIN_VERSION );
 
-        // Register React and ReactDOM from CDN (lightweight approach for MVP)
-        wp_register_script( 'tvs-react', 'https://unpkg.com/react@18/umd/react.production.min.js', array(), null, true );
-        wp_register_script( 'tvs-react-dom', 'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', array( 'tvs-react' ), null, true );
+        // Register React and ReactDOM from CDN - DEVELOPMENT versions for debugging
+        wp_register_script( 'tvs-react', 'https://unpkg.com/react@18/umd/react.development.js', array(), null, true );
+        wp_register_script( 'tvs-react-dom', 'https://unpkg.com/react-dom@18/umd/react-dom.development.js', array( 'tvs-react' ), null, true );
 
         // Register global flash script (must load before tvs-app)
         wp_register_script( 'tvs-flash', TVS_PLUGIN_URL . 'public/js/tvs-flash.js', array(), TVS_PLUGIN_VERSION, true );
@@ -546,6 +664,8 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-activity-heatmap', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-heatmap.js', array( 'tvs-react', 'tvs-react-dom' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-route-weather', TVS_PLUGIN_URL . 'public/js/tvs-block-route-weather.js', array(), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-manual-activity-tracker', TVS_PLUGIN_URL . 'public/js/tvs-block-manual-activity-tracker.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-activity-stats-dashboard', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-stats-dashboard.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-single-activity-details', TVS_PLUGIN_URL . 'public/js/tvs-block-single-activity-details.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
@@ -582,6 +702,8 @@ class TVS_Plugin {
     wp_localize_script( 'tvs-block-personal-records', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-heatmap', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-route-weather', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-activity-stats-dashboard', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-single-activity-details', 'TVS_SETTINGS', $settings );
     }
 
     /**

@@ -100,11 +100,14 @@ export default function ManualActivityTracker({
   const [calibCadence, setCalibCadence] = useState(0);
   const [calibPower, setCalibPower] = useState(0);
   const [calibLaps, setCalibLaps] = useState(0);
+  const [calibNotes, setCalibNotes] = useState('');
+  const [calibRating, setCalibRating] = useState(0);
 
   const timerRef = useRef(null);
   const autoSaveRef = useRef(null);
   const startTimeRef = useRef(null);
   const containerRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   // Auto-scroll to top when step changes
   useEffect(() => {
@@ -228,11 +231,36 @@ export default function ManualActivityTracker({
     }
   }, [step, sessionId, elapsedTime, distance, speed, pace, incline, cadence, power]);
 
+  // Wake Lock helpers
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator && mode === 'live') {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        if (DEBUG) log('Wake Lock activated');
+      }
+    } catch (err) {
+      if (DEBUG) log('Wake Lock error:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try {
+      if (wakeLockRef.current) {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        if (DEBUG) log('Wake Lock released');
+      }
+    } catch (err) {
+      if (DEBUG) log('Wake Lock release error:', err);
+    }
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       stopTimer();
       if (autoSaveRef.current) clearInterval(autoSaveRef.current);
+      releaseWakeLock();
     };
   }, []);
 
@@ -255,6 +283,7 @@ export default function ManualActivityTracker({
         if (mode === 'live') {
           startTimeRef.current = Date.now();
           startTimer();
+          requestWakeLock();
         }
         if (typeof window.tvsFlash === 'function') {
           window.tvsFlash(`${type} activity started!`, 'success');
@@ -348,8 +377,19 @@ export default function ManualActivityTracker({
     setError(null);
 
     try {
+      const payload = {};
+      
+      // Add notes and rating if provided
+      if (calibratedValues?.notes) {
+        payload.notes = calibratedValues.notes;
+      }
+      if (calibratedValues?.rating) {
+        payload.rating = calibratedValues.rating;
+      }
+
       const result = await apiFetch(`/tvs/v1/activities/manual/${sessionId}/finish`, {
         method: 'POST',
+        body: JSON.stringify(payload),
       });
 
       if (result.success && result.activity_id) {
@@ -357,6 +397,7 @@ export default function ManualActivityTracker({
         setPermalink(result.permalink);
         setStep('finished');
         stopTimer();
+        releaseWakeLock();
         localStorage.removeItem('tvs_manual_session');
         
         // Dispatch event to update My Activities block
@@ -460,6 +501,7 @@ export default function ManualActivityTracker({
       startTimeRef.current = Date.now() - elapsedTime * 1000;
       setIsPaused(false);
       startTimer();
+      requestWakeLock();
       if (typeof window.tvsFlash === 'function') {
         window.tvsFlash('▶️ Activity resumed', 'success');
       }
@@ -467,6 +509,7 @@ export default function ManualActivityTracker({
       // Pause
       stopTimer(); // Stop the timer interval
       setIsPaused(true);
+      releaseWakeLock();
       if (typeof window.tvsFlash === 'function') {
         window.tvsFlash('⏸ Activity paused', 'info');
       }
@@ -839,7 +882,7 @@ export default function ManualActivityTracker({
       React.createElement(
         'div',
         { className: 'tvs-controls' },
-        React.createElement('h4', null, 'Adjust Metrics'),
+        React.createElement('h4', null, selectedType === 'Workout' ? 'Add Your Exercises' : 'Adjust Metrics'),
         mode === 'retrospective' && React.createElement(
           'p',
           { className: 'tvs-controls-hint' },
@@ -1078,7 +1121,7 @@ export default function ManualActivityTracker({
             selectedType !== 'Workout' && React.createElement('div', null, `📍 Distance: ${distance.toFixed(2)} km`),
             selectedType === 'Swim' && React.createElement('div', null, `🏊 Laps: ${laps}`),
             selectedType === 'Swim' && pace > 0 && React.createElement('div', null, `⚡ Pace: ${pace} sec/lap`),
-            selectedType === 'Workout' && React.createElement('div', null, `💪 Sets: ${sets} × ${reps} reps`)
+            selectedType === 'Workout' && workoutExercises.length > 0 && React.createElement('div', null, `💪 Exercises: ${workoutExercises.length}`)
           ),
           React.createElement(
             'div',
@@ -1119,6 +1162,8 @@ export default function ManualActivityTracker({
         cadence: calibCadence,
         power: calibPower,
         laps: calibLaps,
+        notes: calibNotes,
+        rating: calibRating,
       });
       setShowConfirmModal(true);
     };
@@ -1177,6 +1222,48 @@ export default function ManualActivityTracker({
         ['Run', 'Walk', 'Hike', 'Ride'].includes(selectedType) && renderCalibrationField('Cadence', calibCadence, setCalibCadence, 'spm', 1),
         selectedType === 'Ride' && renderCalibrationField('Power', calibPower, setCalibPower, 'W', 1),
         selectedType === 'Swim' && renderCalibrationField('Laps', calibLaps, setCalibLaps, '', 1)
+      ),
+      React.createElement(
+        'div',
+        { className: 'tvs-calibration-notes-rating' },
+        React.createElement(
+          'div',
+          { className: 'tvs-calibration-field' },
+          React.createElement('label', null, 'Notes'),
+          React.createElement('textarea', {
+            value: calibNotes,
+            onChange: (e) => setCalibNotes(e.target.value),
+            className: 'tvs-calibration-textarea',
+            placeholder: 'How did the activity feel? Any observations?',
+            rows: 2
+          })
+        ),
+        React.createElement(
+          'div',
+          { className: 'tvs-calibration-field' },
+          React.createElement('label', null, 'Rate Your Activity (1-10)'),
+          React.createElement(
+            'div',
+            { className: 'tvs-rating-scale' },
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(rating => 
+              React.createElement(
+                'button',
+                {
+                  key: rating,
+                  type: 'button',
+                  className: `tvs-rating-btn ${calibRating === rating ? 'tvs-rating-btn--active' : ''}`,
+                  onClick: () => setCalibRating(rating)
+                },
+                rating
+              )
+            )
+          ),
+          calibRating > 0 ? React.createElement(
+            'div',
+            { className: 'tvs-rating-label' },
+            calibRating <= 3 ? 'Challenging' : calibRating <= 6 ? 'Moderate' : calibRating <= 8 ? 'Good' : 'Excellent'
+          ) : null
+        )
       ),
       React.createElement(
         'div',

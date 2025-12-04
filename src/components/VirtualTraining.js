@@ -1,5 +1,6 @@
 import { React } from '../utils/reactMount.js';
-import { RiPlayCircleLine, RiPauseCircleLine, RiRestartLine, RiZoomInLine, RiZoomOutLine, RiVideoOnLine, RiVideoOffLine, RiFullscreenLine, RiFullscreenExitLine, RiAddLine, RiSubtractLine, RiCompassLine, RiCompass3Fill } from 'react-icons/ri';
+import { DEBUG, log } from '../utils/debug.js';
+import { RiPlayCircleLine, RiPauseCircleLine, RiRestartLine, RiZoomInLine, RiZoomOutLine, RiVideoOnLine, RiVideoOffLine, RiFullscreenLine, RiFullscreenExitLine, RiAddLine, RiSubtractLine, RiCompassLine, RiCompass3Fill, RiArrowUpSLine, RiArrowDownSLine } from 'react-icons/ri';
 import { FaRoute } from 'react-icons/fa';
 import { AiOutlineSave } from 'react-icons/ai';
 
@@ -82,8 +83,12 @@ export default function VirtualTraining({ routeData, routeId }) {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [actualDistance, setActualDistance] = useState('');
   const [actualTime, setActualTime] = useState('');
+  const [activityNotes, setActivityNotes] = useState('');
+  const [activityRating, setActivityRating] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [activityType, setActivityType] = useState('Run'); // 'Walk', 'Run', or 'Ride'
+  const [statsMinimized, setStatsMinimized] = useState(false); // Toggle stats panel size
+  const [controlsHidden, setControlsHidden] = useState(false); // Auto-hide controls
   
   // Refs
   const mapRef = useRef(null);
@@ -106,6 +111,7 @@ export default function VirtualTraining({ routeData, routeId }) {
   const lastBearingRef = useRef(null); // Track last bearing for smooth rotation
   const elevationCanvasRef = useRef(null); // Canvas for elevation chart
   const elevationMarkerRef = useRef(null); // Marker for current position on chart
+  const wakeLockRef = useRef(null); // Wake Lock for keeping screen awake
   
   // Points of Interest state
   const [poisData, setPoisData] = useState([]);
@@ -960,9 +966,12 @@ export default function VirtualTraining({ routeData, routeId }) {
       // Pausing
       timelineRef.current.pause();
       pauseStartTimeRef.current = Date.now(); // Record when we paused
+      releaseWakeLock(); // Release wake lock when pausing
       showFlash('Activity paused');
     } else {
       // Playing/Resuming
+      requestWakeLock(); // Request wake lock when starting/resuming
+      
       if (!realStartTimeRef.current) {
         // First play - start the clock and zoom animation
         realStartTimeRef.current = Date.now();
@@ -1168,24 +1177,34 @@ export default function VirtualTraining({ routeData, routeId }) {
       
       const now = new Date().toISOString();
       
+      const payload = {
+        route_id: routeId,
+        route_name: routeTitle,
+        activity_date: now,
+        started_at: now,
+        ended_at: now,
+        duration_s: durationS,
+        distance_m: distanceM,
+        visibility: 'private',
+        activity_type: activityType,
+        is_virtual: true, // Mark as virtual for Strava sync
+      };
+      
+      // Add notes and rating if provided
+      if (activityNotes) {
+        payload.notes = activityNotes;
+      }
+      if (activityRating > 0) {
+        payload.rating = activityRating;
+      }
+      
       const response = await fetch('/wp-json/tvs/v1/activities', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-WP-Nonce': window.TVS_SETTINGS?.nonce || ''
         },
-        body: JSON.stringify({
-          route_id: routeId,
-          route_name: routeTitle,
-          activity_date: now,
-          started_at: now,
-          ended_at: now,
-          duration_s: durationS,
-          distance_m: distanceM,
-          visibility: 'private',
-          activity_type: activityType,
-          is_virtual: true // Mark as virtual for Strava sync
-        })
+        body: JSON.stringify(payload)
       });
       
       if (!response.ok) {
@@ -1207,6 +1226,7 @@ export default function VirtualTraining({ routeData, routeId }) {
       }
       setIsWelcome(true);
       setIsPlaying(false);
+      releaseWakeLock(); // Release wake lock after saving
       setCurrentDistanceKm(0);
       setElapsedTime(0);
       setEstimatedTotalTime(0);
@@ -1247,11 +1267,29 @@ export default function VirtualTraining({ routeData, routeId }) {
   // Listen for fullscreen changes
   useEffect(() => {
     function handleFullscreenChange() {
-      setIsFullscreen(!!document.fullscreenElement);
+      const newFullscreenState = !!document.fullscreenElement;
+      setIsFullscreen(newFullscreenState);
+      
+      // Force map resize after fullscreen change
+      setTimeout(() => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.resize();
+        }
+      }, 100);
     }
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
+  
+  // Trigger map resize when isFullscreen changes
+  useEffect(() => {
+    if (mapInstanceRef.current) {
+      // Multiple resize attempts to ensure it takes effect
+      setTimeout(() => mapInstanceRef.current.resize(), 50);
+      setTimeout(() => mapInstanceRef.current.resize(), 150);
+      setTimeout(() => mapInstanceRef.current.resize(), 300);
+    }
+  }, [isFullscreen]);
   
   // Keyboard shortcut for fullscreen (F key)
   useEffect(() => {
@@ -1265,6 +1303,40 @@ export default function VirtualTraining({ routeData, routeId }) {
     document.addEventListener('keydown', handleKeyPress);
     return () => document.removeEventListener('keydown', handleKeyPress);
   }, [isWelcome, isFullscreen]);
+  
+  // Wake Lock helpers
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        if (DEBUG) log('Wake Lock activated');
+      }
+    } catch (err) {
+      if (DEBUG) log('Wake Lock error:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try {
+      if (wakeLockRef.current) {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        if (DEBUG) log('Wake Lock released');
+      }
+    } catch (err) {
+      if (DEBUG) log('Wake Lock release error:', err);
+    }
+  };
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      releaseWakeLock();
+    };
+  }, []);
   
   // Format time helper
   function formatTime(seconds) {
@@ -1341,68 +1413,98 @@ export default function VirtualTraining({ routeData, routeId }) {
   
   // Training screen
   return h('div', { className: `tvs-virtual-training ${isFullscreen ? 'tvs-virtual-training--fullscreen' : ''}` },
-    // Map container
+    // Map container (full bleed only in fullscreen)
     h('div', {
       ref: mapRef,
       className: 'virtual-training-map',
       style: { 
-        width: '100%', 
-        height: isFullscreen ? 'calc(100vh - 80px)' : '70vh' 
+        width: isFullscreen ? '100vw' : '100%', 
+        height: isFullscreen ? '100vh' : '70vh',
+        position: isFullscreen ? 'fixed' : 'relative',
+        top: isFullscreen ? 0 : 'auto',
+        left: isFullscreen ? 0 : 'auto',
+        zIndex: isFullscreen ? 1 : 'auto'
       }
     }),
 
-    // Stats overlay
-    h('div', { className: 'training-stats' },
-      h('div', { className: 'stat-item' },
-        h('span', { className: 'stat-label' }, 'Distance'),
-        h('span', { className: 'stat-value' }, `${
-          isWelcome ? '0.00' : currentDistanceKm.toFixed(2)
-        } / ${routeDistanceKm.toFixed(2)} km`)
-      ),
-      h('div', { className: 'stat-item' },
-        h('span', { className: 'stat-label' }, 'Time'),
-        h('span', { className: 'stat-value' }, `${
-          isWelcome ? '0:00' : formatTime(elapsedTime)
-        } / ${isWelcome ? formatTime(durationMinutes * 60) : formatTime(estimatedTotalTime)}`)
-      ),
-      h('div', { className: 'stat-item' },
-        h('span', { className: 'stat-label' }, 'Speed'),
-        h('span', { className: 'stat-value' }, `${speed} km/h`)
-      ),
-      h('div', { className: 'stat-item' },
-        h('span', { className: 'stat-label' }, 'Elevation'),
-        h('span', { className: 'stat-value' }, `${currentElevation} m`)
-      ),
-      h('div', { className: 'stat-item' },
-        h('span', { className: 'stat-label' }, 'Gradient'),
-        h('span', { 
-          className: 'stat-value',
-          style: { 
-            color: currentGradient > 0 ? '#f56565' : currentGradient < 0 ? '#48bb78' : 'white'
-          }
-        }, `${currentGradient > 0 ? '+' : ''}${currentGradient}%`)
+    // Stats overlay with minimize toggle
+    h('div', { 
+      className: `training-stats ${statsMinimized ? 'training-stats--minimized' : ''}`,
+      onClick: () => setStatsMinimized(!statsMinimized), // Toggle on click
+      title: statsMinimized ? 'Click to expand' : 'Click to minimize'
+    },
+      // Minimize indicator icon
+      h('div', { className: 'stats-toggle-icon' },
+        h(statsMinimized ? RiArrowDownSLine : RiArrowUpSLine, { size: 16 })
       ),
       
-      // Elevation chart
-      h('div', { className: 'elevation-chart-container' },
-        h('canvas', {
-          ref: elevationCanvasRef,
-          className: 'elevation-chart',
-          width: 300,
-          height: 80
-        }),
-        h('div', {
-          ref: elevationMarkerRef,
-          className: 'elevation-marker',
-          style: {
-            left: '0%'
-          }
-        })
-      )
+      // Minimized view: Only Distance and Time
+      statsMinimized ? [
+        h('div', { key: 'distance', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Distance'),
+          h('span', { className: 'stat-value' }, `${
+            isWelcome ? '0.00' : currentDistanceKm.toFixed(2)
+          }/${routeDistanceKm.toFixed(2)} km`)
+        ),
+        h('div', { key: 'time', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Time'),
+          h('span', { className: 'stat-value' }, `${
+            isWelcome ? '0:00' : formatTime(elapsedTime)
+          }/${isWelcome ? formatTime(durationMinutes * 60) : formatTime(estimatedTotalTime)}`)
+        )
+      ] : [
+        // Full view: All stats + elevation chart
+        h('div', { key: 'distance', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Distance'),
+          h('span', { className: 'stat-value' }, `${
+            isWelcome ? '0.00' : currentDistanceKm.toFixed(2)
+          } / ${routeDistanceKm.toFixed(2)} km`)
+        ),
+        h('div', { key: 'time', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Time'),
+          h('span', { className: 'stat-value' }, `${
+            isWelcome ? '0:00' : formatTime(elapsedTime)
+          } / ${isWelcome ? formatTime(durationMinutes * 60) : formatTime(estimatedTotalTime)}`)
+        ),
+        h('div', { key: 'speed', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Speed'),
+          h('span', { className: 'stat-value' }, `${speed} km/h`)
+        ),
+        h('div', { key: 'elevation', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Elevation'),
+          h('span', { className: 'stat-value' }, `${currentElevation} m`)
+        ),
+        h('div', { key: 'gradient', className: 'stat-item' },
+          h('span', { className: 'stat-label' }, 'Gradient'),
+          h('span', { 
+            className: 'stat-value',
+            style: { 
+              color: currentGradient > 0 ? '#f56565' : currentGradient < 0 ? '#48bb78' : 'white'
+            }
+          }, `${currentGradient > 0 ? '+' : ''}${currentGradient}%`)
+        ),
+        
+        // Elevation chart
+        h('div', { key: 'chart', className: 'elevation-chart-container' },
+          h('canvas', {
+            ref: elevationCanvasRef,
+            className: 'elevation-chart',
+            width: 300,
+            height: 80
+          }),
+          h('div', {
+            ref: elevationMarkerRef,
+            className: 'elevation-marker',
+            style: {
+              left: '0%'
+            }
+          })
+        )
+      ]
     ),
 
     // Overlay: Push play to start
-    !isPlaying && !isWelcome && h('div', { 
+    (!isPlaying && !isWelcome) ? h('div', { 
       className: 'training-overlay-start',
       onClick: togglePlay
     },
@@ -1413,18 +1515,18 @@ export default function VirtualTraining({ routeData, routeId }) {
         }, h(RiPlayCircleLine, { size: 64 })),
         h('div', { style: { fontSize: 20, fontWeight: 600, marginTop: 16 } }, 'Push play to start')
       )
-    ),
+    ) : null,
     
     // PoI popup
-    activePoI && h('div', { 
+    activePoI ? h('div', { 
       className: `poi-popup tvs-panel tvs-panel--elevated${isPoIHiding ? ' poi-popup--hiding' : ''}` 
     },
-      activePoI.imageThumbnail && h('div', { className: 'poi-image' },
+      activePoI.imageThumbnail ? h('div', { className: 'poi-image' },
         h('img', { src: activePoI.imageThumbnail, alt: activePoI.name })
-      ),
+      ) : null,
       h('div', { className: 'poi-content' },
         h('div', { className: 'poi-header' },
-          activePoI.iconType === 'custom' && activePoI.customIconUrl 
+          (activePoI.iconType === 'custom' && activePoI.customIconUrl)
             ? h('div', { 
                 className: 'poi-icon poi-icon-custom',
                 style: { backgroundColor: activePoI.color || '#8b5cf6' }
@@ -1437,12 +1539,14 @@ export default function VirtualTraining({ routeData, routeId }) {
               }, ICON_LIBRARY[activePoI.icon] || activePoI.icon || '📍'),
           h('h3', { className: 'poi-title' }, activePoI.name)
         ),
-        activePoI.description && h('p', { className: 'poi-description' }, activePoI.description)
+        activePoI.description ? h('p', { className: 'poi-description' }, activePoI.description) : null
       )
-    ),
+    ) : null,
     
-    // Controls
-    h('div', { className: 'training-controls' },
+    // Controls with show/hide toggle
+    h('div', { 
+      className: `training-controls ${controlsHidden ? 'training-controls--hidden' : ''}` 
+    },
       // 1. Play / pause
       h('button', {
         className: 'control-btn',
@@ -1523,8 +1627,22 @@ export default function VirtualTraining({ routeData, routeId }) {
       }, h(isFullscreen ? RiFullscreenExitLine : RiFullscreenLine, { size: 24 }))
     ),
     
+    // Controls toggle button (when hidden) - only show after welcome
+    !isWelcome && controlsHidden ? h('div', {
+      className: 'controls-toggle-btn',
+      onClick: () => setControlsHidden(false),
+      title: 'Show Controls'
+    }, h(RiArrowUpSLine, { size: 28 })) : null,
+    
+    // Hide controls button (when visible) - only show after welcome
+    !isWelcome && !controlsHidden ? h('div', {
+      className: 'controls-hide-btn',
+      onClick: () => setControlsHidden(true),
+      title: 'Hide Controls'
+    }, h(RiArrowDownSLine, { size: 20 })) : null,
+    
     // Save Activity Modal
-    showSaveModal && h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
+    showSaveModal ? h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
       h('div', { className: 'save-modal', onClick: (e) => e.stopPropagation() },
         h('h3', null, '💾 Save Activity'),
         h('p', null, `Enter actual data from your ${activityType === 'Ride' ? 'bike/trainer' : 'treadmill'}:`),
@@ -1552,40 +1670,68 @@ export default function VirtualTraining({ routeData, routeId }) {
                   gap: '4px',
                   transition: 'all 0.2s'
                 }
-              },
-                h('span', { style: { fontSize: '24px' } }, 
+              }, [
+                h('span', { key: 'icon', style: { fontSize: '24px' } }, 
                   type === 'Walk' ? '🚶' : type === 'Run' ? '🏃' : '🚴'
                 ),
-                h('span', { style: { fontSize: '14px', fontWeight: activityType === type ? '600' : '400' } }, type)
-              )
+                h('span', { key: 'label', style: { fontSize: '14px', fontWeight: activityType === type ? '600' : '400' } }, type)
+              ])
             )
           )
         ),
         
-        h('div', { className: 'modal-field' },
-          h('label', null, 'Distance (km)'),
-          h('input', {
-            type: 'text',
-            value: actualDistance,
-            onChange: (e) => setActualDistance(e.target.value),
-            placeholder: '8.234'
-          }),
-          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
-            'Supports decimals (e.g., 8.234 km)'
+        // Distance and Time in one row
+        h('div', { className: 'modal-fields-row' },
+          h('div', { className: 'modal-field' },
+            h('label', null, 'Distance (km)'),
+            h('input', {
+              type: 'text',
+              value: actualDistance,
+              onChange: (e) => setActualDistance(e.target.value),
+              placeholder: '8.234'
+            }),
+            h('small', null, 'e.g., 8.234 km')
+          ),
+          
+          h('div', { className: 'modal-field' },
+            h('label', null, 'Time'),
+            h('input', {
+              type: 'text',
+              value: actualTime,
+              onChange: (e) => setActualTime(e.target.value),
+              placeholder: '1:23:45'
+            }),
+            h('small', null, 'H:MM:SS or MM:SS')
           )
         ),
         
+        // Notes field
         h('div', { className: 'modal-field' },
-          h('label', null, 'Time (H:MM:SS, MM:SS, or seconds)'),
-          h('input', {
-            type: 'text',
-            value: actualTime,
-            onChange: (e) => setActualTime(e.target.value),
-            placeholder: '1:23:45 or 45:23'
-          }),
-          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
-            'Format: H:MM:SS (e.g., 1:23:45), MM:SS (e.g., 45:23), or just seconds (e.g., 2723)'
-          )
+          h('label', null, 'Notes (optional)'),
+          h('textarea', {
+            value: activityNotes,
+            onChange: (e) => setActivityNotes(e.target.value),
+            placeholder: 'How did the activity feel? Any observations?',
+            rows: 2
+          })
+        ),
+        
+        // Rating field
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Rate Your Activity (1-10, optional)'),
+          h('div', { className: 'tvs-rating-scale' },
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(rating => 
+              h('button', {
+                key: rating,
+                type: 'button',
+                onClick: () => setActivityRating(rating),
+                className: `tvs-rating-btn ${activityRating === rating ? 'tvs-rating-btn--active' : ''}`
+              }, rating)
+            )
+          ),
+          activityRating > 0 ? h('div', { className: 'tvs-rating-label' },
+            activityRating <= 3 ? 'Challenging' : activityRating <= 6 ? 'Moderate' : activityRating <= 8 ? 'Good' : 'Excellent'
+          ) : null
         ),
         
         h('div', { className: 'modal-buttons' },
@@ -1602,6 +1748,6 @@ export default function VirtualTraining({ routeData, routeId }) {
           }, isSaving ? 'Saving...' : 'Save Activity')
         )
       )
-    )
+    ) : null
   );
 }

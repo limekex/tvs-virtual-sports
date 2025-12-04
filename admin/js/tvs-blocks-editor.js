@@ -76,6 +76,37 @@
     save: function(){ return null; }
   });
 
+  ensure('tvs-virtual-sports/activity-stats-dashboard', {
+    title: 'TVS Activity Stats Dashboard',
+    icon: 'chart-bar',
+    category: 'widgets',
+    keywords: ['tvs', 'stats', 'dashboard', 'analytics', 'activities'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'TVS Activity Stats Dashboard'); },
+    save: function(){ return null; }
+  });
+
+  ensure('tvs-virtual-sports/single-activity-details', {
+    title: 'TVS Activity Details',
+    icon: 'analytics',
+    category: 'widgets',
+    keywords: ['tvs', 'activity', 'details', 'stats', 'single'],
+    edit: function(){ 
+      return el('div', { className: 'tvs-block-edit-placeholder' }, 
+        'TVS Activity Details (auto-detects current activity)'
+      ); 
+    },
+    save: function(){ return null; }
+  });
+
+  ensure('tvs-virtual-sports/manual-activity-tracker', {
+    title: 'TVS Manual Activity Tracker',
+    icon: 'edit',
+    category: 'widgets',
+    keywords: ['tvs', 'manual', 'activity', 'tracker', 'log'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'TVS Manual Activity Tracker'); },
+    save: function(){ return null; }
+  });
+
   // ALWAYS show block attributes in the editor sidebar (InspectorControls)
   if (hooks && compose && blockEditor && components) {
     var InspectorControls = blockEditor.InspectorControls;
@@ -198,6 +229,77 @@
                 help: 'Show raw weather data and API responses.',
                 checked: debug, 
                 onChange: function(v){ props.setAttributes({ debug: !!v }); } 
+              })
+            )
+          );
+        }
+        if (props.name === 'tvs-virtual-sports/activity-stats-dashboard') {
+          var userId = typeof attrs.userId === 'number' ? attrs.userId : 0;
+          var period = typeof attrs.period === 'string' ? attrs.period : '30d';
+          var showCharts = typeof attrs.showCharts === 'boolean' ? attrs.showCharts : true;
+          panels.push(
+            el(PanelBody, { title: 'Dashboard Settings', initialOpen: true },
+              el(TextControl, {
+                label: 'Title',
+                value: attrs.title || 'Activity Dashboard',
+                onChange: function(val){ props.setAttributes({ title: val }); }
+              }),
+              el(components.SelectControl, {
+                label: 'Default Period',
+                value: period,
+                options: [
+                  { label: '7 Days', value: '7d' },
+                  { label: '30 Days', value: '30d' },
+                  { label: '90 Days', value: '90d' },
+                  { label: 'All Time', value: 'all' }
+                ],
+                onChange: function(val){ props.setAttributes({ period: val }); }
+              }),
+              el(TextControl, {
+                label: 'User ID (optional)',
+                help: 'Leave 0 for current logged-in user.',
+                value: String(userId || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ userId: n }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Charts',
+                help: 'Display activity type breakdown chart.',
+                checked: showCharts,
+                onChange: function(v){ props.setAttributes({ showCharts: !!v }); }
+              })
+            )
+          );
+        }
+        if (props.name === 'tvs-virtual-sports/single-activity-details') {
+          var activityId = typeof attrs.activityId === 'number' ? attrs.activityId : 0;
+          var showComparison = typeof attrs.showComparison === 'boolean' ? attrs.showComparison : true;
+          var showActions = typeof attrs.showActions === 'boolean' ? attrs.showActions : true;
+          var showNotes = typeof attrs.showNotes === 'boolean' ? attrs.showNotes : true;
+          panels.push(
+            el(PanelBody, { title: 'Activity Details Settings', initialOpen: true },
+              el(TextControl, {
+                label: 'Activity ID (optional)',
+                help: 'Leave 0 to auto-detect from current page context.',
+                value: String(activityId || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ activityId: n }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Comparison',
+                help: 'Compare with personal best and previous attempts.',
+                checked: showComparison,
+                onChange: function(v){ props.setAttributes({ showComparison: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Actions',
+                help: 'Display edit/delete buttons for activity author.',
+                checked: showActions,
+                onChange: function(v){ props.setAttributes({ showActions: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Notes',
+                help: 'Display activity notes if available.',
+                checked: showNotes,
+                onChange: function(v){ props.setAttributes({ showNotes: !!v }); }
               })
             )
           );

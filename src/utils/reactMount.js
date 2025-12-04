@@ -15,20 +15,25 @@ const hasCreateRoot =
 
 export function mountReact(Component, props, node) {
   try {
+    // Unmount existing root if present
     const existingRoot = tvsRoots.get(node);
     if (existingRoot && typeof existingRoot.unmount === 'function') {
       existingRoot.unmount();
       tvsRoots.delete(node);
-    } else if (ReactDOM && typeof ReactDOM.unmountComponentAtNode === 'function') {
-      ReactDOM.unmountComponentAtNode(node);
     }
 
+    // Use createRoot API (React 18+)
     if (hasCreateRoot) {
       const createRoot = (ReactDOM && ReactDOM.createRoot) || (wpEl && wpEl.createRoot);
       const root = createRoot(node);
       tvsRoots.set(node, root);
       root.render(React.createElement(Component, props));
       return;
+    }
+
+    // Fallback to legacy API (React <18) - unmount first if needed
+    if (ReactDOM && typeof ReactDOM.unmountComponentAtNode === 'function') {
+      ReactDOM.unmountComponentAtNode(node);
     }
 
     const legacyRender = (ReactDOM && ReactDOM.render) || (wpEl && wpEl.render);

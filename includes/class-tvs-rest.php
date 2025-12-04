@@ -582,6 +582,18 @@ class TVS_REST {
                     'required'    => false,
                     'minimum'     => 1,
                 ),
+                'user_id' => array(
+                    'description' => 'User ID (defaults to current user)',
+                    'type'        => 'integer',
+                    'required'    => false,
+                    'minimum'     => 1,
+                ),
+                'period' => array(
+                    'description' => 'Time period (7d, 30d, 90d, all)',
+                    'type'        => 'string',
+                    'required'    => false,
+                    'default'     => 'all',
+                ),
             ),
         ) );
 
@@ -1604,7 +1616,7 @@ class TVS_REST {
         wp_update_post( array( 'ID' => $post_id, 'post_name' => (string) $post_id ) );
 
         // Save meta
-        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility','activity_type','is_virtual');
+        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility','activity_type','is_virtual','notes','rating');
         foreach ( $keys as $k ) {
             if ( isset( $data[ $k ] ) ) {
                 update_post_meta( $post_id, $k, sanitize_text_field( $data[ $k ] ) );
@@ -1700,16 +1712,32 @@ class TVS_REST {
      * Returns best time, averages and most recent for the current user, optionally scoped to a route.
      */
     public function get_activity_stats( $request ) {
-        $user_id  = get_current_user_id();
-        if ( ! $user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        $current_user_id = get_current_user_id();
+        if ( ! $current_user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
+        
+        // Allow querying other users' stats
+        $user_id = (int) $request->get_param( 'user_id' );
+        if ( ! $user_id ) $user_id = $current_user_id;
+        
         $route_id = (int) $request->get_param( 'route_id' );
+        $period = sanitize_text_field( $request->get_param( 'period' ) ?: 'all' );
         $force = isset( $_GET['tvsforcefetch'] ) && $_GET['tvsforcefetch'];
 
         // Transient cache (short TTL)
-        $cache_key = 'tvs_stats_' . md5( json_encode( array( 'u'=>$user_id, 'r'=>$route_id ) ) );
+        $cache_key = 'tvs_stats_' . md5( json_encode( array( 'u'=>$user_id, 'r'=>$route_id, 'p'=>$period ) ) );
         if ( ! $force ) {
             $cached = get_transient( $cache_key );
             if ( $cached !== false ) return rest_ensure_response( $cached );
+        }
+
+        // Date query based on period
+        $date_query = array();
+        if ( $period !== 'all' ) {
+            $days_map = array( '7d' => 7, '30d' => 30, '90d' => 90 );
+            if ( isset( $days_map[ $period ] ) ) {
+                $since = gmdate( 'Y-m-d', strtotime( '-' . $days_map[ $period ] . ' days' ) );
+                $date_query = array( array( 'after' => $since, 'inclusive' => true ) );
+            }
         }
 
         $meta_query = array();
@@ -1724,28 +1752,63 @@ class TVS_REST {
             'orderby'        => 'date',
             'order'          => 'DESC',
             'meta_query'     => ! empty( $meta_query ) ? $meta_query : null,
+            'date_query'     => ! empty( $date_query ) ? $date_query : null,
             'fields'         => 'ids',
         );
         $ids = get_posts( $args );
         $count = 0; $sum_s = 0; $sum_m = 0.0; $best_s = null; $best_id = 0; $recent_id = 0;
+        $sum_rating = 0; $rating_count = 0;
+        $activity_types = array();
+        
         foreach ( (array) $ids as $id ) {
             $count++;
             $dur = get_post_meta( $id, 'duration_s', true );
             $dist = get_post_meta( $id, 'distance_m', true );
+            $rating = get_post_meta( $id, 'rating', true );
+            $activity_type = get_post_meta( $id, 'activity_type', true );
+            
             $dur = is_numeric( $dur ) ? (int) $dur : 0;
             $dist = is_numeric( $dist ) ? (float) $dist : 0.0;
+            
             if ( $dur > 0 ) {
                 if ( $best_s === null || $dur < $best_s ) { $best_s = $dur; $best_id = (int) $id; }
                 $sum_s += $dur;
             }
             if ( $dist > 0 ) { $sum_m += $dist; }
             if ( ! $recent_id ) { $recent_id = (int) $id; } // first in DESC order
+            
+            // Aggregate ratings
+            if ( is_numeric( $rating ) && $rating > 0 ) {
+                $sum_rating += (float) $rating;
+                $rating_count++;
+            }
+            
+            // Count activity types
+            if ( $activity_type ) {
+                $type_key = sanitize_text_field( $activity_type );
+                if ( ! isset( $activity_types[ $type_key ] ) ) {
+                    $activity_types[ $type_key ] = 0;
+                }
+                $activity_types[ $type_key ]++;
+            }
         }
         $avg_pace_s_per_km = null; $avg_speed_kmh = null;
         if ( $sum_m > 0 && $sum_s > 0 ) {
             $avg_pace_s_per_km = ( $sum_s / ( $sum_m / 1000.0 ) );
             $avg_speed_kmh = ( $sum_m / 1000.0 ) / ( $sum_s / 3600.0 );
         }
+        
+        $avg_rating = $rating_count > 0 ? ( $sum_rating / $rating_count ) : null;
+        
+        // Format activity types for frontend
+        $activity_type_counts = array();
+        foreach ( $activity_types as $type => $type_count ) {
+            $activity_type_counts[] = array(
+                'name' => $type,
+                'count' => $type_count,
+            );
+        }
+        
         $best = null; $recent = null;
         if ( $best_id ) {
             $best = array(
@@ -1774,6 +1837,12 @@ class TVS_REST {
                 'speed_kmh'     => $avg_speed_kmh ? round( $avg_speed_kmh, 2 ) : null,
             ),
             'recent' => $recent,
+            // New dashboard fields
+            'total_activities' => (int) $count,
+            'total_distance_m' => (float) $sum_m,
+            'total_duration_s' => (int) $sum_s,
+            'avg_rating' => $avg_rating,
+            'activity_type_counts' => $activity_type_counts,
         );
         set_transient( $cache_key, $resp, 90 );
         return rest_ensure_response( $resp );
@@ -2274,6 +2343,18 @@ class TVS_REST {
         }
         if ( isset( $session_data['pool_length'] ) ) {
             update_post_meta( $post_id, '_tvs_manual_pool_length', intval( $session_data['pool_length'] ) );
+        }
+        
+        // Notes and rating (from calibration screen)
+        $body = $request->get_json_params();
+        if ( ! empty( $body['notes'] ) ) {
+            update_post_meta( $post_id, 'notes', sanitize_textarea_field( $body['notes'] ) );
+        }
+        if ( ! empty( $body['rating'] ) ) {
+            $rating = intval( $body['rating'] );
+            if ( $rating >= 1 && $rating <= 10 ) {
+                update_post_meta( $post_id, 'rating', $rating );
+            }
         }
         
         // Clear session transient

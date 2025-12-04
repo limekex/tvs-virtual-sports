@@ -32,9 +32,10 @@ class TVS_CPT_Activity {
             'rewrite' => array( 'slug' => 'activity', 'with_front' => false ),
         ) );
 
-        // Register activity meta keys and expose to REST
-        $keys = array('route_id','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility');
-        foreach ( $keys as $meta_key ) {
+        // Register activity meta keys and expose to REST API
+        // String fields
+        $string_fields = array('route_id','started_at','ended_at','synced_strava','strava_activity_id','activity_type','source','route_name','activity_date');
+        foreach ( $string_fields as $meta_key ) {
             register_post_meta( 'tvs_activity', $meta_key, array(
                 'show_in_rest' => true,
                 'single' => true,
@@ -42,7 +43,27 @@ class TVS_CPT_Activity {
                 'sanitize_callback' => 'sanitize_text_field',
             ) );
         }
-        // Stricter control for visibility (only authors/admins can update)
+        
+        // Number fields (integer)
+        $integer_fields = array('duration_s','distance_m','avg_hr','max_hr','perceived_exertion','rating');
+        foreach ( $integer_fields as $meta_key ) {
+            register_post_meta( 'tvs_activity', $meta_key, array(
+                'show_in_rest' => true,
+                'single' => true,
+                'type' => 'integer',
+                'sanitize_callback' => 'absint',
+            ) );
+        }
+        
+        // Text field (can be long)
+        register_post_meta( 'tvs_activity', 'notes', array(
+            'show_in_rest' => true,
+            'single' => true,
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+        ) );
+        
+        // Visibility with stricter control (only authors/admins can update)
         register_post_meta( 'tvs_activity', 'visibility', array(
             'show_in_rest' => true,
             'single' => true,
@@ -74,7 +95,7 @@ class TVS_CPT_Activity {
         }
 
         $keys = array(
-            'route_id', 'started_at', 'ended_at', 'duration_s', 'distance_m', 'avg_hr', 'max_hr', 'perceived_exertion', 'synced_strava', 'strava_activity_id', 'visibility'
+            'route_id', 'route_name', 'activity_date', 'started_at', 'ended_at', 'duration_s', 'distance_m', 'avg_hr', 'max_hr', 'perceived_exertion', 'synced_strava', 'strava_activity_id', 'visibility', 'rating', 'notes', 'activity_type', 'source'
         );
 
         if ( isset( $_POST['tvs_activity_meta'] ) && is_array( $_POST['tvs_activity_meta'] ) ) {

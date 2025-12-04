@@ -2,7 +2,6 @@
   "$schema": "https://schemas.wp.org/trunk/block.json",
   "apiVersion": 3,
   "name": "tvs-virtual-sports/manual-activity-tracker",
-  "version": "1.0.0",
   "title": "TVS Manual Activity Tracker",
   "category": "widgets",
   "icon": "controls-play",
@@ -44,5 +43,5 @@
     }
   },
   "editorScript": "tvs-manual-activity-tracker-editor",
-  "viewScript": "file:../../public/js/tvs-block-manual-activity-tracker.js"
+  "viewScript": "tvs-block-manual-activity-tracker"
 }

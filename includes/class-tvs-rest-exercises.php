@@ -121,17 +121,34 @@ class TVS_REST_Exercises {
 				$query->the_post();
 				$post_id = get_the_ID();
 
-				// Get categories
-				$categories = wp_get_post_terms( $post_id, 'exercise_category', array( 'fields' => 'names' ) );
-				$types = wp_get_post_terms( $post_id, 'exercise_type', array( 'fields' => 'names' ) );
+			// Get taxonomy terms (direct query since taxonomies may not be registered yet in REST context)
+			global $wpdb;
+			
+			$category_names = $wpdb->get_col( $wpdb->prepare(
+				"SELECT t.name FROM {$wpdb->terms} t
+				INNER JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+				INNER JOIN {$wpdb->term_relationships} tr ON tt.term_taxonomy_id = tr.term_taxonomy_id
+				WHERE tr.object_id = %d AND tt.taxonomy = %s",
+				$post_id,
+				'exercise_category'
+			) );
+			
+			$type_names = $wpdb->get_col( $wpdb->prepare(
+				"SELECT t.name FROM {$wpdb->terms} t
+				INNER JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+				INNER JOIN {$wpdb->term_relationships} tr ON tt.term_taxonomy_id = tr.term_taxonomy_id
+				WHERE tr.object_id = %d AND tt.taxonomy = %s",
+				$post_id,
+				'exercise_type'
+			) );
 
-				$results[] = array(
-					'id'             => $post_id,
-					'name'           => get_the_title(),
-					'description'    => get_the_excerpt(),
-					'category'       => ! empty( $categories ) ? $categories[0] : '',
-					'categories'     => $categories,
-					'type'           => ! empty( $types ) ? $types[0] : '',
+			$results[] = array(
+				'id'             => $post_id,
+				'name'           => get_the_title(),
+				'description'    => get_the_excerpt(),
+				'category'       => ! empty( $category_names ) ? $category_names[0] : '',
+				'categories'     => $category_names,
+				'type'           => ! empty( $type_names ) ? $type_names[0] : '',
 					'equipment'      => get_post_meta( $post_id, '_tvs_equipment', true ),
 					'muscle_groups'  => get_post_meta( $post_id, '_tvs_muscle_groups', true ),
 					'difficulty'     => get_post_meta( $post_id, '_tvs_difficulty', true ),
@@ -172,18 +189,36 @@ class TVS_REST_Exercises {
 			);
 		}
 
-		$categories = wp_get_post_terms( $exercise_id, 'exercise_category', array( 'fields' => 'names' ) );
-		$types = wp_get_post_terms( $exercise_id, 'exercise_type', array( 'fields' => 'names' ) );
+	// Get taxonomy terms (direct query since taxonomies may not be registered yet in REST context)
+	global $wpdb;
+	
+	$category_names = $wpdb->get_col( $wpdb->prepare(
+		"SELECT t.name FROM {$wpdb->terms} t
+		INNER JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+		INNER JOIN {$wpdb->term_relationships} tr ON tt.term_taxonomy_id = tr.term_taxonomy_id
+		WHERE tr.object_id = %d AND tt.taxonomy = %s",
+		$exercise_id,
+		'exercise_category'
+	) );
+	
+	$type_names = $wpdb->get_col( $wpdb->prepare(
+		"SELECT t.name FROM {$wpdb->terms} t
+		INNER JOIN {$wpdb->term_taxonomy} tt ON t.term_id = tt.term_id
+		INNER JOIN {$wpdb->term_relationships} tr ON tt.term_taxonomy_id = tr.term_taxonomy_id
+		WHERE tr.object_id = %d AND tt.taxonomy = %s",
+		$exercise_id,
+		'exercise_type'
+	) );
 
-		$data = array(
-			'id'             => $exercise_id,
-			'name'           => $post->post_title,
-			'description'    => $post->post_content,
-			'excerpt'        => $post->post_excerpt,
-			'category'       => ! empty( $categories ) ? $categories[0] : '',
-			'categories'     => $categories,
-			'type'           => ! empty( $types ) ? $types[0] : '',
-			'types'          => $types,
+	$data = array(
+		'id'             => $exercise_id,
+		'name'           => $post->post_title,
+		'description'    => $post->post_content,
+		'excerpt'        => $post->post_excerpt,
+		'category'       => ! empty( $category_names ) ? $category_names[0] : '',
+		'categories'     => $category_names,
+		'type'           => ! empty( $type_names ) ? $type_names[0] : '',
+		'types'          => $type_names,
 			'equipment'      => get_post_meta( $exercise_id, '_tvs_equipment', true ),
 			'muscle_groups'  => get_post_meta( $exercise_id, '_tvs_muscle_groups', true ),
 			'difficulty'     => get_post_meta( $exercise_id, '_tvs_difficulty', true ),

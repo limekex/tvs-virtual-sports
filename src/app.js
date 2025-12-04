@@ -29,9 +29,12 @@ export default function App({ initialData, routeId }) {
   const [activityType, setActivityType] = useState('Run');
   const [actualTime, setActualTime] = useState('');
   const [actualDistance, setActualDistance] = useState('');
+  const [activityNotes, setActivityNotes] = useState('');
+  const [activityRating, setActivityRating] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const videoRef = useRef(null);
   const playerRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   function showFlash(message, type = 'success') {
     if (typeof window.tvsFlash === 'function') {
@@ -139,8 +142,33 @@ export default function App({ initialData, routeId }) {
       } catch (_) {}
       playerRef.current = null;
       setIsPlayerReady(false);
+      releaseWakeLock();
     };
   }, [data]);
+
+  // Wake Lock helpers
+  const requestWakeLock = async () => {
+    try {
+      if ('wakeLock' in navigator) {
+        wakeLockRef.current = await navigator.wakeLock.request('screen');
+        if (DEBUG) log('Wake Lock activated');
+      }
+    } catch (err) {
+      if (DEBUG) log('Wake Lock error:', err);
+    }
+  };
+
+  const releaseWakeLock = async () => {
+    try {
+      if (wakeLockRef.current) {
+        await wakeLockRef.current.release();
+        wakeLockRef.current = null;
+        if (DEBUG) log('Wake Lock released');
+      }
+    } catch (err) {
+      if (DEBUG) log('Wake Lock release error:', err);
+    }
+  };
 
   // Keyboard shortcut: F key toggles cinematic mode, Escape exits
   useEffect(() => {
@@ -270,6 +298,7 @@ export default function App({ initialData, routeId }) {
       }
       setSessionStartAt(new Date());
       setIsSessionActive(true);
+      requestWakeLock(); // Keep screen awake during activity
       setLastStatus('running');
       showFlash('Activity started');
     } catch (e) {
@@ -296,6 +325,7 @@ export default function App({ initialData, routeId }) {
         throw e;
       }
       setIsSessionActive(true);
+      requestWakeLock(); // Keep screen awake when resuming
       setLastStatus('running');
       showFlash('Activity resumed');
     } catch (e) {
@@ -320,6 +350,7 @@ export default function App({ initialData, routeId }) {
         throw e;
       }
       setIsSessionActive(false);
+      releaseWakeLock(); // Allow screen to sleep when paused
       setLastStatus('paused');
       showFlash('Activity paused');
     } catch (e) {
@@ -410,6 +441,15 @@ export default function App({ initialData, routeId }) {
         activity_type: activityType,
         is_virtual: false // Real video activity
       };
+      
+      // Add notes and rating if provided
+      if (activityNotes) {
+        payload.notes = activityNotes;
+      }
+      if (activityRating > 0) {
+        payload.rating = activityRating;
+      }
+      
       const nonce = window.TVS_SETTINGS?.nonce || '';
 
       if (slowParam) await delay(slowParam);
@@ -435,6 +475,7 @@ export default function App({ initialData, routeId }) {
       showFlash('Activity saved! 🎉', 'success');
       setLastStatus('ok');
       setIsSessionActive(false);
+      releaseWakeLock(); // Release wake lock after saving activity
       setSessionStartAt(null);
       
       // Notify My Activities widget to refresh
@@ -563,7 +604,7 @@ export default function App({ initialData, routeId }) {
                 h(RiRestartLine, { size: 24 })
               ),
               // Fullscreen button (only in normal mode)
-              !isCinematicMode && h(
+              !isCinematicMode ? h(
                 'button',
                 {
                   key: 'fullscreen',
@@ -587,8 +628,8 @@ export default function App({ initialData, routeId }) {
                   title: 'Enter fullscreen mode (F)'
                 },
                 h(RiFullscreenLine, { size: 24 })
-              )
-            ]
+              ) : null
+            ].filter(Boolean)
           : [
               // Start button (play icon)
               h(
@@ -603,7 +644,7 @@ export default function App({ initialData, routeId }) {
                 h(RiPlayCircleLine, { size: 24 })
               ),
               // Fullscreen button (only in normal mode)
-              !isCinematicMode && h(
+              !isCinematicMode ? h(
                 'button',
                 {
                   key: 'fullscreen',
@@ -627,8 +668,8 @@ export default function App({ initialData, routeId }) {
                   title: 'Enter fullscreen mode (F)'
                 },
                 h(RiFullscreenLine, { size: 24 })
-              )
-            ]
+              ) : null
+            ].filter(Boolean)
       )
     : [
         // Pause button
@@ -656,7 +697,7 @@ export default function App({ initialData, routeId }) {
           h(RiSaveLine, { size: 24 })
         ),
         // Fullscreen button (only in normal mode)
-        !isCinematicMode && h(
+        !isCinematicMode ? h(
           'button',
           {
             key: 'fullscreen',
@@ -680,8 +721,8 @@ export default function App({ initialData, routeId }) {
             title: 'Enter fullscreen mode (F)'
           },
           h(RiFullscreenLine, { size: 24 })
-        )
-      ];
+        ) : null
+      ].filter(Boolean);
 
   return h(
     'div',
@@ -713,31 +754,31 @@ export default function App({ initialData, routeId }) {
           )
         : null,
       // Minimap overlay (cinematic mode only)
-      isCinematicMode && showMinimap &&
+      (isCinematicMode && showMinimap) ?
         h(
           'div',
           { key: 'minimap', className: 'tvs-video-overlay tvs-video-overlay--minimap' },
           h('div', { className: 'tvs-overlay-placeholder' }, 'Mini-map')
-        ),
+        ) : null,
       // Route info overlay (cinematic mode only)
-      isCinematicMode && showRouteInfo &&
+      (isCinematicMode && showRouteInfo) ?
         h(
           'div',
           { key: 'routeinfo', className: 'tvs-video-overlay tvs-video-overlay--routeinfo' },
           h('div', { className: 'tvs-overlay-placeholder' }, 'Route Info')
-        ),
+        ) : null,
       // Controls - only in normal mode
-      !isCinematicMode && h(ProgressBar, { React, currentTime, duration }),
-      !isCinematicMode && (new URLSearchParams(location.search).get('tvsdebug') === '1' ||
+      !isCinematicMode ? h(ProgressBar, { React, currentTime, duration }) : null,
+      !isCinematicMode ? ((new URLSearchParams(location.search).get('tvsdebug') === '1' ||
         window.TVS_DEBUG === true ||
         localStorage.getItem('tvsDev') === '1')
         ? h('div', { className: 'tvs-meta' }, h('pre', null, JSON.stringify(meta, null, 2)))
-        : null,
-      !isCinematicMode && h(
+        : null) : null,
+      !isCinematicMode ? h(
         'div', 
         { className: 'training-controls' },
         controlButtons
-      )
+      ) : null
     ),
     // Control panel (only in cinematic mode)
     isCinematicMode
@@ -809,7 +850,7 @@ export default function App({ initialData, routeId }) {
     DEBUG ? h(DevOverlay, { React, routeId, lastStatus, lastError, currentTime, duration }) : null,
     
     // Save Activity Modal
-    showSaveModal && h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
+    showSaveModal ? h('div', { className: 'save-modal-overlay', onClick: () => setShowSaveModal(false) },
       h('div', { className: 'save-modal', onClick: (e) => e.stopPropagation() },
         h('h3', null, '💾 Save Activity'),
         h('p', null, `Enter actual data from your ${activityType === 'Ride' ? 'bike/trainer' : 'treadmill'}:`),
@@ -837,40 +878,68 @@ export default function App({ initialData, routeId }) {
                   gap: '4px',
                   transition: 'all 0.2s'
                 }
-              },
-                h('span', { style: { fontSize: '24px' } }, 
+              }, [
+                h('span', { key: 'icon', style: { fontSize: '24px' } }, 
                   type === 'Walk' ? '🚶' : type === 'Run' ? '🏃' : '🚴'
                 ),
-                h('span', { style: { fontSize: '14px', fontWeight: activityType === type ? '600' : '400' } }, type)
-              )
+                h('span', { key: 'label', style: { fontSize: '14px', fontWeight: activityType === type ? '600' : '400' } }, type)
+              ])
             )
           )
         ),
         
-        h('div', { className: 'modal-field' },
-          h('label', null, 'Distance (km)'),
-          h('input', {
-            type: 'text',
-            value: actualDistance,
-            onChange: (e) => setActualDistance(e.target.value),
-            placeholder: '8.234'
-          }),
-          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
-            'Supports decimals (e.g., 8.234 km)'
+        // Distance and Time in one row
+        h('div', { className: 'modal-fields-row' },
+          h('div', { className: 'modal-field' },
+            h('label', null, 'Distance (km)'),
+            h('input', {
+              type: 'text',
+              value: actualDistance,
+              onChange: (e) => setActualDistance(e.target.value),
+              placeholder: '8.234'
+            }),
+            h('small', null, 'e.g., 8.234 km')
+          ),
+          
+          h('div', { className: 'modal-field' },
+            h('label', null, 'Time'),
+            h('input', {
+              type: 'text',
+              value: actualTime,
+              onChange: (e) => setActualTime(e.target.value),
+              placeholder: '1:23:45'
+            }),
+            h('small', null, 'H:MM:SS or MM:SS')
           )
         ),
         
+        // Notes field
         h('div', { className: 'modal-field' },
-          h('label', null, 'Time (H:MM:SS, MM:SS, or seconds)'),
-          h('input', {
-            type: 'text',
-            value: actualTime,
-            onChange: (e) => setActualTime(e.target.value),
-            placeholder: '1:23:45 or 45:23'
-          }),
-          h('small', { style: { color: '#718096', fontSize: '0.75rem', marginTop: '0.25rem', display: 'block' } }, 
-            'Format: H:MM:SS (e.g., 1:23:45), MM:SS (e.g., 45:23), or just seconds (e.g., 2723)'
-          )
+          h('label', null, 'Notes (optional)'),
+          h('textarea', {
+            value: activityNotes,
+            onChange: (e) => setActivityNotes(e.target.value),
+            placeholder: 'How did the activity feel? Any observations?',
+            rows: 2
+          })
+        ),
+        
+        // Rating field
+        h('div', { className: 'modal-field' },
+          h('label', null, 'Rate Your Activity (1-10, optional)'),
+          h('div', { className: 'tvs-rating-scale' },
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(rating => 
+              h('button', {
+                key: rating,
+                type: 'button',
+                onClick: () => setActivityRating(rating),
+                className: `tvs-rating-btn ${activityRating === rating ? 'tvs-rating-btn--active' : ''}`
+              }, rating)
+            )
+          ),
+          activityRating > 0 ? h('div', { className: 'tvs-rating-label' },
+            activityRating <= 3 ? 'Challenging' : activityRating <= 6 ? 'Moderate' : activityRating <= 8 ? 'Good' : 'Excellent'
+          ) : null
         ),
         
         h('div', { className: 'modal-buttons' },
@@ -891,6 +960,6 @@ export default function App({ initialData, routeId }) {
           }, isSaving ? 'Saving...' : 'Save Activity')
         )
       )
-    )
+    ) : null
   );
 }

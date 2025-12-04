@@ -33,13 +33,139 @@ class TVS_CPT_Exercise {
 	const TAX_TYPE = 'exercise_type';
 
 	/**
-	 * Initialize hooks
+	 * Constructor - Initialize hooks
 	 */
-	public function init() {
+	public function __construct() {
 		add_action( 'init', array( $this, 'register_post_type' ) );
 		add_action( 'init', array( $this, 'register_taxonomies' ) );
+		add_action( 'init', array( $this, 'register_meta_fields' ) );
 		add_action( 'add_meta_boxes', array( $this, 'add_meta_boxes' ) );
 		add_action( 'save_post_' . self::POST_TYPE, array( $this, 'save_meta' ), 10, 2 );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
+	}
+
+	/**
+	 * Enqueue admin scripts for media uploader
+	 */
+	public function enqueue_admin_scripts( $hook ) {
+		global $post_type;
+		if ( self::POST_TYPE === $post_type && ( 'post.php' === $hook || 'post-new.php' === $hook ) ) {
+			wp_enqueue_media();
+			wp_enqueue_script(
+				'tvs-exercise-admin',
+				plugin_dir_url( dirname( __FILE__ ) ) . 'public/js/exercise-admin.js',
+				array( 'jquery' ),
+				'1.0.0',
+				true
+			);
+		}
+	}
+
+	/**
+	 * Register meta fields for REST API
+	 */
+	public function register_meta_fields() {
+		// Equipment (array)
+		register_post_meta(
+			self::POST_TYPE,
+			'_tvs_equipment',
+			array(
+				'type'              => 'array',
+				'description'       => 'Equipment required for exercise',
+				'single'            => true,
+				'default'           => array(),
+				'sanitize_callback' => function( $value ) {
+					return is_array( $value ) ? array_map( 'sanitize_text_field', $value ) : array();
+				},
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array(
+							'type' => 'string',
+						),
+					),
+				),
+			)
+		);
+
+		// Muscle groups (array)
+		register_post_meta(
+			self::POST_TYPE,
+			'_tvs_muscle_groups',
+			array(
+				'type'              => 'array',
+				'description'       => 'Muscle groups targeted',
+				'single'            => true,
+				'default'           => array(),
+				'sanitize_callback' => function( $value ) {
+					return is_array( $value ) ? array_map( 'sanitize_text_field', $value ) : array();
+				},
+				'show_in_rest'      => array(
+					'schema' => array(
+						'type'  => 'array',
+						'items' => array(
+							'type' => 'string',
+						),
+					),
+				),
+			)
+		);
+
+		// Difficulty (string)
+		register_post_meta(
+			self::POST_TYPE,
+			'_tvs_difficulty',
+			array(
+				'type'              => 'string',
+				'description'       => 'Difficulty level',
+				'single'            => true,
+				'default'           => '',
+				'sanitize_callback' => 'sanitize_text_field',
+				'show_in_rest'      => true,
+			)
+		);
+
+		// Default metric type (string)
+		register_post_meta(
+			self::POST_TYPE,
+			'_tvs_default_metric_type',
+			array(
+				'type'              => 'string',
+				'description'       => 'Default metric type (reps or time)',
+				'single'            => true,
+				'default'           => 'reps',
+				'sanitize_callback' => 'sanitize_text_field',
+				'show_in_rest'      => true,
+			)
+		);
+
+		// Video URL (string)
+		register_post_meta(
+			self::POST_TYPE,
+			'_tvs_video_url',
+			array(
+				'type'              => 'string',
+				'description'       => 'Exercise demonstration video URL',
+				'single'            => true,
+				'default'           => '',
+				'sanitize_callback' => 'esc_url_raw',
+				'show_in_rest'      => true,
+			)
+		);
+
+		// Animation URL (string)
+		register_post_meta(
+			self::POST_TYPE,
+			'_tvs_animation_url',
+			array(
+				'type'              => 'string',
+				'description'       => 'Exercise animation/GIF URL',
+				'single'            => true,
+				'default'           => '',
+				'sanitize_callback' => 'esc_url_raw',
+				'show_in_rest'      => true,
+			)
+		);
 	}
 
 	/**
@@ -63,7 +189,8 @@ class TVS_CPT_Exercise {
 
 		$args = array(
 			'labels'              => $labels,
-			'public'              => false,
+			'public'              => true,
+			'publicly_queryable'  => false,
 			'show_ui'             => true,
 			'show_in_menu'        => 'tvs-settings',
 			'show_in_rest'        => true,
@@ -84,8 +211,8 @@ class TVS_CPT_Exercise {
 			'hierarchical'        => false,
 			'supports'            => array( 'title', 'editor', 'thumbnail' ),
 			'has_archive'         => false,
-			'rewrite'             => false,
-			'query_var'           => false,
+			'rewrite'             => array( 'slug' => 'exercises', 'with_front' => false ),
+			'query_var'           => true,
 		);
 
 		register_post_type( self::POST_TYPE, $args );
@@ -265,12 +392,21 @@ class TVS_CPT_Exercise {
 				placeholder="https://youtube.com/watch?v=..." style="width:100%;">
 		</p>
 		<p>
-			<label><strong><?php esc_html_e( 'Animation/GIF URL:', 'tvs-virtual-sports' ); ?></strong></label><br>
-			<input type="url" name="tvs_animation_url" value="<?php echo esc_attr( $animation_url ); ?>" 
-				placeholder="https://example.com/animation.gif" style="width:100%;">
+			<label><strong><?php esc_html_e( 'Animation/GIF:', 'tvs-virtual-sports' ); ?></strong></label><br>
+			<input type="text" id="tvs_animation_url" name="tvs_animation_url" value="<?php echo esc_attr( $animation_url ); ?>" 
+				placeholder="Upload or paste URL" style="width:calc(100% - 120px); margin-right: 8px;">
+			<button type="button" class="button tvs-upload-media-btn" data-target="tvs_animation_url">
+				<?php esc_html_e( 'Upload File', 'tvs-virtual-sports' ); ?>
+			</button>
 		</p>
+		<?php if ( $animation_url ) : ?>
+			<p style="margin-top: 10px;">
+				<strong><?php esc_html_e( 'Preview:', 'tvs-virtual-sports' ); ?></strong><br>
+				<img src="<?php echo esc_url( $animation_url ); ?>" style="max-width: 200px; height: auto; border: 1px solid #ddd; padding: 4px; background: #f9f9f9;">
+			</p>
+		<?php endif; ?>
 		<p class="description">
-			<?php esc_html_e( 'Optional: Add demonstration media to help users perform the exercise correctly.', 'tvs-virtual-sports' ); ?>
+			<?php esc_html_e( 'Upload a GIF or image to demonstrate the exercise. Recommended size: 200x150px or similar aspect ratio.', 'tvs-virtual-sports' ); ?>
 		</p>
 		<?php
 	}
