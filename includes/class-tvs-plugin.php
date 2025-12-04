@@ -244,6 +244,11 @@ class TVS_Plugin {
                     'showNotes'      => array( 'type' => 'boolean', 'default' => true ),
                 ),
             ) );
+
+            // Activity Timeline block
+            register_block_type( TVS_PLUGIN_DIR . 'blocks/activity-timeline/block.json', array(
+                'render_callback' => array( $this, 'render_activity_timeline_block' ),
+            ) );
         }
     }
 
@@ -599,6 +604,35 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_activity_timeline_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-activity-timeline' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-activity-timeline-' . uniqid();
+        $user_id  = isset( $attributes['userId'] ) && $attributes['userId'] > 0 
+            ? intval( $attributes['userId'] ) 
+            : get_current_user_id();
+        $limit      = isset( $attributes['limit'] ) ? max( 1, min( 50, intval( $attributes['limit'] ) ) ) : 10;
+        $title      = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Activity Timeline';
+        $show_notes = isset( $attributes['showNotes'] ) ? (bool) $attributes['showNotes'] : true;
+        $show_filters = isset( $attributes['showFilters'] ) ? (bool) $attributes['showFilters'] : false;
+
+        ob_start();
+        ?>
+        <div class="tvs-app tvs-app--activity-timeline">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-activity-timeline-block"
+                 data-user-id="<?php echo esc_attr( $user_id ); ?>"
+                 data-limit="<?php echo esc_attr( $limit ); ?>"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-show-notes="<?php echo esc_attr( $show_notes ? '1' : '0' ); ?>"
+                 data-show-filters="<?php echo esc_attr( $show_filters ? '1' : '0' ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -666,6 +700,7 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-manual-activity-tracker', TVS_PLUGIN_URL . 'public/js/tvs-block-manual-activity-tracker.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-stats-dashboard', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-stats-dashboard.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-single-activity-details', TVS_PLUGIN_URL . 'public/js/tvs-block-single-activity-details.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-activity-timeline', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-timeline.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(

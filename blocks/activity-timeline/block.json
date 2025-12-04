@@ -1,0 +1,47 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/activity-timeline",
+  "title": "TVS Activity Timeline",
+  "category": "widgets",
+  "icon": "backup",
+  "description": "Visual timeline showing activity progression with notes and ratings.",
+  "keywords": ["tvs", "activity", "timeline", "history", "progress"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "example": {
+    "attributes": {
+      "title": "Activity Timeline",
+      "limit": 10,
+      "showNotes": true
+    }
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Activity Timeline"
+    },
+    "limit": {
+      "type": "number",
+      "default": 10
+    },
+    "showNotes": {
+      "type": "boolean",
+      "default": true
+    },
+    "userId": {
+      "type": "number",
+      "default": 0
+    },
+    "showFilters": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "editorScript": "tvs-activity-timeline-editor",
+  "viewScript": "tvs-block-activity-timeline"
+}

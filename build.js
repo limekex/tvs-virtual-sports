@@ -72,6 +72,11 @@ const builds = [
   },
   {
     ...config,
+    entryPoints: ['src/blocks/activity-timeline/view.js'],
+    outfile: 'public/js/tvs-block-activity-timeline.js',
+  },
+  {
+    ...config,
     entryPoints: ['blocks/manual-activity-tracker/index.js'],
     outfile: 'blocks/manual-activity-tracker/index.min.js',
     external: ['@wordpress/*'],
