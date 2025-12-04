@@ -107,6 +107,15 @@
     save: function(){ return null; }
   });
 
+  ensure('tvs-virtual-sports/activity-timeline', {
+    title: 'TVS Activity Timeline',
+    icon: 'backup',
+    category: 'widgets',
+    keywords: ['tvs', 'activity', 'timeline', 'history', 'progress'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'TVS Activity Timeline'); },
+    save: function(){ return null; }
+  });
+
   // ALWAYS show block attributes in the editor sidebar (InspectorControls)
   if (hooks && compose && blockEditor && components) {
     var InspectorControls = blockEditor.InspectorControls;
@@ -300,6 +309,47 @@
                 help: 'Display activity notes if available.',
                 checked: showNotes,
                 onChange: function(v){ props.setAttributes({ showNotes: !!v }); }
+              })
+            )
+          );
+        }
+        if (props.name === 'tvs-virtual-sports/activity-timeline') {
+          var limit = typeof attrs.limit === 'number' ? attrs.limit : 10;
+          var userId = typeof attrs.userId === 'number' ? attrs.userId : 0;
+          var showNotes = typeof attrs.showNotes === 'boolean' ? attrs.showNotes : true;
+          var showFilters = typeof attrs.showFilters === 'boolean' ? attrs.showFilters : false;
+          panels.push(
+            el(PanelBody, { title: 'Timeline Settings', initialOpen: true },
+              el(TextControl, {
+                label: 'Title',
+                value: attrs.title || 'Activity Timeline',
+                onChange: function(val){ props.setAttributes({ title: val }); }
+              }),
+              el(RangeControl, {
+                label: 'Number of Activities',
+                min: 1,
+                max: 50,
+                step: 1,
+                value: limit,
+                onChange: function(val){ props.setAttributes({ limit: val }); }
+              }),
+              el(TextControl, {
+                label: 'User ID (optional)',
+                help: 'Leave 0 for current logged-in user.',
+                value: String(userId || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ userId: n }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Notes',
+                help: 'Display activity notes with expand/collapse.',
+                checked: showNotes,
+                onChange: function(v){ props.setAttributes({ showNotes: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Activity Type Filters',
+                help: 'Show dropdown to filter activities by type.',
+                checked: showFilters,
+                onChange: function(v){ props.setAttributes({ showFilters: !!v }); }
               })
             )
           );

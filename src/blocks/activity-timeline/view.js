@@ -14,14 +14,14 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
 
     useEffect(() => {
         fetchActivities();
-    }, [userId, limit]);
+    }, [limit]);
 
     const fetchActivities = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            const url = `${window.TVS_SETTINGS.restRoot}tvs/v1/activities/user/${userId}?limit=${limit}`;
+            const url = `${window.TVS_SETTINGS.restRoot}tvs/v1/activities/me?per_page=${limit}`;
             const response = await fetch(url, {
                 headers: { 'X-WP-Nonce': window.TVS_SETTINGS.nonce }
             });
@@ -29,7 +29,7 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
             if (!response.ok) throw new Error('Failed to fetch activities');
 
             const data = await response.json();
-            setActivities(data.items || []);
+            setActivities(data || []);
         } catch (err) {
             console.error('Error fetching activities:', err);
             setError(err.message);
