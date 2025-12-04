@@ -46,9 +46,16 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
         ? groupedActivities 
         : groupedActivities.map(group => ({
             ...group,
-            activities: group.activities.filter(a => 
-                a.meta.activity_type?.toLowerCase() === selectedType.toLowerCase()
-            )
+            activities: group.activities.filter(a => {
+                let actType = a.meta.activity_type;
+                if (Array.isArray(actType) && actType.length > 0) {
+                    actType = actType[0];
+                }
+                if (typeof actType !== 'string') {
+                    actType = 'workout';
+                }
+                return actType.toLowerCase() === selectedType.toLowerCase();
+            })
         })).filter(group => group.activities.length > 0);
 
     if (loading) {
@@ -114,7 +121,16 @@ function ActivityCard({ activity, showNotes }) {
     const [expanded, setExpanded] = useState(false);
     const meta = activity.meta || {};
     
-    const activityType = (meta.activity_type || 'workout').toLowerCase();
+    // Handle activity_type - could be string, array, or object
+    let activityTypeRaw = meta.activity_type || 'workout';
+    if (Array.isArray(activityTypeRaw) && activityTypeRaw.length > 0) {
+        activityTypeRaw = activityTypeRaw[0];
+    }
+    if (typeof activityTypeRaw === 'object' && activityTypeRaw !== null) {
+        activityTypeRaw = 'workout';
+    }
+    const activityType = String(activityTypeRaw).toLowerCase();
+    
     const distance = meta.distance_m ? (meta.distance_m / 1000).toFixed(2) : 0;
     const duration = formatDuration(meta.duration_s || 0);
     const rating = parseInt(meta.rating) || 0;
