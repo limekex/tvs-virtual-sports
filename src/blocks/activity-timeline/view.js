@@ -131,11 +131,24 @@ function ActivityCard({ activity, showNotes }) {
     }
     const activityType = String(activityTypeRaw).toLowerCase();
     
-    const distance = meta.distance_m ? (meta.distance_m / 1000).toFixed(2) : 0;
-    const duration = formatDuration(meta.duration_s || 0);
-    const rating = parseInt(meta.rating) || 0;
-    const notes = meta.notes || '';
-    const source = meta.source || 'manual';
+    // Handle numeric values that might be arrays
+    const distance = meta.distance_m ? (parseFloat(Array.isArray(meta.distance_m) ? meta.distance_m[0] : meta.distance_m) / 1000).toFixed(2) : 0;
+    const duration = formatDuration(parseInt(Array.isArray(meta.duration_s) ? meta.duration_s[0] : meta.duration_s) || 0);
+    const rating = parseInt(Array.isArray(meta.rating) ? meta.rating[0] : meta.rating) || 0;
+    
+    // Handle notes - could be string, array, or missing
+    let notesRaw = meta.notes || '';
+    if (Array.isArray(notesRaw) && notesRaw.length > 0) {
+        notesRaw = notesRaw[0];
+    }
+    const notes = String(notesRaw || '');
+    
+    // Handle source
+    let sourceRaw = meta.source || 'manual';
+    if (Array.isArray(sourceRaw) && sourceRaw.length > 0) {
+        sourceRaw = sourceRaw[0];
+    }
+    const source = String(sourceRaw);
 
     // Type icons and colors
     const typeConfig = {
