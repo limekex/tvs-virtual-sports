@@ -11,17 +11,21 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedType, setSelectedType] = useState('all');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalActivities, setTotalActivities] = useState(0);
+    const [totalPages, setTotalPages] = useState(0);
 
     useEffect(() => {
         fetchActivities();
-    }, [limit]);
+    }, [currentPage, selectedType]);
 
     const fetchActivities = async () => {
         setLoading(true);
         setError(null);
 
         try {
-            const url = `${window.TVS_SETTINGS.restRoot}tvs/v1/activities/me?per_page=${limit}`;
+            const itemsPerPage = limit || 10;
+            const url = `${window.TVS_SETTINGS.restRoot}tvs/v1/activities/me?per_page=${itemsPerPage}&page=${currentPage}`;
             const response = await fetch(url, {
                 headers: { 'X-WP-Nonce': window.TVS_SETTINGS.nonce }
             });
@@ -29,7 +33,14 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
             if (!response.ok) throw new Error('Failed to fetch activities');
 
             const data = await response.json();
+            
+            // Get pagination info from headers
+            const total = parseInt(response.headers.get('X-WP-Total') || '0');
+            const pages = parseInt(response.headers.get('X-WP-TotalPages') || '1');
+            
             setActivities(data || []);
+            setTotalActivities(total);
+            setTotalPages(pages);
         } catch (err) {
             console.error('Error fetching activities:', err);
             setError(err.message);
@@ -38,25 +49,22 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
         }
     };
 
-    // Group activities by date
-    const groupedActivities = groupByDate(activities);
+    // Filter by type if selected (now client-side filtering on current page)
+    const filteredActivities = selectedType === 'all' 
+        ? activities 
+        : activities.filter(a => {
+            let actType = a.meta.activity_type;
+            if (Array.isArray(actType) && actType.length > 0) {
+                actType = actType[0];
+            }
+            if (typeof actType !== 'string') {
+                actType = 'workout';
+            }
+            return actType.toLowerCase() === selectedType.toLowerCase();
+        });
 
-    // Filter by type if selected
-    const filteredGroups = selectedType === 'all' 
-        ? groupedActivities 
-        : groupedActivities.map(group => ({
-            ...group,
-            activities: group.activities.filter(a => {
-                let actType = a.meta.activity_type;
-                if (Array.isArray(actType) && actType.length > 0) {
-                    actType = actType[0];
-                }
-                if (typeof actType !== 'string') {
-                    actType = 'workout';
-                }
-                return actType.toLowerCase() === selectedType.toLowerCase();
-            })
-        })).filter(group => group.activities.length > 0);
+    // Group activities by date
+    const groupedActivities = groupByDate(filteredActivities);
 
     if (loading) {
         return h('div', { className: 'tvs-timeline-loading' },
@@ -70,7 +78,7 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
         );
     }
 
-    if (activities.length === 0) {
+    if (!loading && totalActivities === 0) {
         return h('div', { className: 'tvs-timeline-empty' },
             h('p', null, 'No activities found.')
         );
@@ -78,27 +86,54 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
 
     return h('div', { className: 'tvs-activity-timeline' },
         h('div', { className: 'tvs-timeline-header' },
-            h('h2', { className: 'tvs-timeline-title' }, title),
-            showFilters && h('div', { className: 'tvs-timeline-filters' },
-                h('select', {
+            h('div', { className: 'tvs-timeline-header-left' },
+                h('h2', { className: 'tvs-timeline-title' }, title),
+                h('span', { className: 'tvs-timeline-count' }, 
+                    `${totalActivities} ${totalActivities === 1 ? 'activity' : 'activities'}`
+                )
+            ),
+            h('div', { className: 'tvs-timeline-header-right' },
+                showFilters && h('select', {
                     className: 'tvs-type-filter',
                     value: selectedType,
-                    onChange: (e) => setSelectedType(e.target.value)
+                    onChange: (e) => {
+                        setSelectedType(e.target.value);
+                        setCurrentPage(1);
+                    }
                 },
-                    h('option', { value: 'all' }, 'All Activities'),
+                    h('option', { value: 'all' }, 'All Types'),
                     h('option', { value: 'run' }, '🏃 Run'),
                     h('option', { value: 'ride' }, '🚴 Ride'),
                     h('option', { value: 'walk' }, '🚶 Walk'),
                     h('option', { value: 'hike' }, '⛰️ Hike'),
                     h('option', { value: 'swim' }, '🏊 Swim'),
                     h('option', { value: 'workout' }, '💪 Workout')
+                ),
+                totalPages > 1 && h('div', { className: 'tvs-timeline-pagination' },
+                    h('button', {
+                        className: 'tvs-pagination-btn',
+                        disabled: currentPage === 1,
+                        onClick: () => setCurrentPage(p => p - 1)
+                    }, '← Previous'),
+                    h('span', { className: 'tvs-pagination-info' }, 
+                        `Page ${currentPage} of ${totalPages}`
+                    ),
+                    h('button', {
+                        className: 'tvs-pagination-btn',
+                        disabled: currentPage === totalPages,
+                        onClick: () => setCurrentPage(p => p + 1)
+                    }, 'Next →')
                 )
             )
         ),
         h('div', { className: 'tvs-timeline-content' },
-            filteredGroups.map((group, idx) =>
-                h(TimelineGroup, { key: idx, group, showNotes })
-            )
+            filteredActivities.length === 0 
+                ? h('div', { className: 'tvs-timeline-empty' }, 
+                    h('p', null, `No ${selectedType} activities found.`)
+                  )
+                : groupedActivities.map((group, idx) =>
+                    h(TimelineGroup, { key: idx, group, showNotes })
+                  )
         )
     );
 }
@@ -106,8 +141,7 @@ function ActivityTimelineBlock({ userId, limit, title, showNotes, showFilters })
 function TimelineGroup({ group, showNotes }) {
     return h('div', { className: 'tvs-timeline-group' },
         h('div', { className: 'tvs-timeline-date-marker' },
-            h('span', { className: 'tvs-date-label' }, group.label),
-            h('div', { className: 'tvs-timeline-line' })
+            h('span', { className: 'tvs-date-label' }, group.label)
         ),
         h('div', { className: 'tvs-timeline-activities' },
             group.activities.map(activity =>
@@ -172,48 +206,52 @@ function ActivityCard({ activity, showNotes }) {
         className: 'tvs-activity-card',
         style: { borderLeftColor: config.color }
     },
-        h('div', { className: 'tvs-activity-card-header' },
-            h('div', { className: 'tvs-activity-type' },
-                h('span', { className: 'tvs-type-icon' }, config.icon),
-                h('span', { className: 'tvs-type-label' }, config.label)
-            ),
-            h('span', { className: 'tvs-activity-source' }, sourceLabels[source] || source),
-            h('time', { className: 'tvs-activity-time' }, formatTime(activity.date))
-        ),
-        h('div', { className: 'tvs-activity-card-body' },
-            h('div', { className: 'tvs-activity-metrics' },
-                distance > 0 && h('div', { className: 'tvs-metric' },
-                    h('span', { className: 'tvs-metric-icon' }, '📏'),
-                    h('span', { className: 'tvs-metric-value' }, `${distance} km`)
+        h('div', { className: 'tvs-activity-card-main' },
+            h('div', { className: 'tvs-activity-card-left' },
+                h('div', { className: 'tvs-activity-type' },
+                    h('span', { className: 'tvs-type-icon' }, config.icon),
+                    h('span', { className: 'tvs-type-label' }, config.label)
                 ),
-                h('div', { className: 'tvs-metric' },
-                    h('span', { className: 'tvs-metric-icon' }, '⏱️'),
-                    h('span', { className: 'tvs-metric-value' }, duration)
+                h('time', { className: 'tvs-activity-time' }, formatTime(activity.date))
+            ),
+            h('div', { className: 'tvs-activity-card-center' },
+                h('div', { className: 'tvs-activity-metrics' },
+                    distance > 0 && h('span', { className: 'tvs-metric' },
+                        h('span', { className: 'tvs-metric-icon' }, '📏'),
+                        h('span', { className: 'tvs-metric-value' }, `${distance} km`)
+                    ),
+                    h('span', { className: 'tvs-metric' },
+                        h('span', { className: 'tvs-metric-icon' }, '⏱️'),
+                        h('span', { className: 'tvs-metric-value' }, duration)
+                    )
+                ),
+                rating > 0 && h('div', { className: 'tvs-activity-rating' },
+                    Array.from({ length: 10 }).map((_, i) =>
+                        h('span', {
+                            key: i,
+                            className: `tvs-star ${i < rating ? 'tvs-star--filled' : ''}`
+                        }, '⭐')
+                    ),
+                    h('span', { className: 'tvs-rating-value' }, `${rating}/10`)
                 )
             ),
-            rating > 0 && h('div', { className: 'tvs-activity-rating' },
-                Array.from({ length: 10 }).map((_, i) =>
-                    h('span', {
-                        key: i,
-                        className: `tvs-star ${i < rating ? 'tvs-star--filled' : ''}`
-                    }, '⭐')
-                ),
-                h('span', { className: 'tvs-rating-value' }, ` ${rating}/10`)
-            ),
-            showNotes && notes && h('div', { className: 'tvs-activity-notes' },
-                h('div', { className: `tvs-notes-content ${expanded ? 'expanded' : 'collapsed'}` },
-                    expanded ? notes : (notes.substring(0, 100) + (notes.length > 100 ? '...' : ''))
-                ),
-                notes.length > 100 && h('button', {
-                    className: 'tvs-notes-toggle',
-                    onClick: () => setExpanded(!expanded)
-                }, expanded ? 'Show less' : 'Read more')
+            h('div', { className: 'tvs-activity-card-right' },
+                h('span', { className: 'tvs-activity-source' }, sourceLabels[source] || source),
+                h('a', {
+                    href: activity.permalink || `?p=${activity.id}&post_type=tvs_activity`,
+                    className: 'tvs-activity-link'
+                }, 'View →')
             )
         ),
-        h('a', {
-            href: activity.permalink || `?p=${activity.id}&post_type=tvs_activity`,
-            className: 'tvs-activity-link'
-        }, 'View Details →')
+        showNotes && notes && h('div', { className: 'tvs-activity-notes' },
+            h('div', { className: `tvs-notes-content ${expanded ? 'expanded' : 'collapsed'}` },
+                expanded ? notes : (notes.length > 100 ? notes.substring(0, 100) + '...' : notes)
+            ),
+            notes.length > 100 && h('button', {
+                className: 'tvs-notes-toggle',
+                onClick: () => setExpanded(!expanded)
+            }, expanded ? 'Show less' : 'Read more')
+        )
     );
 }
 

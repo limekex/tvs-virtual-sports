@@ -559,7 +559,13 @@ class TVS_REST {
                     'type'        => 'integer',
                     'default'     => 50,
                     'minimum'     => 1,
-                    'maximum'     => 50,
+                    'maximum'     => 100,
+                ),
+                'page' => array(
+                    'description' => 'Page number',
+                    'type'        => 'integer',
+                    'default'     => 1,
+                    'minimum'     => 1,
                 ),
                 'route_id' => array(
                     'description' => 'Filter activities by meta route_id for the current user',
@@ -1667,7 +1673,8 @@ class TVS_REST {
 
     public function get_activities_me( $request ) {
         $user_id  = get_current_user_id();
-        $per_page = max( 1, min( 50, (int) $request->get_param( 'per_page' ) ?: 50 ) );
+        $per_page = max( 1, min( 100, (int) $request->get_param( 'per_page' ) ?: 50 ) );
+        $page     = max( 1, (int) $request->get_param( 'page' ) ?: 1 );
         $route_id = (int) $request->get_param( 'route_id' );
 
         // Security: Never fall back to another user. If no authenticated user, deny.
@@ -1687,6 +1694,7 @@ class TVS_REST {
             'post_type'      => 'tvs_activity',
             'author'         => $user_id,
             'posts_per_page' => $per_page,
+            'paged'          => $page,
             'post_status'    => 'any',
             'orderby'        => 'date',
             'order'          => 'DESC',
@@ -1709,7 +1717,12 @@ class TVS_REST {
         }
         wp_reset_postdata();
 
-        return rest_ensure_response( $out );
+        // Add pagination headers
+        $response = rest_ensure_response( $out );
+        $response->header( 'X-WP-Total', $q->found_posts );
+        $response->header( 'X-WP-TotalPages', $q->max_num_pages );
+
+        return $response;
     }
 
     /**
