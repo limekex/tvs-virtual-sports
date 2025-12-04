@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/activity-gallery",
+  "title": "TVS Activity Gallery",
+  "category": "widgets",
+  "icon": "images-alt2",
+  "description": "Visual gallery of activities with route maps and details.",
+  "keywords": ["tvs", "activity", "gallery", "grid", "photos"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "example": {
+    "attributes": {
+      "title": "Activity Gallery",
+      "layout": "grid",
+      "columns": 3
+    }
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Activity Gallery"
+    },
+    "layout": {
+      "type": "string",
+      "default": "grid",
+      "enum": ["grid", "masonry"]
+    },
+    "columns": {
+      "type": "number",
+      "default": 3
+    },
+    "limit": {
+      "type": "number",
+      "default": 12
+    },
+    "showFilters": {
+      "type": "boolean",
+      "default": true
+    },
+    "userId": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "editorScript": "tvs-activity-gallery-editor",
+  "viewScript": "tvs-block-activity-gallery"
+}

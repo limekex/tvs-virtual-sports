@@ -249,6 +249,11 @@ class TVS_Plugin {
             register_block_type( TVS_PLUGIN_DIR . 'blocks/activity-timeline/block.json', array(
                 'render_callback' => array( $this, 'render_activity_timeline_block' ),
             ) );
+
+            // Activity Gallery block
+            register_block_type( TVS_PLUGIN_DIR . 'blocks/activity-gallery/block.json', array(
+                'render_callback' => array( $this, 'render_activity_gallery_block' ),
+            ) );
         }
     }
 
@@ -633,6 +638,37 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
+    public function render_activity_gallery_block( $attributes ) {
+        wp_enqueue_script( 'tvs-block-activity-gallery' );
+        wp_enqueue_style( 'tvs-public' );
+
+        $mount_id = 'tvs-activity-gallery-' . uniqid();
+        $user_id  = isset( $attributes['userId'] ) && $attributes['userId'] > 0 
+            ? intval( $attributes['userId'] ) 
+            : get_current_user_id();
+        $limit        = isset( $attributes['limit'] ) ? max( 1, min( 100, intval( $attributes['limit'] ) ) ) : 12;
+        $title        = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Activity Gallery';
+        $layout       = isset( $attributes['layout'] ) ? sanitize_text_field( $attributes['layout'] ) : 'grid';
+        $columns      = isset( $attributes['columns'] ) ? max( 1, min( 4, intval( $attributes['columns'] ) ) ) : 3;
+        $show_filters = isset( $attributes['showFilters'] ) ? (bool) $attributes['showFilters'] : true;
+
+        ob_start();
+        ?>
+        <div class="tvs-app tvs-app--activity-gallery">
+            <div id="<?php echo esc_attr( $mount_id ); ?>"
+                 class="tvs-activity-gallery-block"
+                 data-user-id="<?php echo esc_attr( $user_id ); ?>"
+                 data-limit="<?php echo esc_attr( $limit ); ?>"
+                 data-title="<?php echo esc_attr( $title ); ?>"
+                 data-layout="<?php echo esc_attr( $layout ); ?>"
+                 data-columns="<?php echo esc_attr( $columns ); ?>"
+                 data-show-filters="<?php echo esc_attr( $show_filters ? '1' : '0' ); ?>"
+            ></div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function register_shortcodes() {
         add_shortcode( 'tvs_my_activities', array( $this, 'render_my_activities_block' ) );
     }
@@ -701,6 +737,7 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-activity-stats-dashboard', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-stats-dashboard.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-single-activity-details', TVS_PLUGIN_URL . 'public/js/tvs-block-single-activity-details.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-timeline', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-timeline.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-activity-gallery', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-gallery.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
@@ -739,6 +776,8 @@ class TVS_Plugin {
     wp_localize_script( 'tvs-block-route-weather', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-stats-dashboard', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-single-activity-details', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-activity-timeline', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-activity-gallery', 'TVS_SETTINGS', $settings );
     }
 
     /**
@@ -771,6 +810,15 @@ class TVS_Plugin {
         wp_register_script(
             'tvs-activity-timeline-editor',
             TVS_PLUGIN_URL . 'blocks/activity-timeline/index-simple.js',
+            array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor' ),
+            TVS_PLUGIN_VERSION,
+            true
+        );
+
+        // Register activity gallery editor script
+        wp_register_script(
+            'tvs-activity-gallery-editor',
+            TVS_PLUGIN_URL . 'blocks/activity-gallery/index-simple.js',
             array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor' ),
             TVS_PLUGIN_VERSION,
             true
