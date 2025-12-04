@@ -1188,6 +1188,7 @@ export default function VirtualTraining({ routeData, routeId }) {
         visibility: 'private',
         activity_type: activityType,
         is_virtual: true, // Mark as virtual for Strava sync
+        source: 'virtual' // Virtual route training
       };
       
       // Add notes and rating if provided

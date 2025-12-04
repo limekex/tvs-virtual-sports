@@ -439,7 +439,8 @@ export default function App({ initialData, routeId }) {
         distance_m: distanceM,
         visibility: 'private',
         activity_type: activityType,
-        is_virtual: false // Real video activity
+        is_virtual: false, // Real video activity
+        source: (data.meta && data.meta.video_url) ? 'video' : 'virtual' // Video mode if has video_url, otherwise virtual route
       };
       
       // Add notes and rating if provided

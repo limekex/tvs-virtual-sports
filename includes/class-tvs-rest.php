@@ -1616,7 +1616,7 @@ class TVS_REST {
         wp_update_post( array( 'ID' => $post_id, 'post_name' => (string) $post_id ) );
 
         // Save meta
-        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility','activity_type','is_virtual','notes','rating');
+        $keys = array('route_id','route_name','activity_date','started_at','ended_at','duration_s','distance_m','avg_hr','max_hr','perceived_exertion','synced_strava','strava_activity_id','visibility','activity_type','is_virtual','source','notes','rating');
         foreach ( $keys as $k ) {
             if ( isset( $data[ $k ] ) ) {
                 update_post_meta( $post_id, $k, sanitize_text_field( $data[ $k ] ) );
@@ -1626,6 +1626,11 @@ class TVS_REST {
         // Default visibility if not provided
         if ( empty( $data['visibility'] ) ) {
             update_post_meta( $post_id, 'visibility', 'private' );
+        }
+
+        // Default source if not provided (fallback to 'manual')
+        if ( empty( $data['source'] ) ) {
+            update_post_meta( $post_id, 'source', 'manual' );
         }
 
         // Derived pace (seconds per km) if distance + duration present and distance>0
@@ -2294,6 +2299,7 @@ class TVS_REST {
         update_post_meta( $post_id, 'activity_type', $session_data['type'] );
         update_post_meta( $post_id, 'visibility', 'private' ); // Default to private
         update_post_meta( $post_id, 'is_virtual', false ); // Manual activities are not virtual
+        update_post_meta( $post_id, 'source', 'manual' ); // Source: manual tracker
         
         // Calculate and save pace (seconds per km) if distance > 0
         $distance_m = floatval( $session_data['distance'] ) * 1000;

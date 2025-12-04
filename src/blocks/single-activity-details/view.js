@@ -188,6 +188,8 @@ function SingleActivityDetails({ activityId, showComparison, showActions, showNo
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedExercise, setSelectedExercise] = useState(null);
+    const [routeData, setRouteData] = useState(null);
+    const [loadingRoute, setLoadingRoute] = useState(false);
 
     useEffect(() => {
         // If we have fallback meta from PHP, use it directly without fetching
@@ -198,6 +200,28 @@ function SingleActivityDetails({ activityId, showComparison, showActions, showNo
             fetchActivity();
         }
     }, [activityId, fallbackMeta]);
+
+    // Fetch route data when route_id is available
+    useEffect(() => {
+        if (activity && activity.meta) {
+            const meta = activity.meta;
+            const route_id = parseInt(meta.route_id || meta._route_id || 0) || 0;
+            
+            if (route_id > 0 && !routeData && !loadingRoute) {
+                setLoadingRoute(true);
+                fetch(`${window.TVS_SETTINGS.restRoot}tvs/v1/routes/${route_id}`)
+                    .then(res => res.ok ? res.json() : null)
+                    .then(data => {
+                        if (data && data.id) {
+                            // API returns route data directly, not wrapped in {success, route}
+                            setRouteData(data);
+                        }
+                        setLoadingRoute(false);
+                    })
+                    .catch(() => setLoadingRoute(false));
+            }
+        }
+    }, [activity, routeData, loadingRoute]);
 
     const fetchActivity = async () => {
         setLoading(true);
@@ -300,20 +324,67 @@ function SingleActivityDetails({ activityId, showComparison, showActions, showNo
     // Source labels
     const sourceLabels = {
         'manual': 'Manual Tracker',
-        'virtual': 'Virtual Training',
+        'virtual': 'Virtual Route',
         'video': 'Video Mode'
     };
 
+    // Activity type display with emoji
+    const activityTypeDisplay = {
+        'run': { label: 'Run', emoji: '🏃' },
+        'ride': { label: 'Ride', emoji: '🚴' },
+        'walk': { label: 'Walk', emoji: '🚶' },
+        'hike': { label: 'Hike', emoji: '⛰️' },
+        'swim': { label: 'Swim', emoji: '🏊' },
+        'workout': { label: 'Workout', emoji: '💪' }
+    };
+    const typeInfo = activityTypeDisplay[activity_type.toLowerCase()] || { label: activity_type, emoji: '🏃' };
+
     return h('div', { className: 'tvs-single-activity-details' },
         h('div', { className: 'tvs-activity-header' },
-            h('div', { className: 'tvs-activity-type-badge' },
-                h('span', { className: `tvs-type-label` }, activity_type),
-                h('span', { className: 'tvs-source-label' }, sourceLabels[source] || source)
+            h('div', { className: 'tvs-activity-title-wrapper' },
+                h('h1', { className: 'tvs-activity-title' }, 
+                    typeInfo.emoji + ' ' + typeInfo.label
+                ),
+                h('div', { className: 'tvs-activity-badges' },
+                    h('span', { className: 'tvs-source-badge' }, sourceLabels[source] || source),
+                    activityDate && h('time', { 
+                        className: 'tvs-activity-date',
+                        dateTime: activity.date 
+                    }, dateFormatted)
+                )
+            )
+        ),
+
+        // Route header section (if virtual route or video)
+        routeData && (source === 'virtual' || source === 'video') && h('div', { className: 'tvs-route-header' },
+            routeData.image && h('div', { className: 'tvs-route-thumbnail' },
+                h('img', {
+                    src: routeData.image,
+                    alt: routeData.title || 'Route',
+                    onError: (e) => e.target.style.display = 'none'
+                })
             ),
-            activityDate && h('time', { 
-                className: 'tvs-activity-date',
-                dateTime: activity.date 
-            }, dateFormatted)
+            h('div', { className: 'tvs-route-info' },
+                h('h2', { className: 'tvs-route-name' }, routeData.title || 'Route'),
+                h('div', { className: 'tvs-route-insights' },
+                    routeData.meta && routeData.meta.distance_m && h('div', { className: 'tvs-route-insight' },
+                        h('span', { className: 'tvs-insight-icon' }, '📏'),
+                        h('span', { className: 'tvs-insight-value' }, `${(routeData.meta.distance_m / 1000).toFixed(2)} km`)
+                    ),
+                    routeData.meta && routeData.meta.elevation_m && h('div', { className: 'tvs-route-insight' },
+                        h('span', { className: 'tvs-insight-icon' }, '⛰️'),
+                        h('span', { className: 'tvs-insight-value' }, `${routeData.meta.elevation_m}m elevation`)
+                    ),
+                    routeData.surface && h('div', { className: 'tvs-route-insight' },
+                        h('span', { className: 'tvs-insight-icon' }, '🛤️'),
+                        h('span', { className: 'tvs-insight-value' }, routeData.surface)
+                    )
+                ),
+                h('a', { 
+                    href: `?p=${route_id}&post_type=tvs_route`,
+                    className: 'tvs-route-link-btn'
+                }, 'View Full Route Details →')
+            )
         ),
 
         h('div', { className: 'tvs-metrics-grid' },
@@ -434,14 +505,6 @@ function SingleActivityDetails({ activityId, showComparison, showActions, showNo
         showNotes && notes && h('div', { className: 'tvs-notes-section' },
             h('h3', null, 'Notes'),
             h('p', { className: 'tvs-notes-content' }, notes)
-        ),
-
-        route_id > 0 && h('div', { className: 'tvs-route-section' },
-            h('h3', null, 'Route'),
-            h('a', { 
-                href: `?p=${route_id}&post_type=tvs_route`,
-                className: 'tvs-route-link'
-            }, 'View Route Details →')
         ),
 
         showActions && isAuthor && h('div', { className: 'tvs-action-buttons' },
