@@ -767,6 +767,15 @@ class TVS_Plugin {
             true
         );
 
+        // Register activity timeline editor script
+        wp_register_script(
+            'tvs-activity-timeline-editor',
+            TVS_PLUGIN_URL . 'blocks/activity-timeline/index-simple.js',
+            array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor' ),
+            TVS_PLUGIN_VERSION,
+            true
+        );
+
         // Also load the frontend invites block script so it can render inside the editor canvas
         // (it mounts onto .tvs-invite-friends-block and needs TVS_SETTINGS)
         wp_enqueue_script( 'tvs-flash', TVS_PLUGIN_URL . 'public/js/tvs-flash.js', array(), TVS_PLUGIN_VERSION, true );

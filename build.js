@@ -82,6 +82,13 @@ const builds = [
     external: ['@wordpress/*'],
     loader: { '.js': 'jsx' },
   },
+  {
+    ...config,
+    entryPoints: ['blocks/activity-timeline/index.js'],
+    outfile: 'blocks/activity-timeline/index.min.js',
+    external: ['@wordpress/*'],
+    loader: { '.js': 'jsx' },
+  },
 ];
 
 async function build() {
