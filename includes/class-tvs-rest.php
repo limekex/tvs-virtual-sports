@@ -398,6 +398,12 @@ class TVS_REST {
             'permission_callback' => '__return_true',
         ) );
 
+        register_rest_route( $ns, '/auth/logout', array(
+            'methods'  => 'POST',
+            'callback' => array( $this, 'auth_logout' ),
+            'permission_callback' => '__return_true',
+        ) );
+
         // Lightweight availability check for username/email
         register_rest_route( $ns, '/auth/check', array(
             'methods'  => 'GET',
@@ -3206,17 +3212,34 @@ class TVS_REST {
     }
 
     public function auth_login( $request ) {
+        error_log( 'TVS auth_login: Request received' );
+        error_log( 'TVS auth_login: Headers: ' . print_r( $request->get_headers(), true ) );
+        
         $p = $request->get_json_params();
+        error_log( 'TVS auth_login: Params: ' . print_r( $p, true ) );
+        
         $username = isset($p['username']) ? sanitize_user( $p['username'] ) : '';
         $password = isset($p['password']) ? (string) $p['password'] : '';
         if ( ! $username || ! $password ) {
+            error_log( 'TVS auth_login: Missing credentials' );
             return new WP_Error( 'invalid', 'Missing username or password', array( 'status' => 400 ) );
         }
         $creds = array( 'user_login' => $username, 'user_password' => $password, 'remember' => true );
         $user = wp_signon( $creds, is_ssl() );
         if ( is_wp_error( $user ) ) {
+            error_log( 'TVS auth_login: wp_signon failed: ' . $user->get_error_message() );
             return new WP_Error( 'unauthorized', 'Invalid credentials', array( 'status' => 401 ) );
         }
+        error_log( 'TVS auth_login: Success! User ID: ' . $user->ID );
+        // Explicitly set auth cookie (wp_signon doesn't always do this in REST context)
+        wp_set_current_user( $user->ID );
+        wp_set_auth_cookie( $user->ID, true );
+        error_log( 'TVS auth_login: Auth cookie set' );
         return rest_ensure_response( array( 'logged_in' => true, 'user' => array( 'id' => (int)$user->ID, 'roles' => $user->roles ) ) );
+    }
+
+    public function auth_logout( $request ) {
+        wp_logout();
+        return rest_ensure_response( array( 'logged_out' => true ) );
     }
 }

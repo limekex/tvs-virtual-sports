@@ -101,7 +101,7 @@ class TVS_Strava {
     /**
      * Refresh expired Strava token
      */
-    protected function refresh_token( $user_id, $token ) {
+    public function refresh_token( $user_id, $token ) {
         if ( empty( $this->client_id ) || empty( $this->client_secret ) ) {
             return new WP_Error( 'config', 'Strava client id/secret not configured' );
         }
