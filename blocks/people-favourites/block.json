@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 2,
+  "name": "tvs-virtual-sports/people-favourites",
+  "title": "People's Favourites",
+  "category": "tvs",
+  "icon": "star-filled",
+  "description": "Display the most favourited routes by all users",
+  "textdomain": "tvs-virtual-sports",
+  "attributes": {
+    "layout": {
+      "type": "string",
+      "default": "grid",
+      "enum": ["grid", "list"]
+    },
+    "columns": {
+      "type": "number",
+      "default": 3
+    },
+    "perPage": {
+      "type": "number",
+      "default": 12
+    },
+    "showPagination": {
+      "type": "boolean",
+      "default": true
+    },
+    "showMeta": {
+      "type": "boolean",
+      "default": true
+    },
+    "showBadges": {
+      "type": "boolean",
+      "default": true
+    },
+    "showDifficulty": {
+      "type": "boolean",
+      "default": true
+    },
+    "showCounts": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": ["wide", "full"]
+  }
+}

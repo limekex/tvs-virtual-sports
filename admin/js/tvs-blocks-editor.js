@@ -116,6 +116,33 @@
     save: function(){ return null; }
   });
 
+  ensure('tvs-virtual-sports/activity-gallery', {
+    title: 'TVS Activity Gallery',
+    icon: 'images-alt2',
+    category: 'widgets',
+    keywords: ['tvs', 'activity', 'gallery', 'grid', 'photos'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'TVS Activity Gallery'); },
+    save: function(){ return null; }
+  });
+
+  ensure('tvs-virtual-sports/my-favourites', {
+    title: 'My Favourites',
+    icon: 'heart',
+    category: 'widgets',
+    keywords: ['tvs', 'favourites', 'favorites', 'routes', 'saved'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'My Favourites'); },
+    save: function(){ return null; }
+  });
+
+  ensure('tvs-virtual-sports/people-favourites', {
+    title: "People's Favourites",
+    icon: 'star-filled',
+    category: 'widgets',
+    keywords: ['tvs', 'favourites', 'favorites', 'popular', 'top', 'routes'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, "People's Favourites"); },
+    save: function(){ return null; }
+  });
+
   // ALWAYS show block attributes in the editor sidebar (InspectorControls)
   if (hooks && compose && blockEditor && components) {
     var InspectorControls = blockEditor.InspectorControls;
@@ -350,6 +377,138 @@
                 help: 'Show dropdown to filter activities by type.',
                 checked: showFilters,
                 onChange: function(v){ props.setAttributes({ showFilters: !!v }); }
+              })
+            )
+          );
+        }
+
+        if (props.name === 'tvs-virtual-sports/my-favourites') {
+          var layout = typeof attrs.layout === 'string' ? attrs.layout : 'grid';
+          var columns = typeof attrs.columns === 'number' ? attrs.columns : 3;
+          var perPage = typeof attrs.perPage === 'number' ? attrs.perPage : 12;
+          var showPagination = typeof attrs.showPagination === 'boolean' ? attrs.showPagination : true;
+          var showMeta = typeof attrs.showMeta === 'boolean' ? attrs.showMeta : true;
+          var showBadges = typeof attrs.showBadges === 'boolean' ? attrs.showBadges : true;
+          var showDifficulty = typeof attrs.showDifficulty === 'boolean' ? attrs.showDifficulty : true;
+          var emptyStateText = typeof attrs.emptyStateText === 'string' ? attrs.emptyStateText : 'No favourites yet. Start exploring routes to add some!';
+          panels.push(
+            el(PanelBody, { title: 'My Favourites Settings', initialOpen: true },
+              el(components.SelectControl, {
+                label: 'Layout',
+                value: layout,
+                options: [
+                  { label: 'Grid', value: 'grid' },
+                  { label: 'List', value: 'list' }
+                ],
+                onChange: function(val){ props.setAttributes({ layout: val }); }
+              }),
+              el(RangeControl, {
+                label: 'Columns',
+                min: 1,
+                max: 4,
+                step: 1,
+                value: columns,
+                onChange: function(val){ props.setAttributes({ columns: val }); }
+              }),
+              el(RangeControl, {
+                label: 'Routes Per Page',
+                min: 6,
+                max: 50,
+                step: 1,
+                value: perPage,
+                onChange: function(val){ props.setAttributes({ perPage: val }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Pagination',
+                checked: showPagination,
+                onChange: function(v){ props.setAttributes({ showPagination: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Meta (Distance, Elevation)',
+                checked: showMeta,
+                onChange: function(v){ props.setAttributes({ showMeta: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Badges',
+                checked: showBadges,
+                onChange: function(v){ props.setAttributes({ showBadges: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Difficulty',
+                checked: showDifficulty,
+                onChange: function(v){ props.setAttributes({ showDifficulty: !!v }); }
+              }),
+              el(TextControl, {
+                label: 'Empty State Text',
+                help: 'Message shown when user has no favourites.',
+                value: emptyStateText,
+                onChange: function(val){ props.setAttributes({ emptyStateText: val }); }
+              })
+            )
+          );
+        }
+
+        if (props.name === 'tvs-virtual-sports/people-favourites') {
+          var layout = typeof attrs.layout === 'string' ? attrs.layout : 'grid';
+          var columns = typeof attrs.columns === 'number' ? attrs.columns : 3;
+          var perPage = typeof attrs.perPage === 'number' ? attrs.perPage : 12;
+          var showPagination = typeof attrs.showPagination === 'boolean' ? attrs.showPagination : true;
+          var showMeta = typeof attrs.showMeta === 'boolean' ? attrs.showMeta : true;
+          var showBadges = typeof attrs.showBadges === 'boolean' ? attrs.showBadges : true;
+          var showDifficulty = typeof attrs.showDifficulty === 'boolean' ? attrs.showDifficulty : true;
+          var showCounts = typeof attrs.showCounts === 'boolean' ? attrs.showCounts : true;
+          panels.push(
+            el(PanelBody, { title: "People's Favourites Settings", initialOpen: true },
+              el(components.SelectControl, {
+                label: 'Layout',
+                value: layout,
+                options: [
+                  { label: 'Grid', value: 'grid' },
+                  { label: 'List', value: 'list' }
+                ],
+                onChange: function(val){ props.setAttributes({ layout: val }); }
+              }),
+              el(RangeControl, {
+                label: 'Columns',
+                min: 1,
+                max: 4,
+                step: 1,
+                value: columns,
+                onChange: function(val){ props.setAttributes({ columns: val }); }
+              }),
+              el(RangeControl, {
+                label: 'Routes Per Page',
+                min: 6,
+                max: 50,
+                step: 1,
+                value: perPage,
+                onChange: function(val){ props.setAttributes({ perPage: val }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Pagination',
+                checked: showPagination,
+                onChange: function(v){ props.setAttributes({ showPagination: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Meta (Distance, Elevation)',
+                checked: showMeta,
+                onChange: function(v){ props.setAttributes({ showMeta: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Badges',
+                checked: showBadges,
+                onChange: function(v){ props.setAttributes({ showBadges: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Difficulty',
+                checked: showDifficulty,
+                onChange: function(v){ props.setAttributes({ showDifficulty: !!v }); }
+              }),
+              el(components.ToggleControl, {
+                label: 'Show Favourite Counts',
+                help: 'Display number of users who favourited each route.',
+                checked: showCounts,
+                onChange: function(v){ props.setAttributes({ showCounts: !!v }); }
               })
             )
           );

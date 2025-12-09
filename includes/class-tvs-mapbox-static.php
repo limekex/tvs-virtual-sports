@@ -362,6 +362,10 @@ class TVS_Mapbox_Static {
         
         if ( ! is_wp_error( $attachment_id ) ) {
             update_post_meta( $activity_id, '_tvs_map_image_attachment_id', $attachment_id );
+            
+            // Set as featured image so it appears in gallery
+            set_post_thumbnail( $activity_id, $attachment_id );
+            
             // Return WordPress attachment URL (permanent, doesn't require Mapbox API)
             $attachment_url = wp_get_attachment_url( $attachment_id );
             if ( $attachment_url ) {

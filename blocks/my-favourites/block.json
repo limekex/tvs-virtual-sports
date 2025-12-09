@@ -1,0 +1,49 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 2,
+  "name": "tvs-virtual-sports/my-favourites",
+  "title": "My Favourites",
+  "category": "tvs",
+  "icon": "heart",
+  "description": "Display the current user's favourite routes",
+  "textdomain": "tvs-virtual-sports",
+  "attributes": {
+    "layout": {
+      "type": "string",
+      "default": "grid",
+      "enum": ["grid", "list"]
+    },
+    "columns": {
+      "type": "number",
+      "default": 3
+    },
+    "perPage": {
+      "type": "number",
+      "default": 12
+    },
+    "showPagination": {
+      "type": "boolean",
+      "default": true
+    },
+    "showMeta": {
+      "type": "boolean",
+      "default": true
+    },
+    "showBadges": {
+      "type": "boolean",
+      "default": true
+    },
+    "showDifficulty": {
+      "type": "boolean",
+      "default": true
+    },
+    "emptyStateText": {
+      "type": "string",
+      "default": "No favourites yet. Start exploring routes to add some!"
+    }
+  },
+  "supports": {
+    "html": false,
+    "align": ["wide", "full"]
+  }
+}

@@ -789,6 +789,24 @@ class TVS_REST {
             'callback' => array( $this, 'favorites_list' ),
             'permission_callback' => array( $this, 'permissions_for_activities' ),
         ) );
+        register_rest_route( $ns, '/favorites/top', array(
+            'methods'  => 'GET',
+            'callback' => array( $this, 'favorites_top' ),
+            'permission_callback' => '__return_true', // Public endpoint
+            'args' => array(
+                'per_page' => array(
+                    'type' => 'integer',
+                    'default' => 12,
+                    'minimum' => 1,
+                    'maximum' => 100,
+                ),
+                'page' => array(
+                    'type' => 'integer',
+                    'default' => 1,
+                    'minimum' => 1,
+                ),
+            ),
+        ) );
         register_rest_route( $ns, '/favorites/(?P<id>\d+)', array(
             array(
                 'methods'  => 'POST',
@@ -1712,12 +1730,21 @@ class TVS_REST {
         while ( $q->have_posts() ) {
             $q->the_post();
             $id = get_the_ID();
+            
+            // Get featured image/thumbnail URL
+            $thumbnail_url = null;
+            $thumbnail_id = get_post_thumbnail_id( $id );
+            if ( $thumbnail_id ) {
+                $thumbnail_url = wp_get_attachment_image_url( $thumbnail_id, 'medium' );
+            }
+            
             $out[] = array(
                 'id'   => $id,
                 'slug' => get_post_field( 'post_name', $id ),
                 'permalink' => get_permalink( $id ),
                 'title' => get_the_title( $id ),
                 'date'  => get_the_date( 'c', $id ),
+                'thumbnail' => $thumbnail_url,
                 'meta' => get_post_meta( $id ),
             );
         }
@@ -2475,7 +2502,7 @@ class TVS_REST {
     public function permissions_for_activities( $request ) {
         // Try standard cookie-based authentication first
         if ( is_user_logged_in() ) {
-            error_log( 'TVS: Allowing access via cookie-based auth' );
+            error_log( 'TVS: Allowing access via cookie-based auth for user ' . get_current_user_id() );
             return true;
         }
         
@@ -2488,8 +2515,9 @@ class TVS_REST {
             $nonce = $request->get_header( 'X-WP-Nonce' );
         }
 
-        error_log( 'TVS: permissions_for_activities - nonce: ' . ($nonce ? 'present' : 'missing') );
-        error_log( 'TVS: permissions_for_activities - is_user_logged_in: ' . (is_user_logged_in() ? 'yes' : 'no') );
+        error_log( 'TVS: permissions_for_activities - nonce: ' . ($nonce ? substr($nonce, 0, 10) . '... (len=' . strlen($nonce) . ')' : 'MISSING') );
+        error_log( 'TVS: permissions_for_activities - is_user_logged_in: ' . (is_user_logged_in() ? 'yes' : 'NO') );
+        error_log( 'TVS: permissions_for_activities - all headers: ' . print_r($request->get_headers(), true) );
         
         if ( $nonce && strlen( $nonce ) > 5 ) {
             // Nonce is present and looks valid - allow access
@@ -2931,6 +2959,73 @@ class TVS_REST {
         return rest_ensure_response( array( 'ids' => $ids ) );
     }
 
+    public function favorites_top( $request ) {
+        $per_page = $request->get_param( 'per_page' ) ?: 12;
+        $page = $request->get_param( 'page' ) ?: 1;
+
+        $args = array(
+            'post_type'      => 'tvs_route',
+            'post_status'    => 'publish',
+            'posts_per_page' => $per_page,
+            'paged'          => $page,
+            'meta_key'       => 'tvs_fav_count',
+            'orderby'        => 'meta_value_num',
+            'order'          => 'DESC',
+            'meta_query'     => array(
+                array(
+                    'key'     => 'tvs_fav_count',
+                    'compare' => 'EXISTS',
+                ),
+            ),
+        );
+
+        $query = new WP_Query( $args );
+        $items = array();
+
+        while ( $query->have_posts() ) {
+            $query->the_post();
+            $id = get_the_ID();
+            $favCount = (int) get_post_meta( $id, 'tvs_fav_count', true );
+            
+            // Get route metadata
+            $video_url = get_post_meta( $id, 'video_url', true );
+            $gpx_file_url = get_post_meta( $id, 'gpx_file_url', true );
+            $distance = get_post_meta( $id, 'distance', true );
+            $elevation = get_post_meta( $id, 'elevation', true );
+            $surface = get_post_meta( $id, 'surface', true );
+            $difficulty = get_post_meta( $id, 'difficulty', true );
+            
+            // Get featured image
+            $image_url = null;
+            if ( has_post_thumbnail( $id ) ) {
+                $image_url = get_the_post_thumbnail_url( $id, 'medium' );
+            }
+
+            $items[] = array(
+                'id'          => $id,
+                'title'       => get_the_title(),
+                'slug'        => get_post_field( 'post_name', $id ),
+                'permalink'   => get_permalink( $id ),
+                'image'       => $image_url,
+                'video_url'   => $video_url,
+                'gpx_file_url' => $gpx_file_url,
+                'distance'    => $distance,
+                'elevation'   => $elevation,
+                'surface'     => $surface,
+                'difficulty'  => $difficulty,
+                'favCount'    => $favCount,
+            );
+        }
+
+        wp_reset_postdata();
+
+        $response = rest_ensure_response( array( 'items' => $items ) );
+        $response->header( 'X-WP-Total', $query->found_posts );
+        $response->header( 'X-WP-TotalPages', $query->max_num_pages );
+
+        return $response;
+    }
+
     public function favorites_toggle( $request ) {
         $user_id = get_current_user_id();
         if ( ! $user_id ) return new WP_Error( 'unauthorized', 'Authentication required', array( 'status' => 401 ) );
@@ -2944,12 +3039,26 @@ class TVS_REST {
         if ( $idx === false ) {
             $ids[] = $id;
             $favorited = true;
+            // Increment global count
+            $count = (int) get_post_meta( $id, 'tvs_fav_count', true );
+            update_post_meta( $id, 'tvs_fav_count', $count + 1 );
         } else {
             array_splice( $ids, $idx, 1 );
             $favorited = false;
+            // Decrement global count (min 0)
+            $count = (int) get_post_meta( $id, 'tvs_fav_count', true );
+            update_post_meta( $id, 'tvs_fav_count', max( 0, $count - 1 ) );
         }
         update_user_meta( $user_id, 'tvs_favorites_routes', $ids );
-        return rest_ensure_response( array( 'favorited' => $favorited, 'ids' => $ids ) );
+        
+        // Get updated total count
+        $totalCount = (int) get_post_meta( $id, 'tvs_fav_count', true );
+        
+        return rest_ensure_response( array( 
+            'favorited' => $favorited, 
+            'ids' => $ids,
+            'totalCount' => $totalCount
+        ) );
     }
 
     public function favorites_remove( $request ) {

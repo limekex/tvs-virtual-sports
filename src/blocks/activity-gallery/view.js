@@ -205,21 +205,76 @@ function GalleryCard({ activity, onClick }) {
     if (Array.isArray(rating) && rating.length > 0) rating = rating[0];
     rating = parseInt(rating) || 0;
 
+    let source = activity.meta.source;
+    if (Array.isArray(source) && source.length > 0) source = source[0];
+    source = String(source || 'manual').toLowerCase();
+
+    // Workout-specific metrics
+    let exercises = activity.meta._tvs_manual_exercises;
+    if (Array.isArray(exercises)) exercises = exercises[0];
+    let exerciseCount = 0;
+    if (exercises) {
+        try {
+            const parsed = JSON.parse(exercises);
+            if (Array.isArray(parsed)) exerciseCount = parsed.length;
+        } catch (e) {}
+    }
+
     const typeConfig = getTypeConfig(activityType);
     const hasRoute = routeId > 0;
+    const thumbnail = activity.thumbnail; // Featured image URL from API
+    const isWorkout = activityType === 'Workout';
+    
+    // Build icon path for fallback: icon-{source}-{type}.png
+    const iconPath = getIconPath(source, activityType);
 
     return h('div', {
         className: `tvs-gallery-card tvs-gallery-card--${typeConfig.className}`,
-        onClick
+        onClick,
+        style: {
+            background: 'var(--tvs-glass-bg)',
+            backdropFilter: 'blur(var(--tvs-glass-blur))',
+            border: '1px solid var(--tvs-glass-border)',
+            borderRadius: 'var(--tvs-radius-lg)',
+            overflow: 'hidden',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease'
+        }
     }, [
-        h('div', { className: 'tvs-gallery-card-image' },
-            hasRoute
-                ? h('div', { className: 'tvs-gallery-card-map' },
-                    h('div', { className: 'tvs-map-placeholder' }, '🗺️')
-                  )
-                : h('div', { className: 'tvs-gallery-card-icon' },
-                    h('span', { className: 'tvs-activity-icon' }, typeConfig.icon)
-                  )
+        h('div', { 
+            className: 'tvs-gallery-card-image',
+            style: {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+            }
+        },
+            thumbnail
+                ? h('img', { 
+                    className: 'tvs-gallery-card-thumbnail',
+                    src: thumbnail,
+                    alt: activity.title || 'Activity',
+                    loading: 'lazy',
+                    style: {
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        objectPosition: 'center'
+                    }
+                  })
+                : h('img', { 
+                    className: 'tvs-gallery-card-icon-img',
+                    src: iconPath,
+                    alt: `${typeConfig.label} icon`,
+                    loading: 'lazy',
+                    style: {
+                        maxWidth: '60%',
+                        maxHeight: '60%',
+                        width: 'auto',
+                        height: 'auto',
+                        objectFit: 'contain'
+                    }
+                  })
         ),
         
         h('div', { className: 'tvs-gallery-card-overlay' }, [
@@ -238,7 +293,10 @@ function GalleryCard({ activity, onClick }) {
         ]),
         
         h('div', { className: 'tvs-gallery-card-info' }, [
-            h('div', { className: 'tvs-gallery-card-metrics' }, [
+            h('div', { className: 'tvs-gallery-card-metrics' }, isWorkout ? [
+                exerciseCount > 0 && h('span', { className: 'tvs-metric' }, `${exerciseCount} exercises`),
+                h('span', { className: 'tvs-metric' }, formatDuration(duration))
+            ].filter(Boolean) : [
                 h('span', { className: 'tvs-metric' }, `${(distance / 1000).toFixed(2)} km`),
                 h('span', { className: 'tvs-metric' }, formatDuration(duration))
             ]),
@@ -270,47 +328,416 @@ function ActivityModal({ activity, onClose }) {
     if (Array.isArray(notes)) notes = notes[0];
     notes = String(notes || '');
 
+    let source = activity.meta.source;
+    if (Array.isArray(source)) source = source[0];
+    source = String(source || 'manual').toLowerCase();
+
+    // Workout-specific metrics
+    let exercises = activity.meta._tvs_manual_exercises;
+    if (Array.isArray(exercises)) exercises = exercises[0];
+    let exerciseCount = 0;
+    if (exercises) {
+        try {
+            const parsed = JSON.parse(exercises);
+            if (Array.isArray(parsed)) exerciseCount = parsed.length;
+        } catch (e) {}
+    }
+
+    let sets = activity.meta._tvs_manual_sets;
+    if (Array.isArray(sets)) sets = sets[0];
+    sets = parseInt(sets) || 0;
+
+    let reps = activity.meta._tvs_manual_reps;
+    if (Array.isArray(reps)) reps = reps[0];
+    reps = parseInt(reps) || 0;
+
     const typeConfig = getTypeConfig(activityType);
+    const iconPath = getIconPath(source, activityType);
+    const isWorkout = activityType === 'Workout';
 
     return h('div', {
         className: 'tvs-gallery-modal-overlay',
-        onClick: onClose
+        onClick: onClose,
+        style: {
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'var(--tvs-color-overlay-heavy)',
+            backdropFilter: 'blur(var(--tvs-blur-lg))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 'var(--tvs-z-modal)',
+            padding: 'var(--tvs-space-4)'
+        }
     }, [
         h('div', {
             className: 'tvs-gallery-modal',
-            onClick: (e) => e.stopPropagation()
+            onClick: (e) => e.stopPropagation(),
+            style: {
+                background: 'var(--tvs-glass-bg)',
+                backdropFilter: 'blur(var(--tvs-glass-blur))',
+                border: '1px solid var(--tvs-glass-border)',
+                borderRadius: 'var(--tvs-radius-xl)',
+                padding: 'var(--tvs-space-8)',
+                maxWidth: '600px',
+                width: '100%',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                boxShadow: 'var(--tvs-shadow-2xl)',
+                position: 'relative'
+            }
         }, [
             h('button', {
                 className: 'tvs-modal-close',
-                onClick: onClose
+                onClick: onClose,
+                style: {
+                    position: 'absolute',
+                    top: 'var(--tvs-space-4)',
+                    right: 'var(--tvs-space-4)',
+                    zIndex: 10,
+                    background: 'transparent',
+                    border: 'none',
+                    fontSize: '28px',
+                    color: 'var(--tvs-color-text-primary)',
+                    cursor: 'pointer',
+                    width: '32px',
+                    height: '32px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 'var(--tvs-radius-md)',
+                    transition: 'background 0.2s ease'
+                }
             }, '×'),
             
-            h('div', { className: 'tvs-modal-header' }, [
-                h('span', { className: 'tvs-modal-icon' }, typeConfig.icon),
-                h('h3', null, activity.title),
-                h('span', { className: 'tvs-modal-type' }, typeConfig.label)
+            h('div', { 
+                className: 'tvs-modal-header',
+                style: {
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--tvs-space-3)',
+                    marginBottom: 'var(--tvs-space-6)'
+                }
+            }, [
+                h('img', { 
+                    src: iconPath,
+                    alt: typeConfig.label,
+                    className: 'tvs-modal-icon',
+                    style: {
+                        width: '40px',
+                        height: '40px',
+                        objectFit: 'contain'
+                    }
+                }),
+                h('h3', { 
+                    style: { 
+                        flex: 1,
+                        margin: 0,
+                        fontSize: 'var(--tvs-text-xl)',
+                        fontWeight: 'var(--tvs-font-semibold)'
+                    }
+                }, activity.title),
+                h('span', { 
+                    className: 'tvs-modal-type',
+                    style: {
+                        padding: 'var(--tvs-badge-padding-y) var(--tvs-badge-padding-x)',
+                        fontSize: 'var(--tvs-badge-font-size)',
+                        fontWeight: 'var(--tvs-badge-font-weight)',
+                        borderRadius: 'var(--tvs-badge-radius)',
+                        background: 'var(--tvs-color-surface-raised)',
+                        color: 'var(--tvs-color-text-secondary)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                    }
+                }, typeConfig.label)
             ]),
             
-            h('div', { className: 'tvs-modal-metrics' }, [
-                h('div', { className: 'tvs-modal-metric' }, [
-                    h('span', { className: 'tvs-modal-metric-label' }, 'Distance'),
-                    h('span', { className: 'tvs-modal-metric-value' }, `${(distance / 1000).toFixed(2)} km`)
+            h('div', { 
+                className: 'tvs-modal-metrics',
+                style: {
+                    display: 'grid',
+                    gridTemplateColumns: isWorkout ? 'repeat(2, 1fr)' : 'repeat(3, 1fr)',
+                    gap: 'var(--tvs-space-4)',
+                    marginBottom: 'var(--tvs-space-6)'
+                }
+            }, isWorkout ? [
+                // Workout metrics: Duration, Exercises, Sets, Reps
+                h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Duration'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, formatDuration(duration))
                 ]),
-                h('div', { className: 'tvs-modal-metric' }, [
-                    h('span', { className: 'tvs-modal-metric-label' }, 'Duration'),
-                    h('span', { className: 'tvs-modal-metric-value' }, formatDuration(duration))
+                exerciseCount > 0 && h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Exercises'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, exerciseCount)
                 ]),
-                h('div', { className: 'tvs-modal-metric' }, [
-                    h('span', { className: 'tvs-modal-metric-label' }, 'Pace'),
-                    h('span', { className: 'tvs-modal-metric-value' }, 
-                        duration && distance ? `${(duration / 60 / (distance / 1000)).toFixed(2)} min/km` : 'N/A'
-                    )
+                sets > 0 && h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Sets'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, sets)
                 ]),
-                rating > 0 && h('div', { className: 'tvs-modal-metric' }, [
-                    h('span', { className: 'tvs-modal-metric-label' }, 'Rating'),
-                    h('span', { className: 'tvs-modal-metric-value' }, `${rating}/10 ★`)
+                reps > 0 && h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Reps'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, reps)
+                ]),
+                rating > 0 && h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Rating'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, `${rating}/10 ★`)
                 ])
-            ]),
+            ].filter(Boolean) : [
+                // Non-workout metrics: Distance, Duration, Pace, Rating
+                h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Distance'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, `${(distance / 1000).toFixed(2)} km`)
+                ]),
+                h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Duration'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, formatDuration(duration))
+                ]),
+                h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Pace'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, duration && distance ? `${(duration / 60 / (distance / 1000)).toFixed(2)} min/km` : 'N/A')
+                ]),
+                rating > 0 && h('div', { 
+                    className: 'tvs-modal-metric',
+                    style: {
+                        background: 'var(--tvs-color-surface-raised)',
+                        padding: 'var(--tvs-space-4)',
+                        borderRadius: 'var(--tvs-radius-lg)',
+                        textAlign: 'center'
+                    }
+                }, [
+                    h('span', { 
+                        className: 'tvs-modal-metric-label',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-xs)',
+                            color: 'var(--tvs-color-text-tertiary)',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            marginBottom: 'var(--tvs-space-2)'
+                        }
+                    }, 'Rating'),
+                    h('span', { 
+                        className: 'tvs-modal-metric-value',
+                        style: {
+                            display: 'block',
+                            fontSize: 'var(--tvs-text-2xl)',
+                            fontWeight: 'var(--tvs-font-bold)',
+                            color: 'var(--tvs-color-text-primary)'
+                        }
+                    }, `${rating}/10 ★`)
+                ])
+            ].filter(Boolean)),
             
             notes && h('div', { className: 'tvs-modal-notes' }, [
                 h('h4', null, 'Notes'),
@@ -320,11 +747,36 @@ function ActivityModal({ activity, onClose }) {
             h('div', { className: 'tvs-modal-footer' }, [
                 h('a', {
                     href: activity.permalink,
-                    className: 'tvs-modal-btn tvs-modal-btn--primary'
+                    className: 'tvs-modal-btn tvs-modal-btn--primary',
+                    style: {
+                        display: 'inline-block',
+                        padding: 'var(--tvs-button-padding-y) var(--tvs-button-padding-x)',
+                        fontSize: 'var(--tvs-button-font-size)',
+                        fontWeight: 'var(--tvs-button-font-weight)',
+                        borderRadius: 'var(--tvs-button-radius)',
+                        background: 'var(--tvs-color-primary)',
+                        color: 'var(--tvs-color-text-on-primary)',
+                        textDecoration: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        textAlign: 'center'
+                    }
                 }, 'View Full Details'),
                 h('button', {
                     className: 'tvs-modal-btn',
-                    onClick: onClose
+                    onClick: onClose,
+                    style: {
+                        padding: 'var(--tvs-button-padding-y) var(--tvs-button-padding-x)',
+                        fontSize: 'var(--tvs-button-font-size)',
+                        fontWeight: 'var(--tvs-button-font-weight)',
+                        borderRadius: 'var(--tvs-button-radius)',
+                        background: 'var(--tvs-color-surface-raised)',
+                        color: 'var(--tvs-color-text-primary)',
+                        border: '1px solid var(--tvs-color-border-default)',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                    }
                 }, 'Close')
             ])
         ])
@@ -362,6 +814,27 @@ function formatDate(dateString) {
     if (diffDays < 7) return `${diffDays} days ago`;
     
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function getIconPath(source, activityType) {
+    // Normalize activity type to lowercase for filename matching
+    const typeMap = {
+        'Run': 'run',
+        'Ride': 'ride', 
+        'Walk': 'walk',
+        'Hike': 'hike',
+        'Swim': 'swim',
+        'Workout': 'workout'
+    };
+    
+    const type = typeMap[activityType] || 'workout';
+    const sourceNormalized = source.toLowerCase(); // manual, virtual, or video
+    
+    // Get theme URL from TVS_SETTINGS (localized in PHP)
+    const themeUrl = window.TVS_SETTINGS?.themeUrl || '/wp-content/themes/tvs-theme';
+    
+    // Build path: icon-{source}-{type}.png
+    return `${themeUrl}/assets/icons/icon-${sourceNormalized}-${type}.png`;
 }
 
 // Mount the block
