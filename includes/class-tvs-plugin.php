@@ -784,6 +784,9 @@ class TVS_Plugin {
                     $id = get_the_ID();
                     $permalink = get_permalink();
                     $image_url = get_the_post_thumbnail_url( $id, 'medium' );
+                    if ( ! $image_url ) {
+                        $image_url = home_url( '/wp-content/uploads/2025/10/ActivityDymmy2-300x200.jpg' );
+                    }
                     
                     // Meta with fallbacks to both legacy _tvs_* and new names
                     $dist_m = get_post_meta( $id, 'distance_m', true );
@@ -963,6 +966,9 @@ class TVS_Plugin {
                     $id = get_the_ID();
                     $permalink = get_permalink();
                     $image_url = get_the_post_thumbnail_url( $id, 'medium' );
+                    if ( ! $image_url ) {
+                        $image_url = home_url( '/wp-content/uploads/2025/10/ActivityDymmy2-300x200.jpg' );
+                    }
                     
                     // Meta with fallbacks to both legacy _tvs_* and new names
                     $dist_m = get_post_meta( $id, 'distance_m', true );
