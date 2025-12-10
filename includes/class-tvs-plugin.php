@@ -1182,6 +1182,7 @@ class TVS_Plugin {
     wp_localize_script( 'tvs-block-personal-records', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-heatmap', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-route-weather', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-manual-activity-tracker', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-stats-dashboard', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-single-activity-details', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-timeline', 'TVS_SETTINGS', $settings );
