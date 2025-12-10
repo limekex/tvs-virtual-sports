@@ -43,5 +43,6 @@
     }
   },
   "editorScript": "tvs-manual-activity-tracker-editor",
-  "viewScript": "tvs-block-manual-activity-tracker"
+  "viewScript": "tvs-block-manual-activity-tracker",
+  "render": "file:./render.php"
 }

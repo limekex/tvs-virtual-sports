@@ -48,5 +48,6 @@
     }
   },
   "editorScript": "tvs-activity-gallery-editor",
-  "viewScript": "tvs-block-activity-gallery"
+  "viewScript": "tvs-block-activity-gallery",
+  "render": "file:./render.php"
 }

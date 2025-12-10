@@ -211,9 +211,7 @@ class TVS_Plugin {
             ) );
 
             // Issue #21: Manual Activity Tracker - Register via block.json
-            register_block_type( TVS_PLUGIN_DIR . 'blocks/manual-activity-tracker/block.json', array(
-                'render_callback' => array( $this, 'render_manual_activity_tracker_block' ),
-            ) );
+            register_block_type( TVS_PLUGIN_DIR . 'blocks/manual-activity-tracker/block.json' );
 
             // Activity Stats Dashboard block
             register_block_type( 'tvs-virtual-sports/activity-stats-dashboard', array(
@@ -251,9 +249,7 @@ class TVS_Plugin {
             ) );
 
             // Activity Gallery block
-            register_block_type( TVS_PLUGIN_DIR . 'blocks/activity-gallery/block.json', array(
-                'render_callback' => array( $this, 'render_activity_gallery_block' ),
-            ) );
+            register_block_type( TVS_PLUGIN_DIR . 'blocks/activity-gallery/block.json' );
 
             // My Favourites block
             register_block_type( TVS_PLUGIN_DIR . 'blocks/my-favourites/block.json', array(
@@ -494,45 +490,6 @@ class TVS_Plugin {
         return ob_get_clean();
     }
 
-    public function render_manual_activity_tracker_block( $attributes ) {
-        // Must be logged in to use manual activity tracker
-        if ( ! is_user_logged_in() ) {
-            return '<div class="tvs-app"><p>' . esc_html__( 'You must be logged in to track activities.', 'tvs-virtual-sports' ) . '</p></div>';
-        }
-
-        // Enqueue block-specific frontend script and styles
-        wp_enqueue_script( 'tvs-block-manual-activity-tracker' );
-        wp_enqueue_style( 'tvs-public' );
-
-        $mount_id = 'tvs-manual-tracker-' . uniqid();
-        $title = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Start Activity';
-        $show_type_selector = isset( $attributes['showTypeSelector'] ) ? (bool) $attributes['showTypeSelector'] : true;
-        $allowed_types = isset( $attributes['allowedTypes'] ) && is_array( $attributes['allowedTypes'] ) 
-            ? array_map( 'sanitize_text_field', $attributes['allowedTypes'] ) 
-            : array( 'Run', 'Ride', 'Walk', 'Hike', 'Swim', 'Workout' );
-        $auto_start = isset( $attributes['autoStart'] ) ? (bool) $attributes['autoStart'] : false;
-        $default_type = isset( $attributes['defaultType'] ) ? sanitize_text_field( $attributes['defaultType'] ) : 'Run';
-
-        ob_start();
-        ?>
-        <div class="tvs-app tvs-manual-tracker-widget">
-            <div id="<?php echo esc_attr( $mount_id ); ?>"
-                 class="tvs-manual-activity-tracker"
-                 data-title="<?php echo esc_attr( $title ); ?>"
-                 data-show-type-selector="<?php echo esc_attr( $show_type_selector ? '1' : '0' ); ?>"
-                 data-allowed-types="<?php echo esc_attr( wp_json_encode( $allowed_types ) ); ?>"
-                 data-auto-start="<?php echo esc_attr( $auto_start ? '1' : '0' ); ?>"
-                 data-default-type="<?php echo esc_attr( $default_type ); ?>"
-            >
-                <div class="tvs-tracker-loading">
-                    <p><?php esc_html_e( 'Loading activity tracker...', 'tvs-virtual-sports' ); ?></p>
-                </div>
-            </div>
-        </div>
-        <?php
-        return ob_get_clean();
-    }
-
     public function render_activity_stats_dashboard_block( $attributes ) {
         wp_enqueue_script( 'tvs-block-activity-stats-dashboard' );
         wp_enqueue_style( 'tvs-public' );
@@ -650,43 +607,6 @@ class TVS_Plugin {
                  data-limit="<?php echo esc_attr( $limit ); ?>"
                  data-title="<?php echo esc_attr( $title ); ?>"
                  data-show-notes="<?php echo esc_attr( $show_notes ? '1' : '0' ); ?>"
-                 data-show-filters="<?php echo esc_attr( $show_filters ? '1' : '0' ); ?>"
-            ></div>
-        </div>
-        <?php
-        return ob_get_clean();
-    }
-
-    public function render_activity_gallery_block( $attributes ) {
-        wp_enqueue_script( 'tvs-block-activity-gallery' );
-        wp_enqueue_style( 'tvs-public' );
-
-        $mount_id = 'tvs-activity-gallery-' . uniqid();
-        $user_id  = isset( $attributes['userId'] ) && $attributes['userId'] > 0 
-            ? intval( $attributes['userId'] ) 
-            : get_current_user_id();
-        
-        // Require authentication
-        if ( ! is_user_logged_in() && $user_id === 0 ) {
-            return '<div class="tvs-app tvs-auth-required"><p>Du må <a href="/login/">logge inn</a> for å se ditt aktivitetsgalleri.</p></div>';
-        }
-        
-        $limit        = isset( $attributes['limit'] ) ? max( 1, min( 100, intval( $attributes['limit'] ) ) ) : 12;
-        $title        = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Activity Gallery';
-        $layout       = isset( $attributes['layout'] ) ? sanitize_text_field( $attributes['layout'] ) : 'grid';
-        $columns      = isset( $attributes['columns'] ) ? max( 1, min( 4, intval( $attributes['columns'] ) ) ) : 3;
-        $show_filters = isset( $attributes['showFilters'] ) ? (bool) $attributes['showFilters'] : true;
-
-        ob_start();
-        ?>
-        <div class="tvs-app tvs-app--activity-gallery">
-            <div id="<?php echo esc_attr( $mount_id ); ?>"
-                 class="tvs-activity-gallery-block"
-                 data-user-id="<?php echo esc_attr( $user_id ); ?>"
-                 data-limit="<?php echo esc_attr( $limit ); ?>"
-                 data-title="<?php echo esc_attr( $title ); ?>"
-                 data-layout="<?php echo esc_attr( $layout ); ?>"
-                 data-columns="<?php echo esc_attr( $columns ); ?>"
                  data-show-filters="<?php echo esc_attr( $show_filters ? '1' : '0' ); ?>"
             ></div>
         </div>
