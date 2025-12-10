@@ -1,0 +1,55 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/route-insights",
+  "title": "TVS Route Insights",
+  "category": "widgets",
+  "icon": "analytics",
+  "description": "Route elevation, surface, ETA and real-life link.",
+  "keywords": ["tvs", "route", "insights", "analytics"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Route Insights"
+    },
+    "routeId": {
+      "type": "number",
+      "default": 0
+    },
+    "showElevation": {
+      "type": "boolean",
+      "default": true
+    },
+    "showSurface": {
+      "type": "boolean",
+      "default": true
+    },
+    "showEta": {
+      "type": "boolean",
+      "default": true
+    },
+    "showMapsLink": {
+      "type": "boolean",
+      "default": true
+    },
+    "showDistance": {
+      "type": "boolean",
+      "default": true
+    },
+    "showPace": {
+      "type": "boolean",
+      "default": true
+    },
+    "showCumulative": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "render": "file:./render.php"
+}

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/invite-friends",
+  "title": "TVS Invite Friends",
+  "category": "widgets",
+  "icon": "share",
+  "description": "Generate and manage invitation codes for your friends.",
+  "keywords": ["tvs", "invites", "friends"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "attributes": {},
+  "render": "file:./render.php"
+}

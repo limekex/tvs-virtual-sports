@@ -1,24 +1,33 @@
 <?php
 /**
- * Server-side render for TVS My Activities block
+ * My Activities Block - Server-side render
+ * 
+ * @package TVS_Virtual_Sports
  */
+
 if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-// Enqueue the React app if not already loaded
-wp_enqueue_script( 'tvs-app' );
+wp_enqueue_script( 'tvs-block-my-activities' );
 wp_enqueue_style( 'tvs-public' );
 
-// Create a unique mount point for this block instance
 $mount_id = 'tvs-my-activities-' . uniqid();
+$route_id = isset( $attributes['routeId'] ) ? intval( $attributes['routeId'] ) : 0;
+$limit    = isset( $attributes['limit'] ) ? max( 1, min( 20, intval( $attributes['limit'] ) ) ) : 5;
+$title    = isset( $attributes['title'] ) ? sanitize_text_field( $attributes['title'] ) : 'Recent Activities';
+
+// Sensible defaults: on a route page, default to route mode
+if ( is_singular( 'tvs_route' ) && $route_id <= 0 ) {
+    $route_id = get_the_ID();
+}
 ?>
-<div id="<?php echo esc_attr( $mount_id ); ?>" class="tvs-my-activities-block"></div>
-<?php
-/**
- * Deprecated: This legacy render file is intentionally a no-op.
- * The My Activities block is registered and rendered via class-tvs-plugin.php
- * (tvs-virtual-sports/my-activities) and a dedicated JS bundle.
- */
-if ( ! defined( 'ABSPATH' ) ) { exit; }
-return;
+
+<div class="tvs-app tvs-app--activities">
+    <div id="<?php echo esc_attr( $mount_id ); ?>"
+         class="tvs-my-activities-block"
+         data-route-id="<?php echo esc_attr( $route_id ); ?>"
+         data-limit="<?php echo esc_attr( $limit ); ?>"
+         data-title="<?php echo esc_attr( $title ); ?>"
+    ></div>
+</div>

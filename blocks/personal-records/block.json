@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/personal-records",
+  "title": "TVS Personal Records",
+  "category": "widgets",
+  "icon": "awards",
+  "description": "Best time, average pace/tempo, most recent.",
+  "keywords": ["tvs", "records", "personal", "best"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Personal Records"
+    },
+    "routeId": {
+      "type": "number",
+      "default": 0
+    },
+    "showBestTime": {
+      "type": "boolean",
+      "default": true
+    },
+    "showAvgPace": {
+      "type": "boolean",
+      "default": true
+    },
+    "showAvgTempo": {
+      "type": "boolean",
+      "default": false
+    },
+    "showMostRecent": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "render": "file:./render.php"
+}
