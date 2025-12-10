@@ -264,6 +264,9 @@ class TVS_Plugin {
             register_block_type( TVS_PLUGIN_DIR . 'blocks/people-favourites/block.json', array(
                 'render_callback' => array( $this, 'render_people_favourites_block' ),
             ) );
+
+            // Activity Comparison block
+            register_block_type( TVS_PLUGIN_DIR . 'blocks/activity-comparison/block.json' );
         }
     }
 
@@ -1141,6 +1144,7 @@ class TVS_Plugin {
     wp_register_script( 'tvs-block-single-activity-details', TVS_PLUGIN_URL . 'public/js/tvs-block-single-activity-details.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-timeline', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-timeline.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
     wp_register_script( 'tvs-block-activity-gallery', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-gallery.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
+    wp_register_script( 'tvs-block-activity-comparison', TVS_PLUGIN_URL . 'public/js/tvs-block-activity-comparison.js', array( 'tvs-react', 'tvs-react-dom', 'tvs-flash' ), TVS_PLUGIN_VERSION, true );
 
         // Localize script with settings and nonce
         $settings = array(
@@ -1182,6 +1186,7 @@ class TVS_Plugin {
     wp_localize_script( 'tvs-block-single-activity-details', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-timeline', 'TVS_SETTINGS', $settings );
     wp_localize_script( 'tvs-block-activity-gallery', 'TVS_SETTINGS', $settings );
+    wp_localize_script( 'tvs-block-activity-comparison', 'TVS_SETTINGS', $settings );
     }
 
     /**
@@ -1241,6 +1246,15 @@ class TVS_Plugin {
         wp_register_script(
             'tvs-people-favourites-editor',
             TVS_PLUGIN_URL . 'blocks/people-favourites/index-simple.js',
+            array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor' ),
+            TVS_PLUGIN_VERSION,
+            true
+        );
+
+        // Register activity comparison editor script
+        wp_register_script(
+            'tvs-activity-comparison-editor',
+            TVS_PLUGIN_URL . 'blocks/activity-comparison/index-simple.js',
             array( 'wp-blocks', 'wp-element', 'wp-i18n', 'wp-components', 'wp-block-editor' ),
             TVS_PLUGIN_VERSION,
             true

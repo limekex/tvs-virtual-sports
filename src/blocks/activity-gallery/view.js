@@ -100,53 +100,57 @@ function ActivityGalleryBlock({ userId, limit, title, layout, columns, showFilte
     }
 
     return h('div', { className: 'tvs-activity-gallery' }, [
-        h('div', { className: 'tvs-gallery-header' }, [
-            h('h2', { className: 'tvs-gallery-title' }, title),
+        h('div', { key: 'header', className: 'tvs-gallery-header' }, [
+            h('h2', { key: 'title', className: 'tvs-gallery-title' }, title),
             
-            showFilters && h('div', { className: 'tvs-gallery-filters' }, [
+            showFilters && h('div', { key: 'filters', className: 'tvs-gallery-filters' }, [
                 h('select', {
+                    key: 'type-filter',
                     className: 'tvs-filter-select',
                     value: selectedType,
                     onChange: (e) => setSelectedType(e.target.value)
                 }, [
-                    h('option', { value: 'all' }, 'All Types'),
-                    h('option', { value: 'run' }, '🏃 Run'),
-                    h('option', { value: 'ride' }, '🚴 Ride'),
-                    h('option', { value: 'walk' }, '🚶 Walk'),
-                    h('option', { value: 'hike' }, '⛰️ Hike'),
-                    h('option', { value: 'swim' }, '🏊 Swim'),
-                    h('option', { value: 'workout' }, '💪 Workout')
+                    h('option', { key: 'all', value: 'all' }, 'All Types'),
+                    h('option', { key: 'run', value: 'run' }, '🏃 Run'),
+                    h('option', { key: 'ride', value: 'ride' }, '🚴 Ride'),
+                    h('option', { key: 'walk', value: 'walk' }, '🚶 Walk'),
+                    h('option', { key: 'hike', value: 'hike' }, '⛰️ Hike'),
+                    h('option', { key: 'swim', value: 'swim' }, '🏊 Swim'),
+                    h('option', { key: 'workout', value: 'workout' }, '💪 Workout')
                 ]),
                 
                 h('select', {
+                    key: 'period-filter',
                     className: 'tvs-filter-select',
                     value: selectedPeriod,
                     onChange: (e) => setSelectedPeriod(e.target.value)
                 }, [
-                    h('option', { value: 'all' }, 'All Time'),
-                    h('option', { value: '7d' }, 'Last 7 Days'),
-                    h('option', { value: '30d' }, 'Last 30 Days'),
-                    h('option', { value: '90d' }, 'Last 90 Days')
+                    h('option', { key: 'all', value: 'all' }, 'All Time'),
+                    h('option', { key: '7d', value: '7d' }, 'Last 7 Days'),
+                    h('option', { key: '30d', value: '30d' }, 'Last 30 Days'),
+                    h('option', { key: '90d', value: '90d' }, 'Last 90 Days')
                 ]),
                 
                 h('select', {
+                    key: 'sort-filter',
                     className: 'tvs-filter-select',
                     value: sortBy,
                     onChange: (e) => setSortBy(e.target.value)
                 }, [
-                    h('option', { value: 'newest' }, 'Newest First'),
-                    h('option', { value: 'oldest' }, 'Oldest First'),
-                    h('option', { value: 'distance' }, 'Longest Distance'),
-                    h('option', { value: 'rating' }, 'Best Rating')
+                    h('option', { key: 'newest', value: 'newest' }, 'Newest First'),
+                    h('option', { key: 'oldest', value: 'oldest' }, 'Oldest First'),
+                    h('option', { key: 'distance', value: 'distance' }, 'Longest Distance'),
+                    h('option', { key: 'rating', value: 'rating' }, 'Best Rating')
                 ])
             ])
         ]),
 
         processedActivities.length === 0 
-            ? h('div', { className: 'tvs-gallery-empty' },
+            ? h('div', { key: 'empty', className: 'tvs-gallery-empty' },
                 h('p', null, 'No activities found matching your filters.')
               )
             : h('div', { 
+                key: 'grid', 
                 className: `tvs-gallery-grid tvs-gallery-grid--${layout} tvs-gallery-grid--cols-${columns}` 
               },
                 processedActivities.map(activity =>
@@ -158,16 +162,18 @@ function ActivityGalleryBlock({ userId, limit, title, layout, columns, showFilte
                 )
               ),
 
-        totalPages > 1 && h('div', { className: 'tvs-gallery-pagination' }, [
+        totalPages > 1 && h('div', { key: 'pagination', className: 'tvs-gallery-pagination' }, [
             h('button', {
+                key: 'prev',
                 className: 'tvs-pagination-btn',
                 disabled: currentPage === 1,
                 onClick: () => setCurrentPage(p => p - 1)
             }, '← Previous'),
-            h('span', { className: 'tvs-pagination-info' }, 
+            h('span', { key: 'info', className: 'tvs-pagination-info' }, 
                 `Page ${currentPage} of ${totalPages}`
             ),
             h('button', {
+                key: 'next',
                 className: 'tvs-pagination-btn',
                 disabled: currentPage === totalPages,
                 onClick: () => setCurrentPage(p => p + 1)
@@ -175,6 +181,7 @@ function ActivityGalleryBlock({ userId, limit, title, layout, columns, showFilte
         ]),
 
         modalActivity && h(ActivityModal, {
+            key: 'modal',
             activity: modalActivity,
             onClose: () => setModalActivity(null)
         })
@@ -242,6 +249,7 @@ function GalleryCard({ activity, onClick }) {
         }
     }, [
         h('div', { 
+            key: 'image',
             className: 'tvs-gallery-card-image',
             style: {
                 display: 'flex',
@@ -277,12 +285,12 @@ function GalleryCard({ activity, onClick }) {
                   })
         ),
         
-        h('div', { className: 'tvs-gallery-card-overlay' }, [
-            h('div', { className: 'tvs-gallery-card-badge' },
+        h('div', { key: 'overlay', className: 'tvs-gallery-card-overlay' }, [
+            h('div', { key: 'badge', className: 'tvs-gallery-card-badge' },
                 h('span', null, typeConfig.label)
             ),
             
-            rating > 0 && h('div', { className: 'tvs-gallery-card-rating' },
+            rating > 0 && h('div', { key: 'rating', className: 'tvs-gallery-card-rating' },
                 Array.from({ length: 10 }).map((_, i) =>
                     h('span', {
                         key: i,
@@ -292,15 +300,15 @@ function GalleryCard({ activity, onClick }) {
             )
         ]),
         
-        h('div', { className: 'tvs-gallery-card-info' }, [
-            h('div', { className: 'tvs-gallery-card-metrics' }, isWorkout ? [
-                exerciseCount > 0 && h('span', { className: 'tvs-metric' }, `${exerciseCount} exercises`),
-                h('span', { className: 'tvs-metric' }, formatDuration(duration))
+        h('div', { key: 'info', className: 'tvs-gallery-card-info' }, [
+            h('div', { key: 'metrics', className: 'tvs-gallery-card-metrics' }, isWorkout ? [
+                exerciseCount > 0 && h('span', { key: 'exercises', className: 'tvs-metric' }, `${exerciseCount} exercises`),
+                h('span', { key: 'duration', className: 'tvs-metric' }, formatDuration(duration))
             ].filter(Boolean) : [
-                h('span', { className: 'tvs-metric' }, `${(distance / 1000).toFixed(2)} km`),
-                h('span', { className: 'tvs-metric' }, formatDuration(duration))
+                h('span', { key: 'distance', className: 'tvs-metric' }, `${(distance / 1000).toFixed(2)} km`),
+                h('span', { key: 'duration', className: 'tvs-metric' }, formatDuration(duration))
             ]),
-            h('div', { className: 'tvs-gallery-card-date' },
+            h('div', { key: 'date', className: 'tvs-gallery-card-date' },
                 formatDate(activity.date)
             )
         ])

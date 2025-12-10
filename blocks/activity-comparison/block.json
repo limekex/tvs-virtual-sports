@@ -1,0 +1,51 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/activity-comparison",
+  "title": "TVS Activity Comparison",
+  "category": "widgets",
+  "icon": "columns",
+  "description": "Side-by-side comparison of two activities or vs. personal best.",
+  "keywords": ["tvs", "activity", "comparison", "compare", "performance"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "example": {
+    "attributes": {
+      "title": "Activity Comparison",
+      "mode": "manual"
+    }
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Activity Comparison"
+    },
+    "mode": {
+      "type": "string",
+      "default": "manual",
+      "enum": ["manual", "vs-best", "vs-previous"]
+    },
+    "activityId1": {
+      "type": "number",
+      "default": 0
+    },
+    "activityId2": {
+      "type": "number",
+      "default": 0
+    },
+    "routeId": {
+      "type": "number",
+      "default": 0
+    },
+    "userId": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "editorScript": "tvs-activity-comparison-editor",
+  "render": "file:./render.php"
+}

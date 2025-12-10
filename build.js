@@ -82,6 +82,11 @@ const builds = [
   },
   {
     ...config,
+    entryPoints: ['blocks/activity-comparison/view.js'],
+    outfile: 'public/js/tvs-block-activity-comparison.js',
+  },
+  {
+    ...config,
     entryPoints: ['blocks/manual-activity-tracker/index.js'],
     outfile: 'blocks/manual-activity-tracker/index.min.js',
     external: ['@wordpress/*'],

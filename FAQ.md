@@ -140,8 +140,46 @@ Favorites are per-user and private by default. When you mark a route as a favori
 - UI: Bookmark buttons can reflect your current state and toggle without navigating away.
 - Data: Only valid `tvs_route` post IDs can be favorited; inputs are sanitized and stored as integers.
 
-## Can I see other users’ favorites?
-Not yet. The current MVP stores favorites privately per user. A future enhancement may provide aggregate counts (`post_meta`) and separate “People’s Favorites” listings.
+## Can I see other users' favorites?
+Yes! We now have two favorite blocks:
+
+1. **My Favourites** (`tvs-virtual-sports/my-favourites`): Shows routes you've favorited
+2. **People's Favourites** (`tvs-virtual-sports/people-favourites`): Shows the most-favorited routes across all users
+
+The People's Favourites block displays routes ordered by total favorite count (`tvs_fav_count`) and can optionally show a heart badge with the count (e.g., "❤️ 5").
+
+## What are the favorite block attributes?
+Both My Favourites and People's Favourites support these attributes:
+- `layout`: "grid" or "list" (default: grid)
+- `columns`: Number of columns in grid view (default: 3)
+- `perPage`: Routes per page (default: 10)
+- `showPagination`: Enable/disable pagination (default: true)
+- `showMeta`: Show distance and elevation pills (default: true)
+- `showBadges`: Show difficulty and surface badges (default: true)
+- `showDifficulty`: Show difficulty badge specifically (default: true)
+
+People's Favourites also has:
+- `showCounts`: Display favorite count badge (default: true)
+
+## How are favorite counts updated?
+When you toggle a favorite via `POST /wp-json/tvs/v1/favorites/{id}`, the system:
+1. Updates your personal favorites list in `user_meta`
+2. Increments/decrements the global `tvs_fav_count` on the route post
+3. Returns the updated state immediately
+
+This ensures People's Favourites always shows accurate, real-time popularity.
+
+## What happens if a route doesn't have a featured image?
+All route blocks (Routes Grid, My Favourites, People's Favourites) now use a fallback image: `/wp-content/uploads/2025/10/ActivityDymmy2-300x200.jpg`
+
+This ensures every route card has a visual element even if no featured image has been uploaded.
+
+## Why does the Routes Grid block have different spacing than favorite blocks?
+Routes Grid applies a 16:9 aspect ratio to cards for visual consistency. Favorite blocks use a special `.tvs-favourites-grid` class that excludes them from this constraint, allowing titles and metadata to display below the image without clipping.
+
+This design choice ensures:
+- Routes Grid maintains compact, uniform cards
+- Favorite blocks show complete information including titles
 
 ## What text domain do translations use?
-All strings use the `tvs-virtual-sports` text domain across PHP and JS (including related blocks). Translations are loaded from the plugin’s `languages/` directory.
+All strings use the `tvs-virtual-sports` text domain across PHP and JS (including related blocks). Translations are loaded from the plugin's `languages/` directory.

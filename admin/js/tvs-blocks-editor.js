@@ -143,6 +143,15 @@
     save: function(){ return null; }
   });
 
+  ensure('tvs-virtual-sports/activity-comparison', {
+    title: 'TVS Activity Comparison',
+    icon: 'columns',
+    category: 'widgets',
+    keywords: ['tvs', 'activity', 'comparison', 'compare', 'performance', 'vs'],
+    edit: function(){ return el('div', { className: 'tvs-block-edit-placeholder' }, 'TVS Activity Comparison'); },
+    save: function(){ return null; }
+  });
+
   // ALWAYS show block attributes in the editor sidebar (InspectorControls)
   if (hooks && compose && blockEditor && components) {
     var InspectorControls = blockEditor.InspectorControls;
@@ -509,6 +518,57 @@
                 help: 'Display number of users who favourited each route.',
                 checked: showCounts,
                 onChange: function(v){ props.setAttributes({ showCounts: !!v }); }
+              })
+            )
+          );
+        }
+
+        if (props.name === 'tvs-virtual-sports/activity-comparison') {
+          var mode = typeof attrs.mode === 'string' ? attrs.mode : 'manual';
+          var activityId1 = typeof attrs.activityId1 === 'number' ? attrs.activityId1 : 0;
+          var activityId2 = typeof attrs.activityId2 === 'number' ? attrs.activityId2 : 0;
+          var routeId = typeof attrs.routeId === 'number' ? attrs.routeId : 0;
+          var userId = typeof attrs.userId === 'number' ? attrs.userId : 0;
+          panels.push(
+            el(PanelBody, { title: 'Comparison Settings', initialOpen: true },
+              el(TextControl, {
+                label: 'Title',
+                value: attrs.title || 'Activity Comparison',
+                onChange: function(val){ props.setAttributes({ title: val }); }
+              }),
+              el(components.SelectControl, {
+                label: 'Comparison Mode',
+                value: mode,
+                options: [
+                  { label: 'Manual Selection', value: 'manual' },
+                  { label: 'Latest vs Personal Best', value: 'vs-best' },
+                  { label: 'Latest vs Previous on Route', value: 'vs-previous' }
+                ],
+                onChange: function(val){ props.setAttributes({ mode: val }); }
+              }),
+              mode === 'manual' && el(TextControl, {
+                label: 'Activity ID 1',
+                help: 'First activity to compare.',
+                value: String(activityId1 || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ activityId1: n }); }
+              }),
+              mode === 'manual' && el(TextControl, {
+                label: 'Activity ID 2',
+                help: 'Second activity to compare.',
+                value: String(activityId2 || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ activityId2: n }); }
+              }),
+              mode === 'vs-previous' && el(TextControl, {
+                label: 'Route ID',
+                help: 'Route to compare activities on.',
+                value: String(routeId || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ routeId: n }); }
+              }),
+              el(TextControl, {
+                label: 'User ID (optional)',
+                help: 'Leave 0 for current logged-in user.',
+                value: String(userId || 0),
+                onChange: function(val){ var n = parseInt(val, 10) || 0; props.setAttributes({ userId: n }); }
               })
             )
           );

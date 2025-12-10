@@ -582,6 +582,40 @@ class TVS_REST {
             ),
         ) );
 
+        // Get activities for a specific user
+        register_rest_route( $ns, '/activities/user/(?P<user_id>\d+)', array(
+            'methods' => 'GET',
+            'callback' => array( $this, 'get_activities_for_user' ),
+            'permission_callback' => array( $this, 'permissions_for_activities' ),
+            'args' => array(
+                'user_id' => array(
+                    'description' => 'User ID to fetch activities for',
+                    'type'        => 'integer',
+                    'required'    => true,
+                    'minimum'     => 1,
+                ),
+                'per_page' => array(
+                    'description' => 'Max items to return',
+                    'type'        => 'integer',
+                    'default'     => 50,
+                    'minimum'     => 1,
+                    'maximum'     => 100,
+                ),
+                'page' => array(
+                    'description' => 'Page number',
+                    'type'        => 'integer',
+                    'default'     => 1,
+                    'minimum'     => 1,
+                ),
+                'route_id' => array(
+                    'description' => 'Filter activities by route_id',
+                    'type'        => 'integer',
+                    'required'    => false,
+                    'minimum'     => 1,
+                ),
+            ),
+        ) );
+
         // Personal stats for current user (optionally scoped to a route)
         register_rest_route( $ns, '/activities/stats', array(
             'methods'  => 'GET',
@@ -1756,6 +1790,123 @@ class TVS_REST {
         $response->header( 'X-WP-TotalPages', $q->max_num_pages );
 
         return $response;
+    }
+
+    public function get_activities_for_user( $request ) {
+        $user_id  = (int) $request->get_param( 'user_id' );
+        $per_page = max( 1, min( 100, (int) $request->get_param( 'per_page' ) ?: 50 ) );
+        $page     = max( 1, (int) $request->get_param( 'page' ) ?: 1 );
+        $route_id = (int) $request->get_param( 'route_id' );
+
+        if ( ! $user_id ) {
+            return new WP_Error( 'invalid_user', 'User ID is required', array( 'status' => 400 ) );
+        }
+
+        // Check if user exists
+        $user = get_user_by( 'id', $user_id );
+        if ( ! $user ) {
+            return new WP_Error( 'user_not_found', 'User not found', array( 'status' => 404 ) );
+        }
+
+        // Only allow users to see their own activities or if user is admin
+        $current_user_id = get_current_user_id();
+        if ( $current_user_id !== $user_id && ! current_user_can( 'manage_options' ) ) {
+            return new WP_Error( 'forbidden', 'You can only view your own activities', array( 'status' => 403 ) );
+        }
+
+        $meta_query = array();
+        if ( $route_id > 0 ) {
+            $meta_query[] = array(
+                'key'   => 'route_id',
+                'value' => (string) $route_id,
+            );
+        }
+
+        $args = array(
+            'post_type'      => 'tvs_activity',
+            'author'         => $user_id,
+            'posts_per_page' => $per_page,
+            'paged'          => $page,
+            'post_status'    => 'any',
+            'orderby'        => 'date',
+            'order'          => 'DESC',
+            'meta_query'     => ! empty( $meta_query ) ? $meta_query : null,
+        );
+
+        $q = new WP_Query( $args );
+        $activities = array();
+        while ( $q->have_posts() ) {
+            $q->the_post();
+            $id = get_the_ID();
+            
+            // Get featured image/thumbnail URL
+            $thumbnail_url = null;
+            $thumbnail_id = get_post_thumbnail_id( $id );
+            if ( $thumbnail_id ) {
+                $thumbnail_url = wp_get_attachment_image_url( $thumbnail_id, 'medium' );
+            }
+            
+            // Get all post meta
+            $all_meta = get_post_meta( $id );
+            $meta = array();
+            foreach ( $all_meta as $key => $values ) {
+                $meta[ $key ] = isset( $values[0] ) ? $values[0] : null;
+            }
+            
+            // Parse workout data from exercises/circuits JSON
+            $total_reps = null;
+            $total_weight = null;
+            $total_sets = null;
+            if ( isset( $meta['_tvs_manual_exercises'] ) && ! empty( $meta['_tvs_manual_exercises'] ) ) {
+                $exercises = json_decode( $meta['_tvs_manual_exercises'], true );
+                if ( is_array( $exercises ) ) {
+                    $total_reps = 0;
+                    $total_weight = 0;
+                    $total_sets = 0;
+                    foreach ( $exercises as $ex ) {
+                        $total_reps += isset( $ex['reps'] ) ? (int) $ex['reps'] : 0;
+                        $total_weight += isset( $ex['weight'] ) ? (float) $ex['weight'] : 0;
+                        $total_sets += isset( $ex['sets'] ) ? (int) $ex['sets'] : 1;
+                    }
+                }
+            }
+            
+            $activities[] = array(
+                'id'            => $id,
+                'slug'          => get_post_field( 'post_name', $id ),
+                'permalink'     => get_permalink( $id ),
+                'title'         => get_the_title( $id ),
+                'date'          => get_the_date( 'c', $id ),
+                'thumbnail'     => $thumbnail_url,
+                'activity_type' => isset( $meta['activity_type'] ) ? $meta['activity_type'] : 'run',
+                'route_id'      => isset( $meta['route_id'] ) ? (int) $meta['route_id'] : null,
+                'distance_m'    => isset( $meta['distance_m'] ) ? (float) $meta['distance_m'] : 0,
+                'duration_s'    => isset( $meta['duration_s'] ) ? (float) $meta['duration_s'] : 0,
+                'rating'        => isset( $meta['rating'] ) ? (int) $meta['rating'] : null,
+                'notes'         => isset( $meta['notes'] ) ? $meta['notes'] : '',
+                'avg_hr'        => isset( $meta['avg_hr'] ) ? (int) $meta['avg_hr'] : null,
+                'max_hr'        => isset( $meta['max_hr'] ) ? (int) $meta['max_hr'] : null,
+                // Workout-specific (aggregated from exercises)
+                'reps'          => $total_reps,
+                'weight'        => $total_weight,
+                'sets'          => $total_sets,
+                // Swim-specific
+                'laps'          => isset( $meta['_tvs_manual_laps'] ) ? (int) $meta['_tvs_manual_laps'] : null,
+                'pool_length'   => isset( $meta['_tvs_manual_pool_length'] ) ? (int) $meta['_tvs_manual_pool_length'] : null,
+            );
+        }
+        wp_reset_postdata();
+
+        // Return with pagination info
+        $response = array(
+            'activities'  => $activities,
+            'total'       => $q->found_posts,
+            'total_pages' => $q->max_num_pages,
+            'page'        => $page,
+            'per_page'    => $per_page,
+        );
+
+        return rest_ensure_response( $response );
     }
 
     /**

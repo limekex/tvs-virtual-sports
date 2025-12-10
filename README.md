@@ -167,4 +167,62 @@ Endpoints:
 
 Notes:
 - All IDs are sanitized and stored as unique ints.
-- For UI, SSR can preload the current user’s `ids` to set initial state for bookmark buttons.
+- For UI, SSR can preload the current user's `ids` to set initial state for bookmark buttons.
+
+## Gutenberg Blocks
+
+The plugin registers several server-rendered Gutenberg blocks:
+
+### Favorites Blocks
+
+**My Favourites** (`tvs-virtual-sports/my-favourites`)
+- Displays routes favorited by the currently logged-in user
+- Attributes: `layout` (grid/list), `columns`, `perPage`, `showPagination`, `showMeta`, `showBadges`, `showDifficulty`
+- Requires authentication; shows login prompt for anonymous users
+- Uses TVS UI tokens for consistent styling
+
+**People's Favourites** (`tvs-virtual-sports/people-favourites`)
+- Shows most-favorited routes across all users (ordered by `tvs_fav_count`)
+- Attributes: Same as My Favourites, plus `showCounts` (displays favorite count badge)
+- Public block (no authentication required)
+- Query optimized via user_meta aggregation
+
+**Fallback Images**
+- All route blocks (Routes Grid, My Favourites, People's Favourites) use `/wp-content/uploads/2025/10/ActivityDymmy2-300x200.jpg` as fallback when routes don't have featured images
+- Applied via `home_url()` for proper URL resolution
+
+**CSS Notes**
+- Favorites blocks use `.tvs-favourites-grid` class to exclude them from the aspect-ratio constraint applied to Routes Grid
+- This ensures titles and metadata remain visible in grid layout
+
+### Activity Blocks
+
+**My Activities** (`tvs-virtual-sports/my-activities`)
+- Shows recent user activities
+- Server-rendered with React hydration
+
+**Activity Timeline** (`tvs-virtual-sports/activity-timeline`)
+- Displays chronological activity feed
+
+**Activity Gallery** (`tvs-virtual-sports/activity-gallery`)
+- Grid/list view of user activities
+
+### Route Information Blocks
+
+**Route Insights** (`tvs-virtual-sports/route-insights`)
+- Elevation, surface type, ETA
+
+**Personal Records** (`tvs-virtual-sports/personal-records`)
+- Best time, average pace for a route
+
+**Activity Heatmap** (`tvs-virtual-sports/activity-heatmap`)
+- Sparkline/heatmap visualization
+
+**Route Weather** (`tvs-virtual-sports/route-weather`)
+- Historical weather data from MET Norway API
+
+### Social Blocks
+
+**Invite Friends** (`tvs-virtual-sports/invite-friends`)
+- Invitation code generator (logged-in users only)
+
