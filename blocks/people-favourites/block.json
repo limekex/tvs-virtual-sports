@@ -45,5 +45,6 @@
   "supports": {
     "html": false,
     "align": ["wide", "full"]
-  }
+  },
+  "render": "file:./render.php"
 }

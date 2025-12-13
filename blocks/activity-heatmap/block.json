@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/activity-heatmap",
+  "title": "TVS Activity Heatmap",
+  "category": "widgets",
+  "icon": "chart-area",
+  "description": "Sparkline/heatmap of your attempts over time.",
+  "keywords": ["tvs", "heatmap", "sparkline", "activity"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Activity Heatmap"
+    },
+    "heatmapType": {
+      "type": "string",
+      "default": "sparkline"
+    },
+    "routeId": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "render": "file:./render.php"
+}

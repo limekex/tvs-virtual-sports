@@ -1,0 +1,35 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 2,
+	"name": "tvs-virtual-sports/single-activity-details",
+	"title": "Single Activity Details",
+	"category": "tvs-blocks",
+	"icon": "chart-line",
+	"description": "Display comprehensive details and analysis for a single activity session",
+	"keywords": ["activity", "details", "workout", "session", "metrics"],
+	"supports": {
+		"html": false,
+		"align": true
+	},
+	"attributes": {
+		"activityId": {
+			"type": "number",
+			"default": 0
+		},
+		"showComparison": {
+			"type": "boolean",
+			"default": true
+		},
+		"showActions": {
+			"type": "boolean",
+			"default": true
+		},
+		"showNotes": {
+			"type": "boolean",
+			"default": true
+		}
+	},
+	"textdomain": "tvs-virtual-sports",
+	"viewScript": "file:./view.js",
+	"render": "file:./render.php"
+}

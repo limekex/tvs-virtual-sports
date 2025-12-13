@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/route-weather",
+  "title": "TVS Route Weather",
+  "category": "widgets",
+  "icon": "cloud",
+  "description": "Display historical weather data from MET Norway for a route.",
+  "keywords": ["tvs", "weather", "route", "met norway"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Weather Conditions"
+    },
+    "routeId": {
+      "type": "number",
+      "default": 0
+    },
+    "maxDistance": {
+      "type": "number",
+      "default": 50
+    },
+    "debug": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "render": "file:./render.php"
+}

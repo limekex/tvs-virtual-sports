@@ -13,6 +13,8 @@
     "multiple": true,
     "inserter": true
   },
+  "render": "file:./render.php",
+  "viewScript": "file:./view.js",
   "example": {
     "attributes": {
       "title": "Activity Timeline",

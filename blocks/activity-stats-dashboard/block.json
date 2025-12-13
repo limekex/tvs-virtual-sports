@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "tvs-virtual-sports/activity-stats-dashboard",
+  "title": "TVS Activity Stats Dashboard",
+  "category": "widgets",
+  "icon": "chart-bar",
+  "description": "Comprehensive dashboard with activity statistics and charts.",
+  "keywords": ["tvs", "stats", "dashboard", "analytics"],
+  "textdomain": "tvs-virtual-sports",
+  "supports": {
+    "html": false,
+    "multiple": true,
+    "inserter": true
+  },
+  "attributes": {
+    "title": {
+      "type": "string",
+      "default": "Activity Dashboard"
+    },
+    "period": {
+      "type": "string",
+      "default": "30d"
+    },
+    "showCharts": {
+      "type": "boolean",
+      "default": true
+    },
+    "userId": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "render": "file:./render.php"
+}

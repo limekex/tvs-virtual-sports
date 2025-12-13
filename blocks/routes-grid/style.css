@@ -1,0 +1,293 @@
+.tvs-routes-grid {
+	display: grid;
+	grid-template-columns: repeat(var(--tvs-routes-cols, 3), 1fr);
+	gap: var(--tvs-space-6);
+	margin-top: var(--tvs-space-8);
+}
+
+@media (max-width: 960px) {
+	.tvs-routes-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+	.tvs-routes-grid { grid-template-columns: 1fr; }
+}
+
+.tvs-route-card {
+	position: relative;
+	border-radius: var(--tvs-radius-md, var(--tvs-card-radius));
+	overflow: hidden;
+	box-shadow: var(--tvs-card-shadow);
+	transition: var(--tvs-transition-transform), var(--tvs-transition-shadow);
+	background: var(--tvs-color-bg-secondary);
+}
+
+.tvs-route-card:hover {
+	transform: translateY(-2px);
+	box-shadow: var(--tvs-card-shadow-hover);
+}
+
+/* Clickable wrapper fills the card */
+.tvs-route-card__link {
+	display: block;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	color: inherit;
+	text-decoration: none;
+}
+
+/* Image background with subtle dark overlay for readability */
+.tvs-route-card__bg {
+	position: absolute;
+	inset: 0;
+	background-size: cover;
+	background-position: center;
+	transform-origin: center;
+	transition: var(--tvs-transition-transform), var(--tvs-transition-opacity, opacity .25s ease-out), filter var(--tvs-duration-normal) var(--tvs-ease-out);
+}
+.tvs-route-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(to bottom, rgba(0,0,0,0.35), rgba(0,0,0,0.5));
+	pointer-events: none;
+}
+
+/* Blur background on hover/focus */
+.tvs-route-card:hover .tvs-route-card__bg,
+.tvs-route-card:focus-within .tvs-route-card__bg {
+	filter: blur(3px) brightness(0.9);
+	transform: scale(1.04);
+}
+
+/* Overlay content */
+.tvs-route-card__overlay {
+	position: relative;
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	row-gap: var(--tvs-space-4);
+	padding: var(--tvs-space-5);
+	color: #fff;
+	height: 100%;
+}
+
+.tvs-route-card__top {
+	display: grid;
+	justify-items: center;
+	align-content: start;
+	row-gap: var(--tvs-space-3);
+	text-align: center;
+}
+
+.tvs-route-card__title {
+	margin: 0;
+	font-size: var(--tvs-text-xl);
+	line-height: 1.2;
+	color: #fff;
+	text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+}
+
+.tvs-route-card__badges {
+	display: flex;
+	gap: var(--tvs-space-2);
+	flex-wrap: wrap;
+	justify-content: center;
+}
+
+.tvs-badge {
+	background: rgba(0,0,0,0.45);
+	color: #fff;
+	border: 1px solid rgba(255,255,255,0.2);
+	border-radius: var(--tvs-radius-pill, 999px);
+	padding: 2px var(--tvs-space-3);
+	font-size: var(--tvs-text-sm);
+	backdrop-filter: blur(2px);
+}
+
+.tvs-badge--season { background: rgba(255,255,255,0.15); }
+.tvs-badge--region { background: rgba(0,0,0,0.35); }
+
+/* Difficulty indicator: small dots at top-right inside top cluster */
+.tvs-route-card__difficulty {
+	position: absolute;
+	top: var(--tvs-space-4);
+	right: var(--tvs-space-4);
+	display: inline-flex;
+	gap: 4px;
+}
+.tvs-diff-dot {
+	width: 8px; height: 8px;
+	border-radius: 50%;
+	background: var(--tvs-color-primary);
+	box-shadow: 0 0 0 1px rgba(0,0,0,0.2);
+}
+
+/* Bottom meta: centered and spaced */
+.tvs-route-card__meta {
+	display: flex;
+	justify-content: center;
+	gap: var(--tvs-space-2);
+	align-items: center;
+	flex-wrap: wrap;
+}
+.meta-item {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tvs-space-2);
+	font-size: var(--tvs-text-base);
+	color: #fff;
+	text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+	background: var(--tvs-color-glass-dark);
+	border: 1px solid var(--tvs-glass-border);
+	border-radius: var(--tvs-radius-full);
+	padding: 4px var(--tvs-space-3);
+	backdrop-filter: blur(var(--tvs-glass-blur));
+	-webkit-backdrop-filter: blur(var(--tvs-glass-blur));
+	font-weight: bold;
+}
+.meta-icon { opacity: 0.9; }
+
+/* Bookmark button */
+.tvs-bookmark-btn {
+	appearance: none;
+	border: 1px solid var(--tvs-color-border-subtle);
+	background: var(--tvs-color-bg-elevated, #222);
+	color: var(--tvs-color-text-primary);
+	border-radius: var(--tvs-radius-full);
+	padding: 6px 10px;
+	line-height: 1;
+	cursor: pointer;
+	box-shadow: var(--tvs-elevation-1, 0 1px 2px rgba(0,0,0,0.18));
+	transition: transform var(--tvs-duration-fast, .15s) var(--tvs-ease-out),
+		box-shadow var(--tvs-duration-fast, .15s) var(--tvs-ease-out),
+		filter var(--tvs-duration-fast, .15s) var(--tvs-ease-out);
+}
+.tvs-bookmark-btn:hover { filter: brightness(1.05); box-shadow: var(--tvs-elevation-2, 0 2px 6px rgba(0,0,0,0.22)); }
+.tvs-bookmark-btn:active { transform: translateY(1px); }
+
+/* Grid: position top-left to avoid conflict with difficulty top-right */
+.tvs-route-card .tvs-bookmark-btn { position: absolute; bottom: var(--tvs-space-4); right: var(--tvs-space-4); top: auto; left: auto; z-index: 2; }
+
+/* List: anchor in row body top-right */
+.tvs-route-row__body { position: relative; }
+.tvs-bookmark-btn--row { position: absolute; bottom: var(--tvs-space-3); right: var(--tvs-space-3); top: auto; }
+
+/* Active state */
+.tvs-bookmark-btn.is-active{ background: var(--tvs-color-primary); color: #fff; border-color: var(--tvs-color-primary); }
+
+/* Grid-only tweaks - Apply aspect-ratio ONLY to routes-grid, NOT favourites */
+.tvs-routes-grid:not(.tvs-favourites-grid) .tvs-route-card {
+	aspect-ratio: 16/9;
+}
+
+/* List layout */
+.tvs-routes-list {
+	display: flex;
+	flex-direction: column;
+	gap: var(--tvs-space-5);
+	margin-top: var(--tvs-space-6);
+}
+
+.tvs-route-row {
+	display: grid;
+	grid-template-columns: 280px 1fr;
+	gap: var(--tvs-space-5);
+	align-items: stretch;
+	background: var(--tvs-color-bg-secondary);
+	border: 1px solid var(--tvs-color-border, rgba(0,0,0,0.08));
+	border-radius: var(--tvs-radius-lg);
+	box-shadow: var(--tvs-elevation-1, 0 1px 2px rgba(0,0,0,0.06));
+	overflow: hidden;
+}
+
+@media (max-width: 800px) {
+	.tvs-route-row { grid-template-columns: 1fr; }
+}
+
+.tvs-route-row__thumb {
+	display: block;
+	width: 100%;
+	height: 100%;
+	min-height: 180px;
+	background: var(--tvs-color-bg-tertiary);
+}
+.tvs-route-row__thumb img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.tvs-route-row__body {
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	gap: var(--tvs-space-3);
+	padding: var(--tvs-space-5);
+}
+
+.tvs-route-row__title {
+	margin: 0;
+	font-size: var(--tvs-text-xl);
+	line-height: 1.25;
+}
+.tvs-route-row__title a {
+	color: var(--tvs-color-text-primary);
+	text-decoration: none;
+}
+.tvs-route-row__title a:hover { text-decoration: underline; }
+
+.tvs-route-row__meta {
+	margin-top: var(--tvs-space-3);
+	display: flex;
+	gap: var(--tvs-space-2);
+	align-items: center;
+	flex-wrap: wrap;
+	font-size: var(--tvs-text-sm);
+}
+.tvs-route-row__meta .meta-item {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tvs-space-2);
+	color: var(--tvs-color-text-primary);
+	background: var(--tvs-color-bg-tertiary);
+	border: 1px solid var(--tvs-color-border-subtle);
+	border-radius: var(--tvs-radius-full);
+	padding: 4px var(--tvs-space-3);
+	font-weight: var(--tvs-font-semibold);
+}
+.tvs-route-row__meta .meta-icon { opacity: .8; }
+
+/* Pagination */
+.tvs-pagination {
+	margin-top: var(--tvs-space-6);
+	display: flex;
+	gap: var(--tvs-space-4);
+	align-items: center;
+	justify-content: center;
+	padding: var(--tvs-space-3) var(--tvs-space-4);
+	border-top: 1px solid var(--tvs-color-border, rgba(0,0,0,0.08));
+}
+.tvs-page-status {
+	color: var(--tvs-color-text-secondary);
+	font-size: var(--tvs-text-sm);
+}
+.tvs-page-prev, .tvs-page-next {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--tvs-space-2);
+	padding: 8px var(--tvs-space-4);
+	border-radius: var(--tvs-radius-md);
+	border: 1px solid var(--tvs-color-border, rgba(0,0,0,0.1));
+	background: var(--tvs-color-bg-elevated, #fff);
+	color: var(--tvs-color-text-primary);
+	text-decoration: none;
+	box-shadow: var(--tvs-elevation-1, 0 1px 1px rgba(0,0,0,0.04));
+	transition: background-color var(--tvs-duration-fast, .15s) var(--tvs-ease-out),
+		box-shadow var(--tvs-duration-fast, .15s) var(--tvs-ease-out),
+		transform var(--tvs-duration-fast, .15s) var(--tvs-ease-out);
+}
+.tvs-page-prev:hover, .tvs-page-next:hover {
+	background: var(--tvs-color-bg-hover, #fafafa);
+	box-shadow: var(--tvs-elevation-2, 0 2px 4px rgba(0,0,0,0.06));
+}
+.tvs-page-prev:active, .tvs-page-next:active { transform: translateY(1px); }

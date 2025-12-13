@@ -277,3 +277,25 @@ function tvs_wmo_code_to_text( $code ) {
     return array( 'text' => __( 'Unknown', 'tvs-virtual-sports' ), 'emoji' => '🌡️', 'icon' => 'cloudy.svg' );
 }
 
+/**
+ * Format meters to human-readable km
+ */
+if ( ! function_exists( 'tvs_human_km' ) ) {
+    function tvs_human_km( $meters ) {
+        $m = floatval( $meters );
+        if ( $m <= 0 ) return '';
+        $km = $m / 1000;
+        return ( $km >= 10 ) ? number_format( floor( $km ) ) . ' km' : number_format( $km, 1 ) . ' km';
+    }
+}
+
+/**
+ * Format meters to human-readable elevation
+ */
+if ( ! function_exists( 'tvs_human_elevation' ) ) {
+    function tvs_human_elevation( $meters ) {
+        $m = intval( $meters );
+        if ( $m <= 0 ) return '';
+        return number_format( $m ) . ' m';
+    }
+}
